@@ -79,8 +79,15 @@ const ROUTES = [
 // ANY customer tag (marketing tags, campaign names, dates, whatever else
 // gets tagged on a customer for unrelated reasons) would incorrectly show
 // up as a "stop" with a lit order pill.
-const VALID_STOP_NAMES = new Set(
-  ROUTES.flatMap((route) => route.stops.map((s) => s.name.toLowerCase()))
+//
+// This is a Map (not just a Set) so each valid stop can also carry
+// metadata — right now just whether it's an out-of-state/B2B stop, which
+// the picking screen uses to flip into a completely different visual
+// theme so pickers can't mistake one for a local order.
+const VALID_STOP_NAMES = new Map(
+  ROUTES.flatMap((route) =>
+    route.stops.map((s) => [s.name.toLowerCase(), { isB2B: Boolean(s.isB2B) }])
+  )
 );
 
 const FLEET = [
@@ -336,7 +343,8 @@ async function fetchTodaysStopOrders() {
       // Only ever match a tag that's an actual real stop name from our
       // routes — ignore any other tag on the customer (marketing tags,
       // campaign names, unrelated labels, etc.)
-      if (!VALID_STOP_NAMES.has(key)) return;
+      const stopMeta = VALID_STOP_NAMES.get(key);
+      if (!stopMeta) return;
       // First matching order per stop name wins (most recent order stays if duplicates)
       if (!byStopName[key]) {
         byStopName[key] = {
@@ -344,6 +352,7 @@ async function fetchTodaysStopOrders() {
           orderName: order.name,
           createdAt: order.createdAt,
           lineItems: order.lineItems.edges.map((e) => e.node),
+          isB2B: stopMeta.isB2B,
         };
       }
     });
@@ -514,6 +523,7 @@ app.get("/api/picking-list", async (req, res) => {
         pickedCount,
         missingCount,
         isComplete: pickedCount + missingCount >= totalItems && totalItems > 0,
+        isB2B: Boolean(order.isB2B),
       };
     });
     saveState(state); // persist any freshly-seeded records
@@ -543,6 +553,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       lineItems: order.lineItems,
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
+      isB2B: Boolean(order.isB2B),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
