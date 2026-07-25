@@ -100,6 +100,12 @@ const DRIVERS = [
 
 const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
 
+// How long a driver realistically needs to unload at each stop before
+// continuing to the next one — used to make ETAs actually accurate
+// instead of just chaining raw drive times back to back. Adjust here if
+// 18 minutes isn't the right number for your stops.
+const UNLOAD_MINUTES_PER_STOP = 18;
+
 // ================= DAY / STATE PERSISTENCE =================
 function todayEastern() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -641,13 +647,17 @@ app.get("/api/route-eta/:routeId", (req, res) => {
     return res.json({ available: false });
   }
   const startedAt = new Date(meta.startedAt).getTime();
+  const UNLOAD_MS = UNLOAD_MINUTES_PER_STOP * 60 * 1000;
   let cumulativeMs = 0;
   const etaByStopId = {};
   meta.optimizedStopIds.forEach((stopId, i) => {
     cumulativeMs += meta.legDurationsSeconds[i] * 1000;
     etaByStopId[stopId] = new Date(startedAt + cumulativeMs).toISOString();
+    // After arriving, the driver needs time to unload before the next
+    // leg of driving can realistically begin.
+    cumulativeMs += UNLOAD_MS;
   });
-  // final leg is the trip back to HQ
+  // final leg is the trip back to HQ (no unload time needed at HQ itself)
   cumulativeMs += meta.legDurationsSeconds[meta.legDurationsSeconds.length - 1] * 1000;
   const etaBackToHQ = new Date(startedAt + cumulativeMs).toISOString();
 
@@ -657,6 +667,7 @@ app.get("/api/route-eta/:routeId", (req, res) => {
     etaByStopId,
     etaBackToHQ,
     startedAt: meta.startedAt,
+    unloadMinutesPerStop: UNLOAD_MINUTES_PER_STOP,
   });
 });
 
