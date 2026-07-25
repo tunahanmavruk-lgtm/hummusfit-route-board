@@ -204,13 +204,13 @@ app.post("/api/stop-status", (req, res) => {
   const now = new Date().toISOString();
   const existing = state.stopStatus[stopId] || {};
   const updated = { ...existing, status };
+  if (status === "picked" && !existing.pickedAt) updated.pickedAt = now;
   if (status === "arrived" && !existing.arrivedAt) updated.arrivedAt = now;
-  if (status === "unloading" && !existing.unloadingAt) updated.unloadingAt = now;
   if (status === "delivered" && !existing.deliveredAt) updated.deliveredAt = now;
   if (status === "not_started") {
     // starting over on this stop — clear timestamps
+    updated.pickedAt = null;
     updated.arrivedAt = null;
-    updated.unloadingAt = null;
     updated.deliveredAt = null;
   }
   state.stopStatus[stopId] = updated;

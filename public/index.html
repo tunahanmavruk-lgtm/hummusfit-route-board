@@ -205,8 +205,8 @@
     transition: all .15s ease;
   }
   .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
+  .status-dot.picked{ background: #A25FE0; border-color: #A25FE0; }
   .status-dot.arrived{ background: #4F9BE8; border-color: #4F9BE8; }
-  .status-dot.unloading{ background: #A25FE0; border-color: #A25FE0; }
   .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
 
   .issue-toggle{
@@ -356,8 +356,8 @@
     width: 78px;
   }
   .status-label.enroute{ color: var(--gold); }
+  .status-label.picked{ color: #A25FE0; }
   .status-label.arrived{ color: #4F9BE8; }
-  .status-label.unloading{ color: #A25FE0; }
   .status-label.delivered{ color: var(--teal); }
 
   .refresh-note{
@@ -430,8 +430,8 @@
 <div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Only shows orders from the current 12pm–11pm order window, never stale/previous days. Syncs every 10 seconds.</div>
 
 <script>
-  var STATUS_CYCLE = ['not_started', 'enroute', 'arrived', 'unloading', 'delivered'];
-  var STATUS_LABEL = { not_started: 'Not Started', enroute: 'En Route', arrived: 'Arrived', unloading: 'Unloading', delivered: 'Delivered' };
+  var STATUS_CYCLE = ['not_started', 'picked', 'enroute', 'arrived', 'delivered'];
+  var STATUS_LABEL = { not_started: 'Not Started', picked: 'Order Picked', enroute: 'En Route', arrived: 'Arrived', delivered: 'Delivered' };
 
   var routesData = [];
   var fleetData = [];
