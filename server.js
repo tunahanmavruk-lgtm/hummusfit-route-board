@@ -379,15 +379,54 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     doc.moveDown(1);
 
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
-    doc.moveDown(0.5);
+    doc.moveDown(0.7);
 
-    doc.fontSize(11).fillColor("#111111");
-    order.lineItems.forEach((item) => {
-      doc.text(`${item.quantity} x  ${item.title}${item.sku ? "  (SKU: " + item.sku + ")" : ""}`);
-      doc.moveDown(0.3);
+    // Column headers
+    const checkboxX = 50;
+    const qtyX = 105;
+    const itemX = 150;
+    doc.fontSize(9).fillColor("#999999");
+    doc.text("PICKED", checkboxX, doc.y, { width: 50, lineBreak: false });
+    doc.text("QTY", qtyX, doc.y - 11, { width: 35, lineBreak: false });
+    doc.text("ITEM", itemX, doc.y - 11, { lineBreak: false });
+    doc.moveDown(0.6);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.6);
+
+    const boxSize = 14;
+    order.lineItems.forEach((item, idx) => {
+      const rowY = doc.y;
+      const itemWidth = 375;
+      const textHeight = doc.heightOfString(item.title, { width: itemWidth, fontSize: 11 });
+      const estimatedRowHeight = Math.max(boxSize + 8, textHeight + 8);
+
+      // Alternate a light gray band behind every other row for easier
+      // scanning while picking — drawn first, before anything on top of it
+      if (idx % 2 === 1) {
+        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill("#F3F3F1");
+      }
+
+      // Draw an actual empty checkbox square to physically check off by hand
+      doc
+        .rect(checkboxX, rowY, boxSize, boxSize)
+        .lineWidth(1.2)
+        .strokeColor("#333333")
+        .stroke();
+
+      doc.fontSize(11).fillColor("#111111");
+      doc.text(String(item.quantity), qtyX, rowY + 1, { width: 35 });
+      doc.text(item.title, itemX, rowY + 1, { width: itemWidth });
+
+      // Advance past the taller of (checkbox height, wrapped text height)
+      const afterTextY = doc.y;
+      const rowHeight = Math.max(boxSize + 6, afterTextY - rowY + 6);
+      doc.y = rowY + rowHeight;
     });
 
-    doc.moveDown(1);
+    doc.moveDown(0.8);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.5);
+
     const totalItems = order.lineItems.reduce((sum, i) => sum + i.quantity, 0);
     doc.fontSize(10).fillColor("#666666").text(`Total items: ${totalItems}`);
 
