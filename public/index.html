@@ -168,6 +168,19 @@
     padding: 8px 22px 0;
   }
 
+  .parkway-warning{
+    margin: 10px 22px 0;
+    padding: 10px 14px;
+    background: #FFF4E5;
+    border: 1.5px solid var(--gold);
+    border-radius: 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: #8A5A00;
+    line-height:1.5;
+  }
+
   .stop-address{
     font-family:'JetBrains Mono', monospace;
     font-size: 10px;
@@ -536,6 +549,14 @@
         etaSummary = '<span class="eta-summary">Est. total drive: ' + mins + ' min</span>';
       }
 
+      var parkwayWarning = '';
+      if(meta.flaggedParkways && meta.flaggedParkways.length > 0){
+        parkwayWarning =
+          '<div class="parkway-warning">⚠ Route may include: ' +
+          meta.flaggedParkways.join(', ') +
+          ' — verify before dispatching, commercial vans are not permitted</div>';
+      }
+
       card.innerHTML =
         '<div class="route-head">' +
           '<span class="route-name">' + route.name + '</span>' +
@@ -544,6 +565,7 @@
           '<span class="route-progress">' + deliveredCount + '/' + route.stops.length + ' delivered</span>' +
         '</div>' +
         '<div class="hq-address">Starts &amp; ends at ' + hqData.name + ' — ' + hqData.address + '</div>' +
+        parkwayWarning +
         '<div class="assign-row">' +
           '<div class="assign-field">' +
             '<div class="assign-label">Van</div>' +

@@ -455,6 +455,73 @@ function getRouteById(routeId) {
   return ROUTES.find((r) => r.id === routeId);
 }
 
+// Commercial vans can't legally use NY-area parkways (low bridge clearances,
+// posted no-commercial-vehicle restrictions). Google's Directions API has no
+// "avoid this specific road" option, so instead we check every route it
+// generates against the real list of restricted parkways and flag it
+// clearly if any leg would send a driver onto one.
+const RESTRICTED_PARKWAYS = [
+  // NYC
+  "Belt Parkway", "Belt Pkwy",
+  "FDR Drive", "Franklin D. Roosevelt Drive",
+  "Henry Hudson Parkway", "Henry Hudson Pkwy",
+  "Cross Island Parkway", "Cross Island Pkwy",
+  "Jackie Robinson Parkway", "Jackie Robinson Pkwy",
+  "Bronx River Parkway", "Bronx River Pkwy",
+  "Hutchinson River Parkway", "Hutchinson River Pkwy", "Hutch River Pkwy",
+  "Mosholu Parkway", "Mosholu Pkwy",
+  "Pelham Parkway", "Pelham Pkwy",
+  "Ocean Parkway", "Ocean Pkwy",
+  "Korean War Veterans Parkway", "Korean War Veterans Pkwy",
+  "Grand Central Parkway", "Grand Central Pkwy",
+  // Long Island
+  "Bethpage State Parkway", "Bethpage Parkway", "Bethpage Pkwy",
+  "Heckscher State Parkway", "Heckscher Parkway", "Heckscher Pkwy",
+  "Loop Parkway", "Loop Pkwy",
+  "Meadowbrook State Parkway", "Meadowbrook Parkway", "Meadowbrook Pkwy",
+  "Northern State Parkway", "Northern State Pkwy", "Northern Parkway", "Northern Pkwy",
+  "Robert Moses Causeway",
+  "Sagtikos State Parkway", "Sagtikos Parkway", "Sagtikos Pkwy",
+  "Sunken Meadow State Parkway", "Sunken Meadow Parkway", "Sunken Meadow Pkwy",
+  "Southern State Parkway", "Southern State Pkwy", "Southern Parkway", "Southern Pkwy",
+  "Wantagh State Parkway", "Wantagh Parkway", "Wantagh Pkwy",
+  // Hudson Valley (unlikely for these routes, but included for completeness)
+  "Cross County Parkway", "Cross County Pkwy",
+  "Saw Mill River Parkway", "Saw Mill River Pkwy",
+  "Taconic State Parkway", "Taconic Pkwy",
+  "Sprain Brook Parkway", "Sprain Brook Pkwy",
+  "Long Mountain Parkway", "Long Mountain Pkwy",
+  "Bear Mountain Parkway", "Bear Mountain Pkwy",
+  "Palisades Interstate Parkway", "Palisades Pkwy",
+  "Lake Welch Parkway", "Lake Welch Pkwy",
+];
+const restrictedLower = RESTRICTED_PARKWAYS.map((p) => p.toLowerCase());
+
+function stripHtml(text) {
+  return text.replace(/<[^>]*>/g, "");
+}
+
+// Pulls out anything that looks like "___ Parkway" or "___ Pkwy" from a
+// turn-by-turn instruction, regardless of whether it's on our known list —
+// this catches parkways we might not have thought to list explicitly.
+function extractParkwayMentions(instructionHtml) {
+  const text = stripHtml(instructionHtml);
+  const results = new Set();
+  const connectorRegex =
+    /\b(?:onto|on|toward|via)\s+([A-Z][\w.'-]*(?:\s[A-Za-z.'-]+){0,4}?\s(?:Parkway|Pkwy))\b/g;
+  let m;
+  while ((m = connectorRegex.exec(text)) !== null) {
+    results.add(m[1].replace(/\s[NSEW]$/, "").trim());
+  }
+  if (results.size === 0) {
+    const bareRegex = /\b([A-Z][\w.'-]*(?:\s[A-Za-z.'-]+){0,3}\s(?:Parkway|Pkwy))\b/g;
+    while ((m = bareRegex.exec(text)) !== null) {
+      results.add(m[1].replace(/\s[NSEW]$/, "").trim());
+    }
+  }
+  return Array.from(results);
+}
+
 // Calls Google Directions API to find the fastest stop order for a route,
 // starting and ending at HQ. Returns the optimized stop order plus the
 // estimated drive time (seconds) for each leg of the trip.
@@ -486,11 +553,26 @@ async function optimizeRouteWithGoogle(route) {
   const legDurations = legs.map((leg) => leg.duration.value); // seconds
   const legDistances = legs.map((leg) => leg.distance.text);
 
+  // Scan every turn-by-turn step across every leg for parkway mentions
+  const flaggedSet = new Set();
+  legs.forEach((leg) => {
+    (leg.steps || []).forEach((step) => {
+      const mentions = extractParkwayMentions(step.html_instructions || "");
+      mentions.forEach((mention) => {
+        const isKnownRestricted = restrictedLower.includes(mention.toLowerCase());
+        // Flag it if it matches our known list OR just generically looks like
+        // a parkway (better to over-flag for manual review than miss one)
+        flaggedSet.add(mention);
+      });
+    });
+  });
+
   return {
     optimizedStopIds: optimizedStops.map((s) => s.id),
     legDurationsSeconds: legDurations,
     legDistances,
     totalDurationSeconds: legDurations.reduce((a, b) => a + b, 0),
+    flaggedParkways: Array.from(flaggedSet),
     computedAt: new Date().toISOString(),
   };
 }
