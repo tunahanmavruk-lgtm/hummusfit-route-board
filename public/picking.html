@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Hummus Fit — Picking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#08090B;
+    --card:#121418;
+    --card-2:#181B20;
+    --line:rgba(255,255,255,0.08);
+    --ink:#F2F3F5;
+    --dim:#8A9099;
+    --teal:#2BE0C4;
+    --teal-glow: rgba(43,224,196,0.35);
+    --orange:#FF7A3D;
+    --orange-glow: rgba(255,122,61,0.35);
+    --red:#FF4D5E;
+    --red-glow: rgba(255,77,94,0.35);
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none;}
+  html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif; height:100%;}
+  body{
+    background:
+      radial-gradient(circle at 10% 0%, rgba(43,224,196,0.10), transparent 40%),
+      radial-gradient(circle at 90% 10%, rgba(255,122,61,0.10), transparent 40%),
+      var(--bg);
+    padding-bottom: 60px;
+    min-height:100vh;
+  }
+  ::selection{ background: var(--teal); color:#000; }
+
+  header{
+    padding: max(20px, env(safe-area-inset-top)) 5vw 20px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top:0;
+    background: rgba(8,9,11,0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 50;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--teal);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom: 6px;
+  }
+  .eyebrow .dot{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: clamp(30px, 8vw, 42px);
+    letter-spacing:0.01em;
+  }
+  h1 span{ color: var(--orange); }
+
+  .back-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight:700;
+    color: var(--dim);
+    text-decoration:none;
+  }
+
+  main{ max-width: 720px; margin:0 auto; padding: 18px 5vw 0; }
+
+  /* ---------- LIST VIEW ---------- */
+  .stop-card{
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    cursor:pointer;
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  .stop-card:active{ transform: scale(0.98); }
+  .stop-card.complete{ border-color: rgba(43,224,196,0.4); }
+  .stop-info{ flex:1; min-width:0; }
+  .stop-name{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing:0.01em;
+    text-transform: capitalize;
+  }
+  .stop-order{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--dim);
+    margin-top:2px;
+  }
+  .stop-progress-ring{
+    width: 56px; height:56px;
+    flex-shrink:0;
+    position:relative;
+  }
+  .stop-progress-ring svg{ transform: rotate(-90deg); }
+  .stop-progress-label{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+  }
+  .stop-badge-complete{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    padding: 4px 10px;
+    border-radius:999px;
+    background: rgba(43,224,196,0.14);
+    color: var(--teal);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding: 60px 24px;
+    color: var(--dim);
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height:1.8;
+  }
+
+  /* ---------- ORDER DETAIL VIEW ---------- */
+  .order-header{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom: 18px;
+  }
+  .order-title{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 30px;
+    text-transform:capitalize;
+  }
+  .order-sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--dim);
+    margin-top:4px;
+  }
+  .order-total-progress{
+    text-align:right;
+    flex-shrink:0;
+  }
+  .order-total-count{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 30px;
+    color: var(--teal);
+  }
+  .order-total-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+
+  .item-card{
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 12px;
+    display:flex;
+    align-items:center;
+    gap: 16px;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .item-card.picked{ border-color: rgba(43,224,196,0.5); background: linear-gradient(90deg, rgba(43,224,196,0.08), transparent 40%); }
+  .item-card.missing{ border-color: rgba(255,77,94,0.5); background: linear-gradient(90deg, rgba(255,77,94,0.08), transparent 40%); }
+
+  .item-qty{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 26px;
+    color: var(--dim);
+    width: 44px;
+    flex-shrink:0;
+    text-align:center;
+  }
+  .item-card.picked .item-qty{ color: var(--teal); }
+  .item-card.missing .item-qty{ color: var(--red); }
+
+  .item-info{ flex:1; min-width:0; }
+  .item-title{ font-size: 15.5px; font-weight:600; line-height:1.3; }
+  .item-status-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color: var(--dim);
+    margin-top:3px;
+  }
+  .item-card.picked .item-status-label{ color: var(--teal); }
+  .item-card.missing .item-status-label{ color: var(--red); }
+
+  .tap-btn{
+    flex-shrink:0;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: 2.5px solid var(--line);
+    background: var(--card-2);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 26px;
+    cursor:pointer;
+    transition: all .15s cubic-bezier(0.34,1.56,0.64,1);
+    color: var(--dim);
+  }
+  .tap-btn:active{ transform: scale(0.88); }
+  .item-card.picked .tap-btn{
+    border-color: var(--teal);
+    background: rgba(43,224,196,0.16);
+    color: var(--teal);
+    box-shadow: 0 0 20px var(--teal-glow);
+  }
+  .item-card.missing .tap-btn{
+    border-color: var(--red);
+    background: rgba(255,77,94,0.16);
+    color: var(--red);
+    box-shadow: 0 0 20px var(--red-glow);
+  }
+
+  .missing-note-row{
+    margin: -4px 0 12px;
+    padding: 0 4px;
+  }
+  .missing-note-row input{
+    width:100%;
+    background: var(--card-2);
+    border: 1.5px solid rgba(255,77,94,0.35);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-size: 13px;
+    outline:none;
+  }
+  .missing-note-row input::placeholder{ color: var(--dim); }
+
+  .bottom-bar{
+    position: sticky;
+    bottom: 0;
+    background: rgba(8,9,11,0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line);
+    padding: 16px 5vw max(16px, env(safe-area-inset-bottom));
+    display:flex;
+    gap: 10px;
+    margin: 20px -5vw 0;
+  }
+  .big-btn{
+    flex:1;
+    padding: 16px;
+    border-radius: 14px;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 13px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    text-align:center;
+    text-decoration:none;
+    cursor:pointer;
+    border: 1.5px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    transition: transform .12s ease;
+  }
+  .big-btn:active{ transform: scale(0.97); }
+  .big-btn.primary{
+    background: var(--teal);
+    color: #06231D;
+    border-color: var(--teal);
+  }
+  .big-btn.danger{
+    background: rgba(255,77,94,0.14);
+    color: var(--red);
+    border-color: rgba(255,77,94,0.4);
+  }
+  .big-btn:disabled, .big-btn.disabled{
+    opacity:0.35;
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow"><span class="dot"></span>Hummus Fit / Warehouse</div>
+  <h1 id="pageTitle">PICK <span>LIST</span></h1>
+  <a class="back-link" id="backLink" href="#" style="display:none;">&larr; All Orders</a>
+</header>
+
+<main id="mainContent">
+  <div class="empty-state">Loading…</div>
+</main>
+
+<script>
+(function(){
+  var view = 'list';
+  var pickingList = [];
+  var orderDetail = null;
+
+  function ringSvg(picked, missing, total){
+    var done = picked + missing;
+    var pct = total > 0 ? done / total : 0;
+    var r = 24, c = 2 * Math.PI * r;
+    var offset = c * (1 - pct);
+    var color = pct >= 1 ? 'var(--teal)' : 'var(--orange)';
+    return '<svg width="56" height="56" viewBox="0 0 56 56">' +
+      '<circle cx="28" cy="28" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5"/>' +
+      '<circle cx="28" cy="28" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="5" stroke-linecap="round" ' +
+        'stroke-dasharray="' + c + '" stroke-dashoffset="' + offset + '" style="transition: stroke-dashoffset .4s ease;"/>' +
+      '</svg>';
+  }
+
+  function renderList(){
+    view = 'list';
+    document.getElementById('pageTitle').innerHTML = 'PICK <span>LIST</span>';
+    document.getElementById('backLink').style.display = 'none';
+    var main = document.getElementById('mainContent');
+
+    if(pickingList.length === 0){
+      main.innerHTML = '<div class="empty-state">No orders in the current picking window yet.<br>Check back once today\'s orders start coming in.</div>';
+      return;
+    }
+
+    var html = '';
+    pickingList.forEach(function(stop){
+      var done = stop.pickedCount + stop.missingCount;
+      html +=
+        '<div class="stop-card' + (stop.isComplete ? ' complete' : '') + '" data-stop="' + stop.stopName + '">' +
+          '<div class="stop-info">' +
+            '<div class="stop-name">' + stop.stopName + '</div>' +
+            '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + stop.totalItems + ' items</div>' +
+            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">Complete</div>' : '') +
+          '</div>' +
+          '<div class="stop-progress-ring">' + ringSvg(stop.pickedCount, stop.missingCount, stop.totalItems) +
+            '<div class="stop-progress-label">' + done + '/' + stop.totalItems + '</div>' +
+          '</div>' +
+        '</div>';
+    });
+    main.innerHTML = html;
+
+    document.querySelectorAll('.stop-card').forEach(function(card){
+      card.addEventListener('click', function(){
+        openOrder(card.dataset.stop);
+      });
+    });
+  }
+
+  function nextItemStatus(current){
+    if(current === 'picked') return 'missing';
+    if(current === 'missing') return 'not_picked';
+    return 'picked';
+  }
+
+  function renderOrder(){
+    view = 'order';
+    document.getElementById('pageTitle').textContent = orderDetail.stopName;
+    document.getElementById('backLink').style.display = 'inline-flex';
+    var main = document.getElementById('mainContent');
+
+    var picked = 0, missing = 0;
+    orderDetail.lineItems.forEach(function(item, idx){
+      var s = orderDetail.itemStatus[idx] || 'not_picked';
+      if(s === 'picked') picked++;
+      if(s === 'missing') missing++;
+    });
+    var total = orderDetail.lineItems.length;
+    var done = picked + missing;
+
+    var html =
+      '<div class="order-header">' +
+        '<div>' +
+          '<div class="order-title">' + orderDetail.orderName + '</div>' +
+          '<div class="order-sub">' + orderDetail.stopName + '</div>' +
+        '</div>' +
+        '<div class="order-total-progress">' +
+          '<div class="order-total-count">' + done + '/' + total + '</div>' +
+          '<div class="order-total-label">Reviewed</div>' +
+        '</div>' +
+      '</div>';
+
+    orderDetail.lineItems.forEach(function(item, idx){
+      var status = orderDetail.itemStatus[idx] || 'not_picked';
+      var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : '');
+      var label = status === 'picked' ? 'Picked' : (status === 'missing' ? 'Missing' : 'Tap when picked');
+      html +=
+        '<div class="item-card ' + status + '" data-idx="' + idx + '">' +
+          '<div class="item-qty">' + item.quantity + '</div>' +
+          '<div class="item-info">' +
+            '<div class="item-title">' + item.title + '</div>' +
+            '<div class="item-status-label">' + label + '</div>' +
+          '</div>' +
+          '<div class="tap-btn" data-idx="' + idx + '">' + icon + '</div>' +
+        '</div>';
+      if(status === 'missing'){
+        html +=
+          '<div class="missing-note-row">' +
+            '<input type="text" placeholder="Why is it missing? (optional)" data-note-idx="' + idx + '" value="' +
+            (orderDetail.itemNotes[idx] || '').replace(/"/g,'&quot;') + '">' +
+          '</div>';
+      }
+    });
+
+    var hasMissing = missing > 0;
+    html +=
+      '<div class="bottom-bar">' +
+        '<a class="big-btn' + (hasMissing ? ' danger' : ' disabled') + '" ' +
+          (hasMissing ? 'href="/api/missing-items-pdf/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank"' : '') +
+          '>Missing Report</a>' +
+        '<a class="big-btn primary" href="/api/packing-slip/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank">Packing Slip PDF</a>' +
+      '</div>';
+
+    main.innerHTML = html;
+
+    document.querySelectorAll('.tap-btn, .item-card').forEach(function(el){
+      el.addEventListener('click', function(){
+        var idx = this.dataset.idx;
+        if(idx === undefined) return;
+        var current = orderDetail.itemStatus[idx] || 'not_picked';
+        var next = nextItemStatus(current);
+        orderDetail.itemStatus[idx] = next;
+        renderOrder();
+        fetch('/api/picking-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: next })
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-note-idx]').forEach(function(inp){
+      var debounce;
+      inp.addEventListener('input', function(){
+        clearTimeout(debounce);
+        var idx = this.dataset.noteIdx;
+        var val = this.value;
+        orderDetail.itemNotes[idx] = val;
+        debounce = setTimeout(function(){
+          fetch('/api/picking-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: orderDetail.itemStatus[idx], note: val })
+          });
+        }, 500);
+      });
+    });
+  }
+
+  function openOrder(stopName){
+    fetch('/api/picking-order/' + encodeURIComponent(stopName))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(data.error){ return; }
+        orderDetail = data;
+        renderOrder();
+        window.scrollTo(0,0);
+      });
+  }
+
+  document.getElementById('backLink').addEventListener('click', function(e){
+    e.preventDefault();
+    loadList();
+  });
+
+  function loadList(){
+    fetch('/api/picking-list')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        pickingList = data.stops || [];
+        renderList();
+      })
+      .catch(function(){
+        document.getElementById('mainContent').innerHTML =
+          '<div class="empty-state">Couldn\'t load the pick list.</div>';
+      });
+  }
+
+  function poll(){
+    var activeEl = document.activeElement;
+    var isTyping = activeEl && activeEl.tagName === 'INPUT';
+    if(isTyping) return;
+    if(view === 'list'){
+      loadList();
+    }
+  }
+
+  loadList();
+  setInterval(poll, 15000);
+})();
+</script>
+
+</body>
+</html>

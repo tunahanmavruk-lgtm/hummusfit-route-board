@@ -167,7 +167,7 @@ function getOrderWindowEastern(now = new Date()) {
 }
 
 function defaultState() {
-  return { day: todayEastern(), assignments: {}, stopStatus: {}, routeMeta: {} };
+  return { day: todayEastern(), assignments: {}, stopStatus: {}, routeMeta: {}, picking: {} };
 }
 
 function loadState() {
@@ -177,6 +177,7 @@ function loadState() {
       return defaultState();
     }
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
+    if (!state.picking) state.picking = {}; // migrate older saved state
     return state;
   } catch (e) {
     return defaultState();
@@ -433,6 +434,185 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     doc.end();
   } catch (err) {
     res.status(500).send("Error generating packing slip: " + err.message);
+  }
+});
+
+// ================= DIGITAL PICKING SYSTEM =================
+// Lets the warehouse/fridge crew pick each order on an iPhone/iPad
+// instead of (or alongside) the printed paper slip, and generates a
+// separate "Missing Items" report for anything that couldn't be found.
+
+function pickingKeyFor(stopName) {
+  return stopName.toLowerCase();
+}
+
+function getPickingRecord(state, stopName, order) {
+  const key = pickingKeyFor(stopName);
+  if (!state.picking[key] || state.picking[key].orderId !== order.orderId) {
+    // fresh order for this stop (or first time seeing it today) — seed it
+    state.picking[key] = {
+      orderId: order.orderId,
+      orderName: order.orderName,
+      itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing'
+      itemNotes: {}, // index -> free text reason
+    };
+  }
+  return state.picking[key];
+}
+
+// List every stop that has an order in the current window, with picking
+// progress, so the crew can see what's left to do at a glance.
+app.get("/api/picking-list", async (req, res) => {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const state = loadState();
+    const list = Object.entries(cache.byStopName).map(([key, order]) => {
+      const record = getPickingRecord(state, key, order);
+      const statuses = Object.values(record.itemStatus);
+      const pickedCount = statuses.filter((s) => s === "picked").length;
+      const missingCount = statuses.filter((s) => s === "missing").length;
+      const totalItems = order.lineItems.length;
+      return {
+        stopName: key,
+        orderName: order.orderName,
+        orderId: order.orderId,
+        totalItems,
+        pickedCount,
+        missingCount,
+        isComplete: pickedCount + missingCount >= totalItems && totalItems > 0,
+      };
+    });
+    saveState(state); // persist any freshly-seeded records
+    res.json({ stops: list, configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN) });
+  } catch (err) {
+    res.json({ stops: [], configured: false, error: err.message });
+  }
+});
+
+// Full detail for one stop's order — line items plus current pick status
+app.get("/api/picking-order/:stopName", async (req, res) => {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    saveState(state);
+
+    res.json({
+      stopName: key,
+      orderName: order.orderName,
+      orderId: order.orderId,
+      createdAt: order.createdAt,
+      lineItems: order.lineItems,
+      itemStatus: record.itemStatus,
+      itemNotes: record.itemNotes,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update one item's pick status: not_picked -> picked -> missing -> not_picked
+app.post("/api/picking-item", async (req, res) => {
+  try {
+    const { stopName, itemIndex, status, note } = req.body;
+    if (!stopName || itemIndex === undefined || !status) {
+      return res.status(400).json({ error: "stopName, itemIndex, and status required" });
+    }
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    record.itemStatus[itemIndex] = status;
+    if (note !== undefined) {
+      record.itemNotes[itemIndex] = note;
+    }
+    saveState(state);
+    res.json({ ok: true, itemStatus: record.itemStatus, itemNotes: record.itemNotes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generates a PDF containing ONLY the items marked missing — meant to be
+// printed and sent along with the driver, or handed to the store, so their
+// team knows exactly what didn't make it onto the truck.
+app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).send("No order found for this stop.");
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+
+    const missingItems = order.lineItems
+      .map((item, idx) => ({ ...item, idx, note: record.itemNotes[idx] || "" }))
+      .filter((item) => record.itemStatus[item.idx] === "missing");
+
+    if (missingItems.length === 0) {
+      return res.status(404).send("No items are currently marked missing for this order.");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${order.orderName}-missing-items.pdf"`
+    );
+
+    const doc = new PDFDocument({ margin: 50 });
+    doc.pipe(res);
+
+    doc.fontSize(20).fillColor("#B23A2E").text("HUMMUS FIT", { align: "left" });
+    doc.fontSize(13).fillColor("#B23A2E").text("MISSING ITEMS REPORT", { align: "left" });
+    doc.moveDown(1);
+
+    doc.fontSize(13).fillColor("#111111").text(`Order: ${order.orderName}`);
+    doc.fontSize(10).fillColor("#666666").text(`Store: ${req.params.stopName}`);
+    doc.text(
+      `Reported: ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}`
+    );
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.7);
+
+    doc.fontSize(9).fillColor("#999999");
+    doc.text("QTY", 50, doc.y, { width: 40, lineBreak: false });
+    doc.text("ITEM", 95, doc.y - 11, { width: 280, lineBreak: false });
+    doc.text("REASON", 380, doc.y - 11, { lineBreak: false });
+    doc.moveDown(0.6);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.6);
+
+    missingItems.forEach((item, i) => {
+      const rowY = doc.y;
+      if (i % 2 === 1) {
+        const textHeight = doc.heightOfString(item.title, { width: 280, fontSize: 11 });
+        doc.rect(46, rowY - 3, 503, Math.max(20, textHeight + 8)).fill("#FBEAE8");
+      }
+      doc.fontSize(11).fillColor("#111111");
+      doc.text(String(item.quantity), 50, rowY + 1, { width: 40 });
+      doc.text(item.title, 95, rowY + 1, { width: 280 });
+      doc.fontSize(10).fillColor("#666666").text(item.note || "—", 380, rowY + 1, { width: 160 });
+      const afterY = Math.max(doc.y, rowY + 20);
+      doc.y = afterY + 6;
+    });
+
+    doc.moveDown(0.8);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(10).fillColor("#666666").text(`${missingItems.length} item(s) missing from this order.`);
+
+    doc.end();
+  } catch (err) {
+    res.status(500).send("Error generating missing items report: " + err.message);
   }
 });
 
@@ -724,6 +904,10 @@ app.get("/api/status", (req, res) => {
       isOpen,
     },
   });
+});
+
+app.get("/picking", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "picking.html"));
 });
 
 app.use(express.static(path.join(__dirname, "public")));
