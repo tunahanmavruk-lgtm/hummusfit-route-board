@@ -10,6 +10,11 @@ const DATA_FILE = path.join(__dirname, "data.json");
 app.use(express.json());
 
 // ================= ROUTE DEFINITIONS =================
+const HQ = {
+  name: "Hummus Fit New HQ",
+  address: "1800 Motor Pkwy, Islandia, NY 11749",
+};
+
 const ROUTES = [
   {
     id: "r1",
@@ -17,10 +22,10 @@ const ROUTES = [
     time: "4:00 AM",
     vanSize: "Large (350)",
     stops: [
-      { id: "r1-1", name: "Lindenhurst" },
-      { id: "r1-2", name: "Lynbrook" },
-      { id: "r1-3", name: "Island Park" },
-      { id: "r1-4", name: "Bellmore" },
+      { id: "r1-1", name: "Lindenhurst", address: "38 E Sunrise Hwy, Lindenhurst, NY" },
+      { id: "r1-2", name: "Lynbrook", address: "433 Sunrise Highway, Lynbrook, NY" },
+      { id: "r1-3", name: "Island Park", address: "4587 Austin Blvd, Island Park, NY" },
+      { id: "r1-4", name: "Bellmore", address: "2060 Bellmore Ave, Bellmore, NY" },
     ],
   },
   {
@@ -29,9 +34,9 @@ const ROUTES = [
     time: "7:30 AM",
     vanSize: "Large (350)",
     stops: [
-      { id: "r2-1", name: "Islip" },
-      { id: "r2-2", name: "Farmingdale" },
-      { id: "r2-3", name: "Deer Park" },
+      { id: "r2-1", name: "Islip", address: "14 E Main St, East Islip, NY" },
+      { id: "r2-2", name: "Farmingdale", address: "101 Fulton Street, Farmingdale, NY" },
+      { id: "r2-3", name: "Deer Park", address: "550 Commack Road, Unit B, Deer Park, NY" },
     ],
   },
   {
@@ -40,10 +45,10 @@ const ROUTES = [
     time: "9:00 AM",
     vanSize: "Small",
     stops: [
-      { id: "r3-1", name: "Woodbury" },
-      { id: "r3-2", name: "Huntington" },
-      { id: "r3-3", name: "Ozone Park", brand: "Natural Body" },
-      { id: "r3-4", name: "Hicksville", brand: "Natural Body" },
+      { id: "r3-1", name: "Woodbury", address: "150 Woodbury Road, Woodbury, NY" },
+      { id: "r3-2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
+      { id: "r3-3", name: "Ozone Park", brand: "Natural Body", address: "135-26 Crossbay Blvd, Ozone Park, NY 11417" },
+      { id: "r3-4", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801" },
     ],
   },
   {
@@ -52,9 +57,9 @@ const ROUTES = [
     time: "8:00 AM",
     vanSize: "Any",
     stops: [
-      { id: "r4-1", name: "Selden" },
-      { id: "r4-2", name: "Miller Place" },
-      { id: "r4-3", name: "Lake Grove" },
+      { id: "r4-1", name: "Selden", address: "680 Middle Country Rd, Selden, NY" },
+      { id: "r4-2", name: "Miller Place", address: "451 Route 25A, Miller Place, NY" },
+      { id: "r4-3", name: "Lake Grove", address: "2810 Middle Country Rd, Lake Grove, NY" },
     ],
   },
   {
@@ -63,8 +68,8 @@ const ROUTES = [
     time: "8:00 AM",
     vanSize: "Any",
     stops: [
-      { id: "r5-1", name: "Holbrook" },
-      { id: "r5-2", name: "Ronkonkoma" },
+      { id: "r5-1", name: "Holbrook", address: "1066 Main Street, Holbrook, NY" },
+      { id: "r5-2", name: "Ronkonkoma", address: "200 Ronkonkoma Ave, Ronkonkoma, NY" },
     ],
   },
 ];
@@ -144,15 +149,20 @@ function getOrderWindowEastern(now = new Date()) {
   return { windowStart, windowEnd, isOpen: now >= windowStart && now <= windowEnd };
 }
 
+function defaultState() {
+  return { day: todayEastern(), assignments: {}, stopStatus: {}, routeMeta: {} };
+}
+
 function loadState() {
   try {
     const state = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     if (state.day !== todayEastern()) {
-      return { day: todayEastern(), assignments: {}, stopStatus: {} };
+      return defaultState();
     }
+    if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     return state;
   } catch (e) {
-    return { day: todayEastern(), assignments: {}, stopStatus: {} };
+    return defaultState();
   }
 }
 function saveState(state) {
@@ -160,7 +170,7 @@ function saveState(state) {
 }
 
 app.get("/api/routes", (req, res) => {
-  res.json({ routes: ROUTES, fleet: FLEET });
+  res.json({ routes: ROUTES, fleet: FLEET, hq: HQ });
 });
 app.get("/api/state", (req, res) => {
   res.json(loadState());
@@ -180,12 +190,35 @@ app.post("/api/stop-status", (req, res) => {
   const { stopId, status } = req.body;
   if (!stopId || !status) return res.status(400).json({ error: "stopId and status required" });
   const state = loadState();
-  state.stopStatus[stopId] = status;
+  const now = new Date().toISOString();
+  const existing = state.stopStatus[stopId] || {};
+  const updated = { ...existing, status };
+  if (status === "arrived" && !existing.arrivedAt) updated.arrivedAt = now;
+  if (status === "unloading" && !existing.unloadingAt) updated.unloadingAt = now;
+  if (status === "delivered" && !existing.deliveredAt) updated.deliveredAt = now;
+  if (status === "not_started") {
+    // starting over on this stop — clear timestamps
+    updated.arrivedAt = null;
+    updated.unloadingAt = null;
+    updated.deliveredAt = null;
+  }
+  state.stopStatus[stopId] = updated;
   saveState(state);
   res.json({ ok: true, state });
 });
+
+app.post("/api/stop-issue", (req, res) => {
+  const { stopId, issue } = req.body;
+  if (!stopId) return res.status(400).json({ error: "stopId required" });
+  const state = loadState();
+  const existing = state.stopStatus[stopId] || { status: "not_started" };
+  state.stopStatus[stopId] = { ...existing, issue: Boolean(issue) };
+  saveState(state);
+  res.json({ ok: true, state });
+});
+
 app.post("/api/reset-day", (req, res) => {
-  const state = { day: todayEastern(), assignments: {}, stopStatus: {} };
+  const state = defaultState();
   saveState(state);
   res.json({ ok: true, state });
 });
@@ -415,11 +448,131 @@ app.get("/api/van-status", async (req, res) => {
   }
 });
 
+// ================= GOOGLE MAPS — ROUTE OPTIMIZATION & LIVE ETA =================
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+function getRouteById(routeId) {
+  return ROUTES.find((r) => r.id === routeId);
+}
+
+// Calls Google Directions API to find the fastest stop order for a route,
+// starting and ending at HQ. Returns the optimized stop order plus the
+// estimated drive time (seconds) for each leg of the trip.
+async function optimizeRouteWithGoogle(route) {
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error("GOOGLE_MAPS_API_KEY not configured");
+  }
+  const origin = encodeURIComponent(HQ.address);
+  const destination = encodeURIComponent(HQ.address);
+  const waypoints =
+    "optimize:true|" + route.stops.map((s) => encodeURIComponent(s.address)).join("|");
+
+  const url =
+    `https://maps.googleapis.com/maps/api/directions/json` +
+    `?origin=${origin}&destination=${destination}&waypoints=${waypoints}` +
+    `&mode=driving&key=${GOOGLE_MAPS_API_KEY}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.status !== "OK" || !data.routes || !data.routes[0]) {
+    throw new Error(`Google Directions error: ${data.status} ${data.error_message || ""}`);
+  }
+
+  const googleRoute = data.routes[0];
+  const waypointOrder = googleRoute.waypoint_order; // indices into route.stops, in optimized visit order
+  const legs = googleRoute.legs; // length = stops.length + 1 (HQ->stop1->stop2->...->HQ)
+
+  const optimizedStops = waypointOrder.map((idx) => route.stops[idx]);
+  const legDurations = legs.map((leg) => leg.duration.value); // seconds
+  const legDistances = legs.map((leg) => leg.distance.text);
+
+  return {
+    optimizedStopIds: optimizedStops.map((s) => s.id),
+    legDurationsSeconds: legDurations,
+    legDistances,
+    totalDurationSeconds: legDurations.reduce((a, b) => a + b, 0),
+    computedAt: new Date().toISOString(),
+  };
+}
+
+app.post("/api/optimize-route", async (req, res) => {
+  const { routeId } = req.body;
+  const route = getRouteById(routeId);
+  if (!route) return res.status(404).json({ error: "Route not found" });
+
+  try {
+    const optimized = await optimizeRouteWithGoogle(route);
+    const state = loadState();
+    state.routeMeta[routeId] = {
+      ...(state.routeMeta[routeId] || {}),
+      ...optimized,
+    };
+    saveState(state);
+    res.json({ ok: true, optimized, state });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/start-route", async (req, res) => {
+  const { routeId } = req.body;
+  const route = getRouteById(routeId);
+  if (!route) return res.status(404).json({ error: "Route not found" });
+
+  const state = loadState();
+  try {
+    // If we don't already have an optimized order cached for today, compute one now
+    if (!state.routeMeta[routeId] || !state.routeMeta[routeId].optimizedStopIds) {
+      const optimized = await optimizeRouteWithGoogle(route);
+      state.routeMeta[routeId] = { ...(state.routeMeta[routeId] || {}), ...optimized };
+    }
+    state.routeMeta[routeId].startedAt = new Date().toISOString();
+    saveState(state);
+    res.json({ ok: true, state });
+  } catch (err) {
+    // Even if Google Maps isn't configured/fails, still record the start time
+    // so the board reflects reality — just without ETAs.
+    state.routeMeta[routeId] = {
+      ...(state.routeMeta[routeId] || {}),
+      startedAt: new Date().toISOString(),
+    };
+    saveState(state);
+    res.json({ ok: true, state, warning: err.message });
+  }
+});
+
+app.get("/api/route-eta/:routeId", (req, res) => {
+  const state = loadState();
+  const meta = state.routeMeta[req.params.routeId];
+  if (!meta || !meta.startedAt || !meta.legDurationsSeconds) {
+    return res.json({ available: false });
+  }
+  const startedAt = new Date(meta.startedAt).getTime();
+  let cumulativeMs = 0;
+  const etaByStopId = {};
+  meta.optimizedStopIds.forEach((stopId, i) => {
+    cumulativeMs += meta.legDurationsSeconds[i] * 1000;
+    etaByStopId[stopId] = new Date(startedAt + cumulativeMs).toISOString();
+  });
+  // final leg is the trip back to HQ
+  cumulativeMs += meta.legDurationsSeconds[meta.legDurationsSeconds.length - 1] * 1000;
+  const etaBackToHQ = new Date(startedAt + cumulativeMs).toISOString();
+
+  res.json({
+    available: true,
+    optimizedStopIds: meta.optimizedStopIds,
+    etaByStopId,
+    etaBackToHQ,
+    startedAt: meta.startedAt,
+  });
+});
+
 app.get("/api/status", (req, res) => {
   const { windowStart, windowEnd, isOpen } = getOrderWindowEastern(new Date());
   res.json({
     shopifyConfigured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
     bouncieConfigured: Boolean(BOUNCIE_CLIENT_ID && BOUNCIE_CLIENT_SECRET && BOUNCIE_AUTH_CODE),
+    mapsConfigured: Boolean(GOOGLE_MAPS_API_KEY),
     fleetTrackerUrl: FLEET_TRACKER_URL,
     serverTimeEastern: new Date().toISOString(),
     orderWindow: {

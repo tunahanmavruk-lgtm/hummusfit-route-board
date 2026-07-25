@@ -127,6 +127,98 @@
     color: var(--teal);
   }
 
+  .route-actions{
+    display:flex;
+    gap: 10px;
+    padding: 14px 22px;
+    flex-wrap:wrap;
+    border-bottom: 1px solid var(--line);
+    align-items:center;
+  }
+  .action-btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: none;
+    cursor:pointer;
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .action-btn:hover{ transform: translateY(-1px); }
+  .action-btn:disabled{ opacity:0.5; cursor:default; transform:none; }
+  .action-btn.optimize{ background: var(--black); color:#fff; }
+  .action-btn.start{ background: var(--orange); color:#fff; }
+  .action-btn.started{ background: var(--teal-tint); color: var(--teal); }
+
+  .eta-summary{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--teal);
+    margin-left:auto;
+  }
+
+  .hq-address{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    padding: 8px 22px 0;
+  }
+
+  .stop-address{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    width:100%;
+    margin-top: -4px;
+    padding-left: 25px;
+  }
+
+  .status-stages{
+    display:flex;
+    align-items:center;
+    gap: 4px;
+    flex-shrink:0;
+  }
+  .status-dot{
+    width: 13px; height:13px;
+    border-radius:50%;
+    background: #fff;
+    border: 2.5px solid var(--dim);
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
+  .status-dot.arrived{ background: #4F9BE8; border-color: #4F9BE8; }
+  .status-dot.unloading{ background: #A25FE0; border-color: #A25FE0; }
+  .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
+
+  .issue-toggle{
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--dim);
+    font-size: 12px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+  }
+  .issue-toggle.active{ background: var(--red); border-color: var(--red); color:#fff; }
+
+  .eta-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    color: var(--dim);
+    white-space:nowrap;
+  }
+
   .assign-row{
     display:flex;
     gap: 12px;
@@ -193,25 +285,13 @@
   .stop-row{
     display:flex;
     align-items:center;
+    flex-wrap:wrap;
     gap: 12px;
     padding: 12px 14px;
     border-radius: 12px;
     border: 1.5px solid var(--line);
     background: var(--bg);
   }
-
-  .status-dot{
-    width: 13px; height:13px;
-    border-radius:50%;
-    flex-shrink:0;
-    background: #fff;
-    border: 2.5px solid var(--dim);
-    cursor:pointer;
-    transition: all .15s ease;
-  }
-  .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
-  .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
-  .status-dot.issue{ background: var(--red); border-color: var(--red); }
 
   .stop-name{ font-weight:700; font-size: 14.5px; flex-shrink:0; }
   .stop-badge{
@@ -263,8 +343,9 @@
     width: 78px;
   }
   .status-label.enroute{ color: var(--gold); }
+  .status-label.arrived{ color: #4F9BE8; }
+  .status-label.unloading{ color: #A25FE0; }
   .status-label.delivered{ color: var(--teal); }
-  .status-label.issue{ color: var(--red); }
 
   .refresh-note{
     max-width: 1100px;
@@ -336,14 +417,16 @@
 <div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Only shows orders from the current 12pm–11pm order window, never stale/previous days. Syncs every 10 seconds.</div>
 
 <script>
-  var STATUS_CYCLE = ['not_started', 'enroute', 'delivered', 'issue'];
-  var STATUS_LABEL = { not_started: 'Not Started', enroute: 'En Route', delivered: 'Delivered', issue: 'Issue' };
+  var STATUS_CYCLE = ['not_started', 'enroute', 'arrived', 'unloading', 'delivered'];
+  var STATUS_LABEL = { not_started: 'Not Started', enroute: 'En Route', arrived: 'Arrived', unloading: 'Unloading', delivered: 'Delivered' };
 
   var routesData = [];
   var fleetData = [];
-  var stateData = { assignments: {}, stopStatus: {} };
+  var hqData = { name: '', address: '' };
+  var stateData = { assignments: {}, stopStatus: {}, routeMeta: {} };
   var ordersByStop = {};
   var vanStatusList = [];
+  var etaCache = {}; // routeId -> eta response
 
   function nextStatus(current){
     var i = STATUS_CYCLE.indexOf(current || 'not_started');
@@ -383,26 +466,50 @@
 
   var FLEET_TRACKER_URL = 'https://hummusfit-fleet-tracker-production.up.railway.app';
 
+  function fmtTime(iso){
+    if(!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' });
+  }
+
   function render(){
     var container = document.getElementById('routesContainer');
     container.innerHTML = '';
 
     routesData.forEach(function(route){
       var assignment = stateData.assignments[route.id] || { van: '', driver: '' };
+      var meta = stateData.routeMeta[route.id] || {};
+      var eta = etaCache[route.id];
+
       var deliveredCount = route.stops.filter(function(s){
-        return stateData.stopStatus[s.id] === 'delivered';
+        var st = stateData.stopStatus[s.id];
+        return st && st.status === 'delivered';
       }).length;
 
       var card = document.createElement('div');
       card.className = 'route-card';
 
+      // Determine stop display order: optimized order if we have it, otherwise original
+      var orderedStops = route.stops;
+      if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length){
+        orderedStops = meta.optimizedStopIds.map(function(id){
+          return route.stops.find(function(s){ return s.id === id; });
+        });
+      }
+
       var stopsHtml = '';
-      route.stops.forEach(function(stop){
-        var status = stateData.stopStatus[stop.id] || 'not_started';
+      orderedStops.forEach(function(stop){
+        var stopState = stateData.stopStatus[stop.id] || {};
+        var status = stopState.status || 'not_started';
         var order = ordersByStop[stop.name.toLowerCase()];
         var pillHtml = order
           ? '<a class="order-pill lit" href="/api/packing-slip/' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>'
           : '<span class="order-pill">No order yet</span>';
+
+        var etaChip = '';
+        if(eta && eta.available && eta.etaByStopId && eta.etaByStopId[stop.id] && status !== 'delivered'){
+          etaChip = '<span class="eta-chip">ETA ' + fmtTime(eta.etaByStopId[stop.id]) + '</span>';
+        }
+        var arrivedChip = stopState.arrivedAt ? '<span class="eta-chip">Arrived ' + fmtTime(stopState.arrivedAt) + '</span>' : '';
 
         stopsHtml +=
           '<div class="stop-row">' +
@@ -410,9 +517,24 @@
             '<div class="stop-name">' + stop.name + '</div>' +
             (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
             '<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>' +
+            (etaChip || arrivedChip) +
+            '<button class="issue-toggle' + (stopState.issue ? ' active' : '') + '" data-issue-stop="' + stop.id + '" title="Report an issue">!</button>' +
             pillHtml +
+            '<div class="stop-address">' + (stop.address || '') + '</div>' +
           '</div>';
       });
+
+      var optimizeBtn = '<button class="action-btn optimize" data-optimize="' + route.id + '">Create Route</button>';
+      var startBtn = meta.startedAt
+        ? '<span class="action-btn started">Started ' + fmtTime(meta.startedAt) + '</span>'
+        : '<button class="action-btn start" data-start="' + route.id + '">Start Route</button>';
+      var etaSummary = '';
+      if(eta && eta.available && eta.etaBackToHQ){
+        etaSummary = '<span class="eta-summary">Back to HQ ~' + fmtTime(eta.etaBackToHQ) + '</span>';
+      } else if(meta.totalDurationSeconds){
+        var mins = Math.round(meta.totalDurationSeconds / 60);
+        etaSummary = '<span class="eta-summary">Est. total drive: ' + mins + ' min</span>';
+      }
 
       card.innerHTML =
         '<div class="route-head">' +
@@ -421,6 +543,7 @@
           '<span class="route-size">' + route.vanSize + '</span>' +
           '<span class="route-progress">' + deliveredCount + '/' + route.stops.length + ' delivered</span>' +
         '</div>' +
+        '<div class="hq-address">Starts &amp; ends at ' + hqData.name + ' — ' + hqData.address + '</div>' +
         '<div class="assign-row">' +
           '<div class="assign-field">' +
             '<div class="assign-label">Van</div>' +
@@ -432,6 +555,9 @@
           '</div>' +
           (assignment.van ? vanLiveHtml(assignment.van) : '') +
         '</div>' +
+        '<div class="route-actions">' +
+          optimizeBtn + startBtn + etaSummary +
+        '</div>' +
         '<div class="stops">' + stopsHtml + '</div>';
 
       container.appendChild(card);
@@ -440,15 +566,68 @@
     document.querySelectorAll('.status-dot').forEach(function(dot){
       dot.addEventListener('click', function(){
         var stopId = dot.dataset.stop;
-        var current = stateData.stopStatus[stopId] || 'not_started';
+        var current = (stateData.stopStatus[stopId] || {}).status || 'not_started';
         var next = nextStatus(current);
-        stateData.stopStatus[stopId] = next;
+        stateData.stopStatus[stopId] = Object.assign({}, stateData.stopStatus[stopId], { status: next });
         render();
         fetch('/api/stop-status', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ stopId: stopId, status: next })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(data.state){ stateData = data.state; render(); }
         });
+      });
+    });
+
+    document.querySelectorAll('.issue-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var stopId = btn.dataset.issueStop;
+        var current = stateData.stopStatus[stopId] || {};
+        var newIssue = !current.issue;
+        stateData.stopStatus[stopId] = Object.assign({}, current, { issue: newIssue });
+        render();
+        fetch('/api/stop-issue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopId: stopId, issue: newIssue })
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-optimize]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var routeId = btn.dataset.optimize;
+        btn.disabled = true;
+        btn.textContent = 'Optimizing…';
+        fetch('/api/optimize-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(data.error){ alert('Could not optimize route: ' + data.error); }
+          if(data.state){ stateData = data.state; }
+          render();
+        }).catch(function(){ render(); });
+      });
+    });
+
+    document.querySelectorAll('[data-start]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var routeId = btn.dataset.start;
+        btn.disabled = true;
+        btn.textContent = 'Starting…';
+        fetch('/api/start-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(data.warning){ console.warn(data.warning); }
+          if(data.state){ stateData = data.state; }
+          fetchEtaFor(routeId);
+          render();
+        }).catch(function(){ render(); });
       });
     });
 
@@ -485,6 +664,21 @@
     });
   }
 
+  function fetchEtaFor(routeId){
+    return fetch('/api/route-eta/' + routeId).then(function(r){ return r.json(); }).then(function(data){
+      etaCache[routeId] = data;
+      render();
+    }).catch(function(){});
+  }
+
+  function refreshAllStartedEtas(){
+    Object.keys(stateData.routeMeta || {}).forEach(function(routeId){
+      if(stateData.routeMeta[routeId].startedAt){
+        fetchEtaFor(routeId);
+      }
+    });
+  }
+
   function loadInitial(){
     Promise.all([
       fetch('/api/routes').then(function(r){ return r.json(); }),
@@ -494,10 +688,12 @@
     ]).then(function(results){
       routesData = results[0].routes;
       fleetData = results[0].fleet;
+      hqData = results[0].hq || { name: 'HQ', address: '' };
       stateData = results[1];
       ordersByStop = results[2].byStopName || {};
       vanStatusList = results[3].vehicles || [];
       render();
+      refreshAllStartedEtas();
     }).catch(function(){
       document.getElementById('routesContainer').innerHTML =
         '<div style="color:#DA4A3F; font-family:\'JetBrains Mono\', monospace; padding:30px 0;">Couldn\'t load the route board.</div>';
@@ -518,6 +714,7 @@
       ordersByStop = results[1].byStopName || {};
       vanStatusList = results[2].vehicles || [];
       render();
+      refreshAllStartedEtas();
     }).catch(function(){});
   }
 
