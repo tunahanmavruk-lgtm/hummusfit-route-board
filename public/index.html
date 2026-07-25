@@ -333,6 +333,12 @@
     color: var(--dim);
     background: #fff;
   }
+  .order-pill.not-scheduled{
+    border-style: dashed;
+    color: var(--steel-light, var(--dim));
+    background: transparent;
+    opacity: 0.65;
+  }
   .order-pill.lit{
     background: var(--orange);
     color: #fff;
@@ -439,6 +445,7 @@
   var hqData = { name: '', address: '' };
   var stateData = { assignments: {}, stopStatus: {}, routeMeta: {} };
   var ordersByStop = {};
+  var scheduledToday = {};
   var vanStatusList = [];
   var etaCache = {}; // routeId -> eta response
 
@@ -522,10 +529,17 @@
       orderedStops.forEach(function(stop){
         var stopState = stateData.stopStatus[stop.id] || {};
         var status = stopState.status || 'not_started';
-        var order = ordersByStop[stop.name.toLowerCase()];
-        var pillHtml = order
-          ? '<a class="order-pill lit" href="/api/packing-slip/' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>'
-          : '<span class="order-pill">No order yet</span>';
+        var stopKey = stop.name.toLowerCase();
+        var order = ordersByStop[stopKey];
+        var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
+        var pillHtml;
+        if(order){
+          pillHtml = '<a class="order-pill lit" href="/api/packing-slip/' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
+        } else if(!isScheduled){
+          pillHtml = '<span class="order-pill not-scheduled">No delivery today</span>';
+        } else {
+          pillHtml = '<span class="order-pill">No order yet</span>';
+        }
 
         var etaChip = '';
         if(eta && eta.available && eta.etaByStopId && eta.etaByStopId[stop.id] && status !== 'delivered'){
@@ -719,6 +733,7 @@
       hqData = results[0].hq || { name: 'HQ', address: '' };
       stateData = results[1];
       ordersByStop = results[2].byStopName || {};
+      scheduledToday = results[2].scheduledToday || {};
       vanStatusList = results[3].vehicles || [];
       render();
       refreshAllStartedEtas();
@@ -736,6 +751,7 @@
     ]).then(function(results){
       stateData = results[0];
       ordersByStop = results[1].byStopName || {};
+      scheduledToday = results[1].scheduledToday || {};
       vanStatusList = results[2].vehicles || [];
       render();
       refreshAllStartedEtas();

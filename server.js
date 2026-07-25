@@ -47,8 +47,8 @@ const ROUTES = [
     stops: [
       { id: "r3-1", name: "Woodbury", address: "150 Woodbury Road, Woodbury, NY" },
       { id: "r3-2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
-      { id: "r3-3", name: "Ozone Park", brand: "Natural Body", address: "135-26 Crossbay Blvd, Ozone Park, NY 11417" },
-      { id: "r3-4", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801" },
+      { id: "r3-3", name: "Ozone Park", brand: "Natural Body", address: "135-26 Crossbay Blvd, Ozone Park, NY 11417", deliveryDays: [1, 3, 5] },
+      { id: "r3-4", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
     ],
   },
   {
@@ -86,9 +86,17 @@ const ROUTES = [
 // theme so pickers can't mistake one for a local order.
 const VALID_STOP_NAMES = new Map(
   ROUTES.flatMap((route) =>
-    route.stops.map((s) => [s.name.toLowerCase(), { isB2B: Boolean(s.isB2B) }])
+    route.stops.map((s) => [
+      s.name.toLowerCase(),
+      { isB2B: Boolean(s.isB2B), deliveryDays: s.deliveryDays || null },
+    ])
   )
 );
+
+function isStopScheduledToday(stopMeta, now = new Date()) {
+  if (!stopMeta || !stopMeta.deliveryDays) return true; // no schedule set = every day
+  return stopMeta.deliveryDays.includes(getEasternWeekday(now));
+}
 
 const FLEET = [
   "2022 RAM Promaster 1500",
@@ -130,6 +138,18 @@ function todayEastern() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+// 0=Sunday, 1=Monday ... 6=Saturday, matching JS Date.getDay() convention,
+// but computed in Eastern time regardless of what timezone the server
+// itself runs in.
+const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function getEasternWeekday(now = new Date()) {
+  const short = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).format(now);
+  return WEEKDAY_NAMES.indexOf(short);
 }
 
 function getStartOfDayEastern(now = new Date()) {
@@ -363,16 +383,22 @@ async function fetchTodaysStopOrders() {
 }
 
 app.get("/api/today-orders", async (req, res) => {
+  const now = new Date();
+  const scheduledToday = {};
+  VALID_STOP_NAMES.forEach((meta, key) => {
+    scheduledToday[key] = isStopScheduledToday(meta, now);
+  });
   try {
     const cache = await fetchTodaysStopOrders();
     res.json({
       byStopName: cache.byStopName,
       windowStart: cache.windowStart,
       windowEnd: cache.windowEnd,
+      scheduledToday,
       configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
     });
   } catch (err) {
-    res.json({ byStopName: {}, configured: false, error: err.message });
+    res.json({ byStopName: {}, scheduledToday, configured: false, error: err.message });
   }
 });
 
