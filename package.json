@@ -1,0 +1,16 @@
+{
+  "name": "hummusfit-route-board",
+  "version": "2.0.0",
+  "description": "Daily driver assignment board, delivery status tracker, live van tracking, and Shopify order packing slips for Hummus Fit routes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0"
+  }
+}

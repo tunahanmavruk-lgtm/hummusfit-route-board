@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hummus Fit — Route Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F7F6F3;
+    --card:#FFFFFF;
+    --ink:#141311;
+    --dim:#7A776E;
+    --line:rgba(20,19,17,0.09);
+    --orange:#E8612C;
+    --orange-tint:#FDEBE3;
+    --teal:#1FA98F;
+    --teal-tint:#E3F5F1;
+    --black:#141311;
+    --gold:#E0A83B;
+    --red:#DA4A3F;
+    --shadow: 0 1px 2px rgba(20,19,17,0.04), 0 8px 24px rgba(20,19,17,0.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif;}
+  body{
+    background:
+      radial-gradient(circle at 8% 0%, rgba(232,97,44,0.07), transparent 40%),
+      radial-gradient(circle at 95% 10%, rgba(31,169,143,0.08), transparent 40%),
+      var(--bg);
+    padding-bottom: 60px;
+  }
+
+  header{
+    padding: 30px 5vw 22px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+    border-bottom: 2px solid var(--black);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+  h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: clamp(36px, 5.5vw, 60px);
+    line-height: 0.95;
+    letter-spacing: 0.01em;
+  }
+  h1 span{ color: var(--teal); }
+
+  .reset-btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color: var(--dim);
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    padding: 9px 16px;
+    border-radius: 999px;
+    cursor:pointer;
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .reset-btn:hover{ border-color: var(--red); color: var(--red); }
+
+  main{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 26px 5vw 0;
+  }
+
+  .route-card{
+    background: var(--card);
+    border-radius: 16px;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    overflow:hidden;
+  }
+  .route-head{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap: 10px;
+    padding: 18px 22px;
+    background: var(--black);
+    color: #fff;
+  }
+  .route-name{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 25px;
+    letter-spacing:0.01em;
+  }
+  .route-time{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight:700;
+    color: var(--black);
+    background: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .route-size{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.55);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  .route-progress{
+    margin-left:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--teal);
+  }
+
+  .assign-row{
+    display:flex;
+    gap: 12px;
+    padding: 16px 22px;
+    flex-wrap:wrap;
+    border-bottom: 1px solid var(--line);
+    align-items:flex-end;
+  }
+  .assign-field{ flex:1; min-width: 170px; }
+  .assign-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  select, input[type="text"]{
+    width:100%;
+    background: var(--bg);
+    border: 1.5px solid var(--line);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    outline:none;
+  }
+  select:focus, input[type="text"]:focus{ border-color: var(--teal); }
+
+  .van-live{
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--teal-tint);
+    color: var(--teal);
+    text-decoration:none;
+    white-space:nowrap;
+    transition: transform .15s ease;
+  }
+  .van-live:hover{ transform: translateY(-1px); }
+  .van-live .dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation: pulse 2s infinite;
+  }
+  .van-live.idle{ background: var(--orange-tint); color: var(--orange); }
+  .van-live.idle .dot{ background: var(--orange); box-shadow:0 0 6px var(--orange); }
+  .van-live.offline{ background: #F0EFEC; color: var(--dim); }
+  .van-live.offline .dot{ background: var(--dim); box-shadow:none; animation:none; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .stops{ padding: 14px 22px 18px; display:flex; flex-direction:column; gap:10px; }
+
+  .stop-row{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+  }
+
+  .status-dot{
+    width: 13px; height:13px;
+    border-radius:50%;
+    flex-shrink:0;
+    background: #fff;
+    border: 2.5px solid var(--dim);
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
+  .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
+  .status-dot.issue{ background: var(--red); border-color: var(--red); }
+
+  .stop-name{ font-weight:700; font-size: 14.5px; flex-shrink:0; }
+  .stop-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight:700;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    padding: 2px 8px;
+    border-radius:999px;
+    background: var(--orange-tint);
+    color: var(--orange);
+  }
+
+  .order-pill{
+    margin-left:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 7px 14px;
+    border-radius: 999px;
+    white-space:nowrap;
+    border: 1.5px solid var(--line);
+    color: var(--dim);
+    background: #fff;
+  }
+  .order-pill.lit{
+    background: var(--orange);
+    color: #fff;
+    border-color: var(--orange);
+    cursor:pointer;
+    text-decoration:none;
+    box-shadow: 0 2px 10px rgba(232,97,44,0.35);
+    animation: litPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes litPulse{
+    0%,100%{ box-shadow: 0 2px 10px rgba(232,97,44,0.35); }
+    50%{ box-shadow: 0 2px 18px rgba(232,97,44,0.6); }
+  }
+
+  .status-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:700;
+    text-transform:uppercase;
+    color: var(--dim);
+    width: 78px;
+  }
+  .status-label.enroute{ color: var(--gold); }
+  .status-label.delivered{ color: var(--teal); }
+  .status-label.issue{ color: var(--red); }
+
+  .refresh-note{
+    max-width: 1100px;
+    margin: 20px auto 0;
+    padding: 0 5vw;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+
+  @media (max-width: 640px){
+    .stop-row{ flex-wrap:wrap; }
+    .order-pill{ margin-left:0; order:4; width:100%; text-align:center; }
+    .status-label{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">Hummus Fit / Transportation</div>
+    <h1>ROUTE <span>BOARD</span></h1>
+  </div>
+  <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+</header>
+
+<main id="routesContainer">
+  <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
+</main>
+
+<div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Syncs every 10 seconds.</div>
+
+<script>
+  var STATUS_CYCLE = ['not_started', 'enroute', 'delivered', 'issue'];
+  var STATUS_LABEL = { not_started: 'Not Started', enroute: 'En Route', delivered: 'Delivered', issue: 'Issue' };
+
+  var routesData = [];
+  var fleetData = [];
+  var stateData = { assignments: {}, stopStatus: {} };
+  var ordersByStop = {};
+  var vanStatusList = [];
+
+  function nextStatus(current){
+    var i = STATUS_CYCLE.indexOf(current || 'not_started');
+    return STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
+  }
+
+  function buildVanOptions(selected){
+    var html = '<option value="">— Select van —</option>';
+    fleetData.forEach(function(v){
+      html += '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + v + '</option>';
+    });
+    return html;
+  }
+
+  function findVanStatus(vanName){
+    if(!vanName) return null;
+    var needle = vanName.toLowerCase();
+    for(var i=0;i<vanStatusList.length;i++){
+      var hay = (vanStatusList[i].nickName || '').toLowerCase();
+      if(hay && (needle.indexOf(hay) !== -1 || hay.indexOf(needle.split(' ')[0]) !== -1)){
+        return vanStatusList[i];
+      }
+    }
+    return null;
+  }
+
+  function vanLiveHtml(vanName){
+    if(!vanName) return '';
+    var v = findVanStatus(vanName);
+    if(!v){
+      return '<a class="van-live offline" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>No live data</a>';
+    }
+    var cls = v.speed > 1 ? '' : (v.isRunning ? 'idle' : 'offline');
+    var label = v.speed > 1 ? Math.round(v.speed) + ' mph' : (v.isRunning ? 'Idling' : 'Parked');
+    return '<a class="van-live ' + cls + '" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>' + label + '</a>';
+  }
+
+  var FLEET_TRACKER_URL = 'https://hummusfit-fleet-tracker-production.up.railway.app';
+
+  function render(){
+    var container = document.getElementById('routesContainer');
+    container.innerHTML = '';
+
+    routesData.forEach(function(route){
+      var assignment = stateData.assignments[route.id] || { van: '', driver: '' };
+      var deliveredCount = route.stops.filter(function(s){
+        return stateData.stopStatus[s.id] === 'delivered';
+      }).length;
+
+      var card = document.createElement('div');
+      card.className = 'route-card';
+
+      var stopsHtml = '';
+      route.stops.forEach(function(stop){
+        var status = stateData.stopStatus[stop.id] || 'not_started';
+        var order = ordersByStop[stop.name.toLowerCase()];
+        var pillHtml = order
+          ? '<a class="order-pill lit" href="/api/packing-slip/' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>'
+          : '<span class="order-pill">No order yet</span>';
+
+        stopsHtml +=
+          '<div class="stop-row">' +
+            '<div class="status-dot ' + status + '" data-stop="' + stop.id + '"></div>' +
+            '<div class="stop-name">' + stop.name + '</div>' +
+            (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
+            '<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>' +
+            pillHtml +
+          '</div>';
+      });
+
+      card.innerHTML =
+        '<div class="route-head">' +
+          '<span class="route-name">' + route.name + '</span>' +
+          '<span class="route-time">' + route.time + '</span>' +
+          '<span class="route-size">' + route.vanSize + '</span>' +
+          '<span class="route-progress">' + deliveredCount + '/' + route.stops.length + ' delivered</span>' +
+        '</div>' +
+        '<div class="assign-row">' +
+          '<div class="assign-field">' +
+            '<div class="assign-label">Van</div>' +
+            '<select data-route="' + route.id + '" class="van-select">' + buildVanOptions(assignment.van) + '</select>' +
+          '</div>' +
+          '<div class="assign-field">' +
+            '<div class="assign-label">Driver</div>' +
+            '<input type="text" data-route="' + route.id + '" class="driver-input" placeholder="Driver name" value="' + (assignment.driver || '').replace(/"/g,'&quot;') + '">' +
+          '</div>' +
+          (assignment.van ? vanLiveHtml(assignment.van) : '') +
+        '</div>' +
+        '<div class="stops">' + stopsHtml + '</div>';
+
+      container.appendChild(card);
+    });
+
+    document.querySelectorAll('.status-dot').forEach(function(dot){
+      dot.addEventListener('click', function(){
+        var stopId = dot.dataset.stop;
+        var current = stateData.stopStatus[stopId] || 'not_started';
+        var next = nextStatus(current);
+        stateData.stopStatus[stopId] = next;
+        render();
+        fetch('/api/stop-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopId: stopId, status: next })
+        });
+      });
+    });
+
+    document.querySelectorAll('.van-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var routeId = sel.dataset.route;
+        stateData.assignments[routeId] = stateData.assignments[routeId] || {};
+        stateData.assignments[routeId].van = sel.value;
+        render();
+        fetch('/api/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId, van: sel.value })
+        });
+      });
+    });
+
+    document.querySelectorAll('.driver-input').forEach(function(inp){
+      var debounce;
+      inp.addEventListener('input', function(){
+        clearTimeout(debounce);
+        var routeId = inp.dataset.route;
+        var val = inp.value;
+        debounce = setTimeout(function(){
+          stateData.assignments[routeId] = stateData.assignments[routeId] || {};
+          stateData.assignments[routeId].driver = val;
+          fetch('/api/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ routeId: routeId, driver: val })
+          });
+        }, 500);
+      });
+    });
+  }
+
+  function loadInitial(){
+    Promise.all([
+      fetch('/api/routes').then(function(r){ return r.json(); }),
+      fetch('/api/state').then(function(r){ return r.json(); }),
+      fetch('/api/today-orders').then(function(r){ return r.json(); }),
+      fetch('/api/van-status').then(function(r){ return r.json(); })
+    ]).then(function(results){
+      routesData = results[0].routes;
+      fleetData = results[0].fleet;
+      stateData = results[1];
+      ordersByStop = results[2].byStopName || {};
+      vanStatusList = results[3].vehicles || [];
+      render();
+    }).catch(function(){
+      document.getElementById('routesContainer').innerHTML =
+        '<div style="color:#DA4A3F; font-family:\'JetBrains Mono\', monospace; padding:30px 0;">Couldn\'t load the route board.</div>';
+    });
+  }
+
+  function pollState(){
+    var activeEl = document.activeElement;
+    var isTyping = activeEl && activeEl.tagName === 'INPUT' && activeEl.classList.contains('driver-input');
+    if (isTyping) return;
+
+    Promise.all([
+      fetch('/api/state').then(function(r){ return r.json(); }),
+      fetch('/api/today-orders').then(function(r){ return r.json(); }),
+      fetch('/api/van-status').then(function(r){ return r.json(); })
+    ]).then(function(results){
+      stateData = results[0];
+      ordersByStop = results[1].byStopName || {};
+      vanStatusList = results[2].vehicles || [];
+      render();
+    }).catch(function(){});
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
+    fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
+  });
+
+  loadInitial();
+  setInterval(pollState, 10000);
+</script>
+
+</body>
+</html>
