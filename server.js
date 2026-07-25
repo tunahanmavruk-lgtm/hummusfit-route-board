@@ -87,6 +87,17 @@ const FLEET = [
   "Darian — Ford Transit",
 ];
 
+const DRIVERS = [
+  "Chavez, Richy C",
+  "Flores Morales, Carlos E",
+  "Hermosa Melendez, Edson D",
+  "Kaba, Berke",
+  "Soto, Daniel U",
+  "Tanglay, Serol",
+  "Hazar Kutuk",
+  "Ali Dumez",
+];
+
 const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
 
 // ================= DAY / STATE PERSISTENCE =================
@@ -170,7 +181,7 @@ function saveState(state) {
 }
 
 app.get("/api/routes", (req, res) => {
-  res.json({ routes: ROUTES, fleet: FLEET, hq: HQ });
+  res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
 app.get("/api/state", (req, res) => {
   res.json(loadState());

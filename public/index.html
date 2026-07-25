@@ -435,6 +435,7 @@
 
   var routesData = [];
   var fleetData = [];
+  var driversData = [];
   var hqData = { name: '', address: '' };
   var stateData = { assignments: {}, stopStatus: {}, routeMeta: {} };
   var ordersByStop = {};
@@ -450,6 +451,14 @@
     var html = '<option value="">— Select van —</option>';
     fleetData.forEach(function(v){
       html += '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + v + '</option>';
+    });
+    return html;
+  }
+
+  function buildDriverOptions(selected){
+    var html = '<option value="">— Select driver —</option>';
+    driversData.forEach(function(d){
+      html += '<option value="' + d + '"' + (d === selected ? ' selected' : '') + '>' + d + '</option>';
     });
     return html;
   }
@@ -573,7 +582,7 @@
           '</div>' +
           '<div class="assign-field">' +
             '<div class="assign-label">Driver</div>' +
-            '<input type="text" data-route="' + route.id + '" class="driver-input" placeholder="Driver name" value="' + (assignment.driver || '').replace(/"/g,'&quot;') + '">' +
+            '<select data-route="' + route.id + '" class="driver-select">' + buildDriverOptions(assignment.driver) + '</select>' +
           '</div>' +
           (assignment.van ? vanLiveHtml(assignment.van) : '') +
         '</div>' +
@@ -667,21 +676,17 @@
       });
     });
 
-    document.querySelectorAll('.driver-input').forEach(function(inp){
-      var debounce;
-      inp.addEventListener('input', function(){
-        clearTimeout(debounce);
-        var routeId = inp.dataset.route;
-        var val = inp.value;
-        debounce = setTimeout(function(){
-          stateData.assignments[routeId] = stateData.assignments[routeId] || {};
-          stateData.assignments[routeId].driver = val;
-          fetch('/api/assign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ routeId: routeId, driver: val })
-          });
-        }, 500);
+    document.querySelectorAll('.driver-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var routeId = sel.dataset.route;
+        stateData.assignments[routeId] = stateData.assignments[routeId] || {};
+        stateData.assignments[routeId].driver = sel.value;
+        render();
+        fetch('/api/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId, driver: sel.value })
+        });
       });
     });
   }
@@ -710,6 +715,7 @@
     ]).then(function(results){
       routesData = results[0].routes;
       fleetData = results[0].fleet;
+      driversData = results[0].drivers || [];
       hqData = results[0].hq || { name: 'HQ', address: '' };
       stateData = results[1];
       ordersByStop = results[2].byStopName || {};
@@ -723,10 +729,6 @@
   }
 
   function pollState(){
-    var activeEl = document.activeElement;
-    var isTyping = activeEl && activeEl.tagName === 'INPUT' && activeEl.classList.contains('driver-input');
-    if (isTyping) return;
-
     Promise.all([
       fetch('/api/state').then(function(r){ return r.json(); }),
       fetch('/api/today-orders').then(function(r){ return r.json(); }),
