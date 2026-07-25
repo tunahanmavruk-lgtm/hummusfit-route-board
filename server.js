@@ -383,6 +383,22 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
 
+    const checkboxX = 50;
+    const qtyX = 105;
+    const itemX = 150;
+    const itemWidth = 375;
+    const boxSize = 14;
+
+    function drawColumnHeaders() {
+      doc.fontSize(9).fillColor("#999999");
+      doc.text("PICKED", checkboxX, doc.y, { width: 50, lineBreak: false });
+      doc.text("QTY", qtyX, doc.y - 11, { width: 35, lineBreak: false });
+      doc.text("ITEM", itemX, doc.y - 11, { lineBreak: false });
+      doc.moveDown(0.6);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+      doc.moveDown(0.6);
+    }
+
     doc.fontSize(20).fillColor("#111111").text("HUMMUS FIT", { align: "left" });
     doc.fontSize(11).fillColor("#666666").text("Packing Slip", { align: "left" });
     doc.moveDown(1);
@@ -394,25 +410,24 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
 
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
     doc.moveDown(0.7);
+    drawColumnHeaders();
 
-    // Column headers
-    const checkboxX = 50;
-    const qtyX = 105;
-    const itemX = 150;
-    doc.fontSize(9).fillColor("#999999");
-    doc.text("PICKED", checkboxX, doc.y, { width: 50, lineBreak: false });
-    doc.text("QTY", qtyX, doc.y - 11, { width: 35, lineBreak: false });
-    doc.text("ITEM", itemX, doc.y - 11, { lineBreak: false });
-    doc.moveDown(0.6);
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
-    doc.moveDown(0.6);
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
 
-    const boxSize = 14;
     order.lineItems.forEach((item, idx) => {
-      const rowY = doc.y;
-      const itemWidth = 375;
       const textHeight = doc.heightOfString(item.title, { width: itemWidth, fontSize: 11 });
       const estimatedRowHeight = Math.max(boxSize + 8, textHeight + 8);
+
+      // If this row won't fit before the bottom margin, start a fresh page
+      // and repeat the column headers so the sheet stays readable no
+      // matter how long the order is.
+      if (doc.y + estimatedRowHeight > pageBottom) {
+        doc.addPage();
+        doc.y = 50;
+        drawColumnHeaders();
+      }
+
+      const rowY = doc.y;
 
       // Alternate a light gray band behind every other row for easier
       // scanning while picking — drawn first, before anything on top of it
@@ -436,6 +451,12 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
       const rowHeight = Math.max(boxSize + 6, afterTextY - rowY + 6);
       doc.y = rowY + rowHeight;
     });
+
+    // Make sure the footer line itself doesn't get cut off at the bottom
+    if (doc.y + 40 > pageBottom) {
+      doc.addPage();
+      doc.y = 50;
+    }
 
     doc.moveDown(0.8);
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
@@ -583,6 +604,16 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
 
+    function drawMissingHeaders() {
+      doc.fontSize(9).fillColor("#999999");
+      doc.text("QTY", 50, doc.y, { width: 40, lineBreak: false });
+      doc.text("ITEM", 95, doc.y - 11, { width: 280, lineBreak: false });
+      doc.text("REASON", 380, doc.y - 11, { lineBreak: false });
+      doc.moveDown(0.6);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+      doc.moveDown(0.6);
+    }
+
     doc.fontSize(20).fillColor("#B23A2E").text("HUMMUS FIT", { align: "left" });
     doc.fontSize(13).fillColor("#B23A2E").text("MISSING ITEMS REPORT", { align: "left" });
     doc.moveDown(1);
@@ -595,20 +626,23 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
     doc.moveDown(1);
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
     doc.moveDown(0.7);
+    drawMissingHeaders();
 
-    doc.fontSize(9).fillColor("#999999");
-    doc.text("QTY", 50, doc.y, { width: 40, lineBreak: false });
-    doc.text("ITEM", 95, doc.y - 11, { width: 280, lineBreak: false });
-    doc.text("REASON", 380, doc.y - 11, { lineBreak: false });
-    doc.moveDown(0.6);
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
-    doc.moveDown(0.6);
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
 
     missingItems.forEach((item, i) => {
+      const textHeight = doc.heightOfString(item.title, { width: 280, fontSize: 11 });
+      const estimatedRowHeight = Math.max(20, textHeight + 8);
+
+      if (doc.y + estimatedRowHeight > pageBottom) {
+        doc.addPage();
+        doc.y = 50;
+        drawMissingHeaders();
+      }
+
       const rowY = doc.y;
       if (i % 2 === 1) {
-        const textHeight = doc.heightOfString(item.title, { width: 280, fontSize: 11 });
-        doc.rect(46, rowY - 3, 503, Math.max(20, textHeight + 8)).fill("#FBEAE8");
+        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill("#FBEAE8");
       }
       doc.fontSize(11).fillColor("#111111");
       doc.text(String(item.quantity), 50, rowY + 1, { width: 40 });
@@ -617,6 +651,11 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
       const afterY = Math.max(doc.y, rowY + 20);
       doc.y = afterY + 6;
     });
+
+    if (doc.y + 40 > pageBottom) {
+      doc.addPage();
+      doc.y = 50;
+    }
 
     doc.moveDown(0.8);
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
