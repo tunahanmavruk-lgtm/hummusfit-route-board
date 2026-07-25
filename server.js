@@ -74,6 +74,15 @@ const ROUTES = [
   },
 ];
 
+// The only tags that should ever be treated as a delivery stop are ones
+// that match a real stop name from the routes above. Without this check,
+// ANY customer tag (marketing tags, campaign names, dates, whatever else
+// gets tagged on a customer for unrelated reasons) would incorrectly show
+// up as a "stop" with a lit order pill.
+const VALID_STOP_NAMES = new Set(
+  ROUTES.flatMap((route) => route.stops.map((s) => s.name.toLowerCase()))
+);
+
 const FLEET = [
   "2022 RAM Promaster 1500",
   "2016 FORD Transit",
@@ -323,8 +332,12 @@ async function fetchTodaysStopOrders() {
   orders.forEach((order) => {
     const tags = (order.customer?.tags || []).map((t) => t.trim());
     tags.forEach((tag) => {
-      // First matching order per stop name wins (most recent order stays if duplicates)
       const key = tag.toLowerCase();
+      // Only ever match a tag that's an actual real stop name from our
+      // routes — ignore any other tag on the customer (marketing tags,
+      // campaign names, unrelated labels, etc.)
+      if (!VALID_STOP_NAMES.has(key)) return;
+      // First matching order per stop name wins (most recent order stays if duplicates)
       if (!byStopName[key]) {
         byStopName[key] = {
           orderId: order.id,
