@@ -114,6 +114,36 @@ function getStartOfDayEastern(now = new Date()) {
   return new Date(now.getTime() - ms);
 }
 
+// Stores order 12:00 PM – 11:00 PM Eastern for NEXT-DAY delivery.
+// The relevant window depends on what time it is right now:
+//   - Before noon ET  -> yesterday's 12pm-11pm window (routes running
+//     THIS morning are fulfilling those orders)
+//   - Noon or later    -> today's 12pm-11pm window, live, as tomorrow's
+//     orders come in
+// This guarantees the board never shows orders from any day other than
+// the single, currently-relevant order window — no stale multi-day
+// leftovers.
+const HOUR_MS = 3600 * 1000;
+function getOrderWindowEastern(now = new Date()) {
+  const startOfTodayET = getStartOfDayEastern(now);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+    hour: "2-digit",
+  });
+  const hour = parseInt(fmt.format(now), 10) % 24;
+
+  let windowStart, windowEnd;
+  if (hour >= 12) {
+    windowStart = new Date(startOfTodayET.getTime() + 12 * HOUR_MS);
+    windowEnd = new Date(startOfTodayET.getTime() + 23 * HOUR_MS);
+  } else {
+    windowStart = new Date(startOfTodayET.getTime() - 12 * HOUR_MS);
+    windowEnd = new Date(startOfTodayET.getTime() - 1 * HOUR_MS);
+  }
+  return { windowStart, windowEnd, isOpen: now >= windowStart && now <= windowEnd };
+}
+
 function loadState() {
   try {
     const state = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
@@ -184,17 +214,24 @@ async function shopifyGraphQL(query, variables) {
   return data.data;
 }
 
-// In-memory cache of today's orders, refreshed on demand (not every request)
-let ordersCache = { fetchedAt: 0, byStopName: {} };
+// In-memory cache, refreshed on demand (not every request)
+let ordersCache = { fetchedAt: 0, byStopName: {}, windowStart: null, windowEnd: null };
 const ORDERS_CACHE_MS = 60 * 1000; // 1 minute
 
 async function fetchTodaysStopOrders() {
   const now = Date.now();
   if (now - ordersCache.fetchedAt < ORDERS_CACHE_MS) {
-    return ordersCache.byStopName;
+    return ordersCache;
   }
 
-  const isoStart = getStartOfDayEastern(new Date()).toISOString();
+  const { windowStart, windowEnd } = getOrderWindowEastern(new Date());
+  const isoStart = windowStart.toISOString();
+  // Cap the end bound at "now" if the window is still in progress today,
+  // otherwise use the fixed 11pm cutoff — either way this is a hard upper
+  // bound, so orders from outside the current window can never appear.
+  const cappedEnd = new Date(Math.min(windowEnd.getTime(), now));
+  const isoEnd = cappedEnd.toISOString();
+
   let orders = [];
   let cursor = null;
   let hasNextPage = true;
@@ -221,8 +258,9 @@ async function fetchTodaysStopOrders() {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${isoStart}' status:any`,
+      queryString: `created_at:>='${isoStart}' created_at:<='${isoEnd}' status:any`,
     });
+
     const edges = data.orders.edges;
     orders = orders.concat(edges.map((e) => e.node));
     hasNextPage = data.orders.pageInfo.hasNextPage;
@@ -247,14 +285,19 @@ async function fetchTodaysStopOrders() {
     });
   });
 
-  ordersCache = { fetchedAt: now, byStopName };
-  return byStopName;
+  ordersCache = { fetchedAt: now, byStopName, windowStart, windowEnd };
+  return ordersCache;
 }
 
 app.get("/api/today-orders", async (req, res) => {
   try {
-    const byStopName = await fetchTodaysStopOrders();
-    res.json({ byStopName, configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN) });
+    const cache = await fetchTodaysStopOrders();
+    res.json({
+      byStopName: cache.byStopName,
+      windowStart: cache.windowStart,
+      windowEnd: cache.windowEnd,
+      configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
+    });
   } catch (err) {
     res.json({ byStopName: {}, configured: false, error: err.message });
   }
@@ -263,11 +306,11 @@ app.get("/api/today-orders", async (req, res) => {
 // ================= PACKING SLIP PDF =================
 app.get("/api/packing-slip/:stopName", async (req, res) => {
   try {
-    const byStopName = await fetchTodaysStopOrders();
+    const cache = await fetchTodaysStopOrders();
     const key = decodeURIComponent(req.params.stopName).toLowerCase();
-    const order = byStopName[key];
+    const order = cache.byStopName[key];
     if (!order) {
-      return res.status(404).send("No order found for this stop today.");
+      return res.status(404).send("No order found for this stop in the current order window.");
     }
 
     res.setHeader("Content-Type", "application/pdf");
@@ -373,10 +416,17 @@ app.get("/api/van-status", async (req, res) => {
 });
 
 app.get("/api/status", (req, res) => {
+  const { windowStart, windowEnd, isOpen } = getOrderWindowEastern(new Date());
   res.json({
     shopifyConfigured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
     bouncieConfigured: Boolean(BOUNCIE_CLIENT_ID && BOUNCIE_CLIENT_SECRET && BOUNCIE_AUTH_CODE),
     fleetTrackerUrl: FLEET_TRACKER_URL,
+    serverTimeEastern: new Date().toISOString(),
+    orderWindow: {
+      start: windowStart.toISOString(),
+      end: windowEnd.toISOString(),
+      isOpen,
+    },
   });
 });
 

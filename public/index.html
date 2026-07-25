@@ -275,6 +275,39 @@
     color: var(--dim);
   }
 
+  .clock-block{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap: 6px;
+  }
+  .live-clock{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight:700;
+    color: var(--black);
+    font-variant-numeric: tabular-nums;
+  }
+  .window-badge{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 5px 11px;
+    border-radius: 999px;
+  }
+  .window-badge.open{ background: var(--orange-tint); color: var(--orange); }
+  .window-badge.closed{ background: #F0EFEC; color: var(--dim); }
+  .window-badge .dot{
+    width:6px; height:6px; border-radius:50%;
+  }
+  .window-badge.open .dot{ background: var(--orange); animation: pulse 1.5s infinite; }
+  .window-badge.closed .dot{ background: var(--dim); }
+
   @media (max-width: 640px){
     .stop-row{ flex-wrap:wrap; }
     .order-pill{ margin-left:0; order:4; width:100%; text-align:center; }
@@ -289,14 +322,18 @@
     <div class="eyebrow">Hummus Fit / Transportation</div>
     <h1>ROUTE <span>BOARD</span></h1>
   </div>
-  <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+  <div class="clock-block">
+    <div class="live-clock" id="liveClock">--:--:-- --</div>
+    <div class="window-badge closed" id="windowBadge"><span class="dot"></span><span id="windowBadgeText">Checking order window…</span></div>
+    <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+  </div>
 </header>
 
 <main id="routesContainer">
   <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
 </main>
 
-<div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Syncs every 10 seconds.</div>
+<div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Only shows orders from the current 12pm–11pm order window, never stale/previous days. Syncs every 10 seconds.</div>
 
 <script>
   var STATUS_CYCLE = ['not_started', 'enroute', 'delivered', 'issue'];
@@ -491,6 +528,41 @@
 
   loadInitial();
   setInterval(pollState, 10000);
+
+  // ---- Live clock (Eastern Time, ticks every second) ----
+  function tickClock(){
+    var now = new Date();
+    var timeStr = now.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+    });
+    document.getElementById('liveClock').textContent = timeStr + ' ET';
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // ---- Order window badge ----
+  function updateWindowBadge(){
+    fetch('/api/status').then(function(r){ return r.json(); }).then(function(data){
+      var badge = document.getElementById('windowBadge');
+      var text = document.getElementById('windowBadgeText');
+      if(!data.orderWindow){ return; }
+      var start = new Date(data.orderWindow.start);
+      var end = new Date(data.orderWindow.end);
+      var fmtOpts = { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true };
+      var startStr = start.toLocaleTimeString('en-US', fmtOpts);
+      var endStr = end.toLocaleTimeString('en-US', fmtOpts);
+      if(data.orderWindow.isOpen){
+        badge.className = 'window-badge open';
+        text.textContent = 'Orders open until ' + endStr;
+      } else {
+        badge.className = 'window-badge closed';
+        text.textContent = 'Showing orders from ' + startStr + '–' + endStr;
+      }
+    }).catch(function(){});
+  }
+  updateWindowBadge();
+  setInterval(updateWindowBadge, 30000);
 </script>
 
 </body>
