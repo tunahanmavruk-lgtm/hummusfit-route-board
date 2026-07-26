@@ -798,7 +798,7 @@
         // the time the order is done — even if "New Crate" was never
         // tapped for this last box.
         if(result.data.finalCrateNumber){
-          window.open('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.finalCrateNumber, '_blank');
+          printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.finalCrateNumber);
         }
       }).catch(function(err){
         closeModal();
@@ -911,9 +911,9 @@
       orderDetail.closedCrates.push(result.data.closedCrateNumber);
       orderDetail.currentCrateNumber = result.data.currentCrateNumber;
       renderOrder();
-      // Open the just-closed crate's label immediately so it can be
-      // printed and slapped on the box before it's set aside.
-      window.open('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.closedCrateNumber, '_blank');
+      // Print the just-closed crate's label directly, right on this
+      // screen — no tab switch, tap Print and keep picking.
+      printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.closedCrateNumber);
     }).catch(function(err){
       alert('Could not reach the server: ' + err.message);
       updateCrateFab();
@@ -927,6 +927,47 @@
   // picker just scans whatever product is in their hand, and the
   // system finds which line item it matches.
   var hwScanInputEl = document.getElementById('hwScanInput');
+
+  // Prints a PDF (a crate label) directly from the current screen —
+  // no new tab, no navigating away. Loads it into a hidden iframe and
+  // triggers the browser's native print dialog right on top of
+  // whatever the picker's already looking at; once they tap Print (or
+  // cancel), they're right back where they left off, mid-order.
+  function printPdfInPlace(url){
+    var iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    var didPrint = false;
+    var fallbackTimer = setTimeout(function(){
+      // If the print dialog never triggered within a couple seconds
+      // (some browsers restrict this), fall back to the reliable
+      // open-in-new-tab approach instead of silently failing.
+      if(!didPrint){
+        window.open(url, '_blank');
+      }
+    }, 2500);
+    iframe.onload = function(){
+      try{
+        didPrint = true;
+        clearTimeout(fallbackTimer);
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch(e){
+        clearTimeout(fallbackTimer);
+        window.open(url, '_blank');
+      }
+      setTimeout(function(){
+        if(iframe.parentNode){ iframe.parentNode.removeChild(iframe); }
+      }, 60000);
+    };
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  }
 
   function focusHwScanInput(){
     if(view === 'order' && orderDetail && !orderDetail.completedAt){
