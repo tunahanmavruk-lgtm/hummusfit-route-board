@@ -152,6 +152,18 @@ const PICKERS = [
   "Ali Dumez",
 ];
 
+// Maps a picker's name to their headshot file under /public/headshots/.
+// Anyone not listed here just falls back to an initials avatar on the
+// frontend — so this works today with zero photos on file, and each
+// name upgrades to a real photo the moment one gets added here.
+const PICKER_PHOTOS = {
+  "Hazar Kutuk": "/headshots/hazar-kutuk.jpg",
+};
+
+function pickerPhotoFor(name) {
+  return PICKER_PHOTOS[name] || null;
+}
+
 const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
 
 // How long a driver realistically needs to unload at each stop before
@@ -802,6 +814,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       closedCrates: record.closedCrates,
       isB2B: Boolean(order.isB2B),
       pickedBy: record.pickedBy,
+      pickedByPhoto: record.pickedBy ? pickerPhotoFor(record.pickedBy) : null,
       completedAt: record.completedAt,
       completedBy: record.completedBy,
       pickers: PICKERS,
@@ -905,7 +918,7 @@ app.post("/api/picking-set-picker", async (req, res) => {
     const record = getPickingRecord(state, key, order);
     record.pickedBy = picker || null;
     saveState(state);
-    res.json({ ok: true, pickedBy: record.pickedBy });
+    res.json({ ok: true, pickedBy: record.pickedBy, pickedByPhoto: record.pickedBy ? pickerPhotoFor(record.pickedBy) : null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

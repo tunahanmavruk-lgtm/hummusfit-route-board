@@ -245,6 +245,53 @@
     letter-spacing:0.06em;
   }
 
+  .picker-badge-row{
+    display:flex;
+    justify-content:flex-end;
+    margin-bottom: 14px;
+  }
+  .picker-badge{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px 6px 6px;
+    box-shadow: 0 1px 2px rgba(20,19,17,0.04);
+  }
+  .picker-avatar{
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink:0;
+  }
+  .picker-avatar-fallback{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: var(--ink);
+    color:#fff;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 12px;
+  }
+  .picker-badge-text{ line-height:1.25; }
+  .picker-badge-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 8.5px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color: var(--dim);
+  }
+  .picker-badge-name{
+    font-size: 12.5px;
+    font-weight:700;
+    color: var(--ink);
+  }
+
   .scanner-ready-hint{
     display:flex;
     align-items:center;
@@ -1091,6 +1138,23 @@
         '</div>' +
       '</div>';
 
+    if(orderDetail.pickedBy){
+      var initials = orderDetail.pickedBy.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(w){ return w.charAt(0).toUpperCase(); }).join('');
+      var avatarHtml = orderDetail.pickedByPhoto
+        ? '<img class="picker-avatar" src="' + orderDetail.pickedByPhoto + '" alt="">'
+        : '<div class="picker-avatar picker-avatar-fallback">' + initials + '</div>';
+      html +=
+        '<div class="picker-badge-row">' +
+          '<div class="picker-badge">' +
+            avatarHtml +
+            '<div class="picker-badge-text">' +
+              '<div class="picker-badge-label">' + (isLocked ? 'Picked by' : 'Currently picking') + '</div>' +
+              '<div class="picker-badge-name">' + orderDetail.pickedBy + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
     if(!isLocked){
       html += '<div class="scanner-ready-hint"><span class="dot"></span>Bluetooth scanner ready — scan any item, no tap needed</div>';
       html +=
@@ -1193,7 +1257,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ stopName: orderDetail.stopName, picker: pickerEl.value })
-        }).then(function(){
+        }).then(function(r){ return r.json(); }).then(function(data){
+          orderDetail.pickedByPhoto = data.pickedByPhoto || null;
           renderOrder();
         });
       });
