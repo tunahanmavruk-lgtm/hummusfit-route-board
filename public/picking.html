@@ -331,6 +331,48 @@
     cursor: default;
     box-shadow:none;
   }
+  .crate-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background: var(--card-2);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .crate-info{
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .crate-btn{
+    flex-shrink:0;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--ink);
+    color: #fff;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .crate-btn:disabled{
+    opacity:0.3;
+    cursor:default;
+  }
+  .closed-crates-note{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--teal);
+    margin: -6px 0 14px;
+  }
+
   .finish-hint{
     text-align:center;
     font-family:'JetBrains Mono', monospace;
@@ -698,7 +740,14 @@
         }
         orderDetail.completedAt = result.data.completedAt;
         orderDetail.completedBy = result.data.completedBy;
+        if(result.data.closedCrates){ orderDetail.closedCrates = result.data.closedCrates; }
         renderOrder();
+        // Print the final crate's label too, so every crate has one by
+        // the time the order is done — even if "New Crate" was never
+        // tapped for this last box.
+        if(result.data.finalCrateNumber){
+          window.open('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.finalCrateNumber, '_blank');
+        }
       }).catch(function(err){
         closeModal();
         alert('Could not reach the server: ' + err.message);
@@ -861,6 +910,18 @@
     var canFinish = !isLocked && notPicked === 0 && total > 0;
 
     if(!isLocked){
+      var itemsInCurrentCrate = orderDetail.lineItems.filter(function(item, idx){
+        return orderDetail.itemCrateNumber && orderDetail.itemCrateNumber[idx] === orderDetail.currentCrateNumber;
+      }).length;
+      html +=
+        '<div class="crate-row">' +
+          '<div class="crate-info">Currently packing: <strong>Crate ' + orderDetail.currentCrateNumber + '</strong> (' + itemsInCurrentCrate + ' item' + (itemsInCurrentCrate === 1 ? '' : 's') + ')</div>' +
+          '<button class="crate-btn" id="newCrateBtn"' + (itemsInCurrentCrate === 0 ? ' disabled' : '') + '>Crate Full — New Crate</button>' +
+        '</div>';
+      if((orderDetail.closedCrates || []).length > 0){
+        html += '<div class="closed-crates-note">Printed: Crate ' + orderDetail.closedCrates.join(', Crate ') + '</div>';
+      }
+
       html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>Finish Order</button>';
       if(!canFinish){
         html += '<div class="finish-hint">' +
@@ -916,6 +977,36 @@
     if(finishEl){
       finishEl.addEventListener('click', function(){
         showFinishConfirmation(picked, missing, partial, total);
+      });
+    }
+
+    var newCrateEl = document.getElementById('newCrateBtn');
+    if(newCrateEl){
+      newCrateEl.addEventListener('click', function(){
+        newCrateEl.disabled = true;
+        fetch('/api/picking-new-crate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopName: orderDetail.stopName })
+        }).then(function(r){
+          return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+        }).then(function(result){
+          if(!result.ok || result.data.error){
+            alert(result.data.error || 'Could not close this crate.');
+            renderOrder();
+            return;
+          }
+          orderDetail.closedCrates = orderDetail.closedCrates || [];
+          orderDetail.closedCrates.push(result.data.closedCrateNumber);
+          orderDetail.currentCrateNumber = result.data.currentCrateNumber;
+          renderOrder();
+          // Open the just-closed crate's label immediately so it can be
+          // printed and slapped on the box before it's set aside.
+          window.open('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.closedCrateNumber, '_blank');
+        }).catch(function(err){
+          alert('Could not reach the server: ' + err.message);
+          renderOrder();
+        });
       });
     }
 

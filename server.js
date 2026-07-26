@@ -586,13 +586,31 @@ function getPickingRecord(state, stopName, order) {
       itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing' | 'partial'
       itemNotes: {}, // index -> free text reason
       itemPickedQty: {}, // index -> actual quantity picked (only meaningful for 'partial')
+      itemCrateNumber: {}, // index -> which crate this item was physically packed into
+      currentCrateNumber: 1, // crate currently being filled; increments via "New Crate"
+      closedCrates: [], // list of crate numbers already closed out (label already printed)
       pickedBy: null, // employee name working this order
       completedAt: null, // set once Finish Order succeeds
       completedBy: null,
     };
   }
   if (!state.picking[key].itemPickedQty) state.picking[key].itemPickedQty = {}; // migrate older records
+  if (!state.picking[key].itemCrateNumber) state.picking[key].itemCrateNumber = {};
+  if (!state.picking[key].currentCrateNumber) state.picking[key].currentCrateNumber = 1;
+  if (!state.picking[key].closedCrates) state.picking[key].closedCrates = [];
   return state.picking[key];
+}
+
+// Finds which route a given stop belongs to, and that route's display
+// name — used on crate labels so a driver can see "Route #1" at a glance.
+function routeInfoForStop(stopName) {
+  const key = stopName.toLowerCase();
+  for (const route of ROUTES) {
+    if (route.stops.some((s) => s.name.toLowerCase() === key)) {
+      return { routeName: route.name, routeTime: route.time };
+    }
+  }
+  return { routeName: "", routeTime: "" };
 }
 
 // List every stop that has an order in the current window, with picking
@@ -647,6 +665,10 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       lineItems: order.lineItems,
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
+      itemPickedQty: record.itemPickedQty,
+      itemCrateNumber: record.itemCrateNumber,
+      currentCrateNumber: record.currentCrateNumber,
+      closedCrates: record.closedCrates,
       isB2B: Boolean(order.isB2B),
       pickedBy: record.pickedBy,
       completedAt: record.completedAt,
@@ -685,13 +707,54 @@ app.post("/api/picking-item", async (req, res) => {
       // Clear any stale partial-quantity value once the item is no longer partial
       delete record.itemPickedQty[itemIndex];
     }
+    if (status === "picked" || status === "partial") {
+      // Physically going into a box right now — tag it with whichever
+      // crate is currently active.
+      record.itemCrateNumber[itemIndex] = record.currentCrateNumber;
+    } else {
+      // Missing/not_picked items never go in a physical crate
+      delete record.itemCrateNumber[itemIndex];
+    }
     saveState(state);
     res.json({
       ok: true,
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
       itemPickedQty: record.itemPickedQty,
+      itemCrateNumber: record.itemCrateNumber,
+      currentCrateNumber: record.currentCrateNumber,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Closes out the crate currently being filled (marking it ready for its
+// label to print) and starts tracking a fresh crate for whatever gets
+// picked next. Returns the closed crate's number so the frontend can
+// immediately open that crate's label PDF.
+app.post("/api/picking-new-crate", async (req, res) => {
+  try {
+    const { stopName } = req.body;
+    if (!stopName) return res.status(400).json({ error: "stopName required" });
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+
+    const closedCrateNumber = record.currentCrateNumber;
+    const hasItemsInCrate = Object.values(record.itemCrateNumber).includes(closedCrateNumber);
+    if (!hasItemsInCrate) {
+      return res.status(400).json({ error: "This crate is empty — pick at least one item before starting a new crate." });
+    }
+
+    record.closedCrates.push(closedCrateNumber);
+    record.currentCrateNumber = closedCrateNumber + 1;
+    saveState(state);
+    res.json({ ok: true, closedCrateNumber, currentCrateNumber: record.currentCrateNumber });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -747,10 +810,25 @@ app.post("/api/picking-finish", async (req, res) => {
       });
     }
 
+    // Auto-close whatever crate was still active — every crate gets a
+    // label by the time the order is finished, including the last one,
+    // even if the picker never explicitly tapped "New Crate" for it.
+    const finalCrateNumber = record.currentCrateNumber;
+    const finalCrateHasItems = Object.values(record.itemCrateNumber).includes(finalCrateNumber);
+    if (finalCrateHasItems && !record.closedCrates.includes(finalCrateNumber)) {
+      record.closedCrates.push(finalCrateNumber);
+    }
+
     record.completedAt = new Date().toISOString();
     record.completedBy = record.pickedBy;
     saveState(state);
-    res.json({ ok: true, completedAt: record.completedAt, completedBy: record.completedBy });
+    res.json({
+      ok: true,
+      completedAt: record.completedAt,
+      completedBy: record.completedBy,
+      finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
+      closedCrates: record.closedCrates,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -781,6 +859,76 @@ app.post("/api/picking-reopen", async (req, res) => {
 // Generates a PDF containing ONLY the items marked missing — meant to be
 // printed and sent along with the driver, or handed to the store, so their
 // team knows exactly what didn't make it onto the truck.
+// Generates a small 4x6" label for one specific crate — route number,
+// store name (big, this is what stops a driver from dropping the wrong
+// crate at the wrong store), order number, crate number, and only the
+// items actually packed into THAT crate.
+app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).send("No order found for this stop.");
+
+    const crateNumber = parseInt(req.params.crateNumber, 10);
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+
+    const crateItems = order.lineItems
+      .map((item, idx) => {
+        if (record.itemCrateNumber[idx] !== crateNumber) return null;
+        const isPartial = record.itemStatus[idx] === "partial";
+        const qty = isPartial ? record.itemPickedQty[idx] : item.quantity;
+        return { title: item.title, quantity: qty };
+      })
+      .filter((item) => item !== null);
+
+    if (crateItems.length === 0) {
+      return res.status(404).send("No items found in this crate.");
+    }
+
+    const { routeName } = routeInfoForStop(req.params.stopName);
+    const stopNameUpper = decodeURIComponent(req.params.stopName).toUpperCase();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${order.orderName}-crate${crateNumber}-label.pdf"`
+    );
+
+    // Standard 4x6" shipping label size (288 x 432 points)
+    const doc = new PDFDocument({ size: [288, 432], margin: 16 });
+    doc.pipe(res);
+
+    const usableWidth = 288 - 32;
+
+    doc.rect(0, 0, 288, 90).fill("#E8612C");
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF").text(routeName || "HUMMUS FIT", 16, 14, { width: usableWidth });
+    const stopFontSize = fitTextFontSize(doc, stopNameUpper, usableWidth, 34, 18);
+    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#FFFFFF").text(stopNameUpper, 16, 36, { width: usableWidth });
+
+    doc.y = 100;
+    doc.font("Helvetica-Bold").fontSize(20).fillColor("#111111").text(`CRATE ${crateNumber}`, { align: "left" });
+    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`);
+    doc.moveDown(0.8);
+    doc.moveTo(16, doc.y).lineTo(272, doc.y).strokeColor("#222222").lineWidth(1).stroke();
+    doc.moveDown(0.6);
+
+    doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580").text("CONTENTS", { align: "left" });
+    doc.moveDown(0.4);
+
+    crateItems.forEach((item) => {
+      doc.font("Helvetica-Bold").fontSize(11).fillColor("#111111")
+        .text(`${item.quantity}  ${item.title}`, { width: usableWidth });
+      doc.moveDown(0.3);
+    });
+
+    doc.end();
+  } catch (err) {
+    res.status(500).send("Error generating crate label: " + err.message);
+  }
+});
+
 app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
   try {
     const cache = await fetchTodaysStopOrders();
