@@ -1037,6 +1037,12 @@
         } else {
           delete orderDetail.itemPickedQty[idx];
         }
+        orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
+        if(newStatus === 'picked' || newStatus === 'partial'){
+          orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
+        } else {
+          delete orderDetail.itemCrateNumber[idx];
+        }
         renderOrder();
         fetch('/api/picking-item', {
           method: 'POST',
@@ -1059,6 +1065,12 @@
         var current = orderDetail.itemStatus[idx] || 'not_picked';
         var next = nextItemStatus(current);
         orderDetail.itemStatus[idx] = next;
+        orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
+        if(next === 'picked' || next === 'partial'){
+          orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
+        } else {
+          delete orderDetail.itemCrateNumber[idx];
+        }
         renderOrder();
         fetch('/api/picking-item', {
           method: 'POST',
