@@ -745,6 +745,11 @@
 
 <script>
 (function(){
+  function fmtTime(iso){
+    if(!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' });
+  }
+
   var view = 'list';
   var pickingList = [];
   var orderDetail = null;
