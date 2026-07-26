@@ -1051,8 +1051,19 @@
   // iOS Safari can drop focus after alerts, taps elsewhere, or the app
   // being backgrounded — keep pulling it back so a physical scan works
   // at any moment without the picker having to tap anything first.
+  // IMPORTANT: never do this if the tap was on a real interactive
+  // control (the picker dropdown, buttons, text inputs) — forcibly
+  // stealing focus mid-tap is exactly what broke the "Who's picking"
+  // dropdown on iPad/iPhone, since it fought with the native picker
+  // wheel trying to open.
+  var INTERACTIVE_TAGS = ['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON', 'A'];
   document.addEventListener('click', function(e){
-    if(e.target && e.target.id === 'hwScanInput') return;
+    var el = e.target;
+    while(el && el !== document.body){
+      if(el.id === 'hwScanInput') return;
+      if(INTERACTIVE_TAGS.indexOf(el.tagName) !== -1) return;
+      el = el.parentElement;
+    }
     setTimeout(focusHwScanInput, 50);
   });
   window.addEventListener('focus', function(){ setTimeout(focusHwScanInput, 50); });

@@ -458,15 +458,25 @@ app.get("/api/today-orders", async (req, res) => {
       const order = cache.byStopName[key];
       const record = state.picking[key];
       if (!record || record.orderId !== order.orderId) {
-        pickingStatus[key] = { status: "not_started" };
+        pickingStatus[key] = { status: "not_started", crateCount: 0 };
         return;
       }
+      // How many distinct crates exist for this order so far — closed
+      // ones plus whichever one is currently active, if it actually has
+      // anything in it. This is what tells a driver how many physical
+      // boxes to expect/load for this stop.
+      const closedSet = new Set(record.closedCrates || []);
+      const currentHasItems = Object.values(record.itemCrateNumber || {}).includes(record.currentCrateNumber);
+      if (currentHasItems) closedSet.add(record.currentCrateNumber);
+      const crateCount = closedSet.size;
+
       if (record.completedAt) {
         pickingStatus[key] = {
           status: "completed",
           pickedBy: record.completedBy,
           startedAt: record.startedAt,
           completedAt: record.completedAt,
+          crateCount,
         };
         return;
       }
@@ -476,10 +486,10 @@ app.get("/api/today-orders", async (req, res) => {
       const percent = totalItems > 0 ? Math.round((addressedCount / totalItems) * 100) : 0;
       const anyTouched = statuses.length > 0;
       if (record.pickedBy || anyTouched) {
-        pickingStatus[key] = { status: "in_progress", pickedBy: record.pickedBy, percent };
+        pickingStatus[key] = { status: "in_progress", pickedBy: record.pickedBy, percent, crateCount };
         return;
       }
-      pickingStatus[key] = { status: "not_started" };
+      pickingStatus[key] = { status: "not_started", crateCount: 0 };
     });
     res.json({
       byStopName: cache.byStopName,
