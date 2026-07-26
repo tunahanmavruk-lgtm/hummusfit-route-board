@@ -138,6 +138,20 @@ const DRIVERS = [
   "Ali Dumez",
 ];
 
+// Warehouse/fridge crew who do the actual picking — using the same
+// roster as drivers as a starting default until the real picking crew
+// names are provided (swap this list once we have it, same pattern).
+const PICKERS = [
+  "Chavez, Richy C",
+  "Flores Morales, Carlos E",
+  "Hermosa Melendez, Edson D",
+  "Kaba, Berke",
+  "Soto, Daniel U",
+  "Tanglay, Serol",
+  "Hazar Kutuk",
+  "Ali Dumez",
+];
+
 const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
 
 // How long a driver realistically needs to unload at each stop before
@@ -561,6 +575,9 @@ function getPickingRecord(state, stopName, order) {
       orderName: order.orderName,
       itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing'
       itemNotes: {}, // index -> free text reason
+      pickedBy: null, // employee name working this order
+      completedAt: null, // set once Finish Order succeeds
+      completedBy: null,
     };
   }
   return state.picking[key];
@@ -585,8 +602,10 @@ app.get("/api/picking-list", async (req, res) => {
         totalItems,
         pickedCount,
         missingCount,
-        isComplete: pickedCount + missingCount >= totalItems && totalItems > 0,
+        isComplete: Boolean(record.completedAt),
         isB2B: Boolean(order.isB2B),
+        pickedBy: record.pickedBy,
+        completedAt: record.completedAt,
       };
     });
     saveState(state); // persist any freshly-seeded records
@@ -617,6 +636,10 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
       isB2B: Boolean(order.isB2B),
+      pickedBy: record.pickedBy,
+      completedAt: record.completedAt,
+      completedBy: record.completedBy,
+      pickers: PICKERS,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -643,6 +666,87 @@ app.post("/api/picking-item", async (req, res) => {
     }
     saveState(state);
     res.json({ ok: true, itemStatus: record.itemStatus, itemNotes: record.itemNotes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Assign which employee is working this order — tracked for accountability
+app.post("/api/picking-set-picker", async (req, res) => {
+  try {
+    const { stopName, picker } = req.body;
+    if (!stopName) return res.status(400).json({ error: "stopName required" });
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    record.pickedBy = picker || null;
+    saveState(state);
+    res.json({ ok: true, pickedBy: record.pickedBy });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Locks an order as finished — but ONLY if every single line item has
+// been explicitly marked Picked or Missing. This is the actual fix for
+// "forgotten" items: nothing can silently slip through untouched.
+app.post("/api/picking-finish", async (req, res) => {
+  try {
+    const { stopName } = req.body;
+    if (!stopName) return res.status(400).json({ error: "stopName required" });
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+
+    if (!record.pickedBy) {
+      return res.status(400).json({ error: "Select who's picking this order first." });
+    }
+
+    const outstanding = order.lineItems
+      .map((item, idx) => ({ idx, title: item.title, status: record.itemStatus[idx] || "not_picked" }))
+      .filter((item) => item.status === "not_picked");
+
+    if (outstanding.length > 0) {
+      return res.status(400).json({
+        error: `${outstanding.length} item(s) still need to be marked before finishing.`,
+        outstanding,
+      });
+    }
+
+    record.completedAt = new Date().toISOString();
+    record.completedBy = record.pickedBy;
+    saveState(state);
+    res.json({ ok: true, completedAt: record.completedAt, completedBy: record.completedBy });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Undoes a Finish — clears the completed lock so the order can be edited
+// again (e.g. a mistake was noticed after finishing).
+app.post("/api/picking-reopen", async (req, res) => {
+  try {
+    const { stopName } = req.body;
+    if (!stopName) return res.status(400).json({ error: "stopName required" });
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    record.completedAt = null;
+    record.completedBy = null;
+    saveState(state);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

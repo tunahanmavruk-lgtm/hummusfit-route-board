@@ -241,6 +241,176 @@
     letter-spacing:0.06em;
   }
 
+  .picker-row{
+    margin-bottom: 18px;
+  }
+  .picker-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:700;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .picker-select{
+    width:100%;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-weight:700;
+    font-size: 15px;
+    outline:none;
+  }
+  .picker-select:focus{ border-color: var(--teal); }
+
+  .completed-banner{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: rgba(43,224,196,0.12);
+    border: 1.5px solid rgba(43,224,196,0.4);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight:700;
+    color: var(--teal);
+  }
+  .reopen-link{
+    margin-left:auto;
+    text-decoration:underline;
+    color: var(--dim);
+    font-weight:700;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+
+  .scan-btn{
+    flex-shrink:0;
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--card-2);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 19px;
+    cursor:pointer;
+    color: var(--dim);
+  }
+  .scan-btn:active{ transform: scale(0.9); }
+
+  .finish-btn{
+    width:100%;
+    padding: 18px;
+    border-radius: 14px;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 14px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    text-align:center;
+    cursor:pointer;
+    border: none;
+    background: var(--teal);
+    color: #06231D;
+    margin-bottom: 12px;
+  }
+  .finish-btn:disabled{
+    opacity: 0.3;
+    cursor: default;
+  }
+  .finish-hint{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    margin: -4px 0 14px;
+  }
+
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background: rgba(0,0,0,0.75);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 200;
+    padding: 24px;
+  }
+  .modal-box{
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 20px;
+    padding: 28px 24px;
+    max-width: 380px;
+    width:100%;
+  }
+  .modal-title{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 26px;
+    margin-bottom: 14px;
+  }
+  .modal-stat-row{
+    display:flex;
+    justify-content:space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    margin-top: 20px;
+  }
+  .modal-btn{
+    flex:1;
+    padding: 14px;
+    border-radius: 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+    font-size: 12.5px;
+    text-transform:uppercase;
+    text-align:center;
+    cursor:pointer;
+    border: 1.5px solid var(--line);
+    background: var(--card-2);
+    color: var(--ink);
+  }
+  .modal-btn.confirm{
+    background: var(--teal);
+    color: #06231D;
+    border-color: var(--teal);
+  }
+
+  #scannerOverlay{
+    position:fixed;
+    inset:0;
+    background:#000;
+    z-index: 300;
+    display:flex;
+    flex-direction:column;
+  }
+  #scannerOverlay .scanner-header{
+    padding: max(20px, env(safe-area-inset-top)) 20px 16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    color:#fff;
+  }
+  #scannerOverlay .scanner-close{
+    font-size: 22px;
+    color:#fff;
+    cursor:pointer;
+    padding: 4px 10px;
+  }
+  #reader{ flex:1; }
+
   .item-card{
     background: var(--card);
     border: 1.5px solid var(--line);
@@ -369,6 +539,7 @@
     pointer-events:none;
   }
 </style>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -382,11 +553,22 @@
   <div class="empty-state">Loading…</div>
 </main>
 
+<div id="modalContainer"></div>
+<div id="scannerOverlay" style="display:none;">
+  <div class="scanner-header">
+    <span>Scan item barcode</span>
+    <span class="scanner-close" id="scannerCloseBtn">✕</span>
+  </div>
+  <div id="reader"></div>
+</div>
+
 <script>
 (function(){
   var view = 'list';
   var pickingList = [];
   var orderDetail = null;
+  var scanningForIdx = null;
+  var html5QrCode = null;
 
   function ringSvg(picked, missing, total){
     var done = picked + missing;
@@ -445,6 +627,119 @@
     return 'picked';
   }
 
+  // ---- Finish confirmation modal ----
+  function closeModal(){
+    document.getElementById('modalContainer').innerHTML = '';
+  }
+
+  function showFinishConfirmation(picked, missing, total){
+    var html =
+      '<div class="modal-overlay" id="finishModalOverlay">' +
+        '<div class="modal-box">' +
+          '<div class="modal-title">Finish Order?</div>' +
+          '<div class="modal-stat-row"><span>Picked</span><span>' + picked + '</span></div>' +
+          '<div class="modal-stat-row"><span>Missing</span><span>' + missing + '</span></div>' +
+          '<div class="modal-stat-row"><span>Total items</span><span>' + total + '</span></div>' +
+          '<div class="modal-actions">' +
+            '<div class="modal-btn" id="modalCancelBtn">Cancel</div>' +
+            '<div class="modal-btn confirm" id="modalConfirmBtn">Confirm &amp; Finish</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('modalContainer').innerHTML = html;
+
+    document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+    document.getElementById('finishModalOverlay').addEventListener('click', function(e){
+      if(e.target.id === 'finishModalOverlay') closeModal();
+    });
+    document.getElementById('modalConfirmBtn').addEventListener('click', function(){
+      fetch('/api/picking-finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stopName: orderDetail.stopName })
+      }).then(function(r){
+        return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+      }).then(function(result){
+        closeModal();
+        if(!result.ok || result.data.error){
+          alert(result.data.error || 'Could not finish this order.');
+          return;
+        }
+        orderDetail.completedAt = result.data.completedAt;
+        orderDetail.completedBy = result.data.completedBy;
+        renderOrder();
+      }).catch(function(err){
+        closeModal();
+        alert('Could not reach the server: ' + err.message);
+      });
+    });
+  }
+
+  // ---- Barcode scanning ----
+  function openScanner(idx){
+    scanningForIdx = idx;
+    document.getElementById('scannerOverlay').style.display = 'flex';
+    if(typeof Html5Qrcode === 'undefined'){
+      alert('Barcode scanner failed to load. Check your connection and try again.');
+      closeScanner();
+      return;
+    }
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 260, height: 160 } },
+      function(decodedText){
+        handleScanResult(decodedText);
+      },
+      function(){ /* ignore per-frame scan misses */ }
+    ).catch(function(err){
+      alert('Could not access the camera: ' + err);
+      closeScanner();
+    });
+  }
+
+  function closeScanner(){
+    document.getElementById('scannerOverlay').style.display = 'none';
+    if(html5QrCode){
+      html5QrCode.stop().catch(function(){}).then(function(){
+        html5QrCode.clear();
+        html5QrCode = null;
+      });
+    }
+    scanningForIdx = null;
+  }
+
+  function handleScanResult(scannedCode){
+    if(scanningForIdx === null) return;
+    var idx = scanningForIdx;
+    var item = orderDetail.lineItems[idx];
+    var expectedSku = (item.sku || '').trim();
+    var scanned = (scannedCode || '').trim();
+
+    closeScanner();
+
+    if(!expectedSku){
+      // No SKU on file for this item — can't verify, but let the picker
+      // proceed manually rather than blocking them on missing catalog data.
+      alert('No barcode on file for this item yet — mark it picked manually.');
+      return;
+    }
+
+    if(scanned === expectedSku){
+      orderDetail.itemStatus[idx] = 'picked';
+      renderOrder();
+      fetch('/api/picking-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: 'picked' })
+      });
+    } else {
+      alert('That barcode doesn\'t match "' + item.title + '". Double-check you grabbed the right item.');
+    }
+  }
+
+  document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
+
   function renderOrder(){
     view = 'order';
     document.getElementById('pageTitle').textContent = orderDetail.stopName;
@@ -453,19 +748,30 @@
 
     document.body.classList.toggle('b2b-mode', Boolean(orderDetail.isB2B));
 
-    var picked = 0, missing = 0;
+    var picked = 0, missing = 0, notPicked = 0;
     orderDetail.lineItems.forEach(function(item, idx){
       var s = orderDetail.itemStatus[idx] || 'not_picked';
       if(s === 'picked') picked++;
-      if(s === 'missing') missing++;
+      else if(s === 'missing') missing++;
+      else notPicked++;
     });
     var total = orderDetail.lineItems.length;
     var done = picked + missing;
+    var isLocked = Boolean(orderDetail.completedAt);
 
     var html = '';
     if(orderDetail.isB2B){
       html += '<div class="b2b-banner"><span class="icon">⬢</span> Out-of-State / B2B Order — different from local store picking</div>';
     }
+
+    if(isLocked){
+      html +=
+        '<div class="completed-banner">' +
+          '✓ Finished by ' + orderDetail.completedBy + ' — ' + fmtTime(orderDetail.completedAt) +
+          '<span class="reopen-link" id="reopenLink">Reopen</span>' +
+        '</div>';
+    }
+
     html +=
       '<div class="order-header">' +
         '<div>' +
@@ -478,29 +784,54 @@
         '</div>' +
       '</div>';
 
+    if(!isLocked){
+      html +=
+        '<div class="picker-row">' +
+          '<div class="picker-label">Who\'s picking this order</div>' +
+          '<select class="picker-select" id="pickerSelect">' +
+            '<option value="">— Select your name —</option>' +
+            (orderDetail.pickers || []).map(function(p){
+              return '<option value="' + p + '"' + (p === orderDetail.pickedBy ? ' selected' : '') + '>' + p + '</option>';
+            }).join('') +
+          '</select>' +
+        '</div>';
+    }
+
     orderDetail.lineItems.forEach(function(item, idx){
       var status = orderDetail.itemStatus[idx] || 'not_picked';
       var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : '');
       var label = status === 'picked' ? 'Picked' : (status === 'missing' ? 'Missing' : 'Tap when picked');
       html +=
-        '<div class="item-card ' + status + '" data-idx="' + idx + '">' +
+        '<div class="item-card ' + status + '" data-idx="' + idx + '" style="' + (isLocked ? 'opacity:0.7;' : '') + '">' +
           '<div class="item-qty">' + item.quantity + '</div>' +
           '<div class="item-info">' +
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
           '</div>' +
+          (isLocked ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
           '<div class="tap-btn" data-idx="' + idx + '">' + icon + '</div>' +
         '</div>';
       if(status === 'missing'){
         html +=
           '<div class="missing-note-row">' +
             '<input type="text" placeholder="Why is it missing? (optional)" data-note-idx="' + idx + '" value="' +
-            (orderDetail.itemNotes[idx] || '').replace(/"/g,'&quot;') + '">' +
+            (orderDetail.itemNotes[idx] || '').replace(/"/g,'&quot;') + '" ' + (isLocked ? 'disabled' : '') + '>' +
           '</div>';
       }
     });
 
     var hasMissing = missing > 0;
+    var canFinish = !isLocked && notPicked === 0 && total > 0;
+
+    if(!isLocked){
+      html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>Finish Order</button>';
+      if(!canFinish){
+        html += '<div class="finish-hint">' +
+          (notPicked > 0 ? notPicked + ' item(s) still need to be marked before you can finish' : 'Select your name to finish') +
+        '</div>';
+      }
+    }
+
     html +=
       '<div class="bottom-bar">' +
         '<a class="big-btn' + (hasMissing ? ' danger' : ' disabled') + '" ' +
@@ -511,7 +842,54 @@
 
     main.innerHTML = html;
 
-    document.querySelectorAll('.tap-btn, .item-card').forEach(function(el){
+    if(isLocked){
+      var reopenEl = document.getElementById('reopenLink');
+      if(reopenEl){
+        reopenEl.addEventListener('click', function(){
+          if(confirm('Reopen this order for editing?')){
+            fetch('/api/picking-reopen', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ stopName: orderDetail.stopName })
+            }).then(function(r){ return r.json(); }).then(function(){
+              orderDetail.completedAt = null;
+              orderDetail.completedBy = null;
+              renderOrder();
+            });
+          }
+        });
+      }
+    }
+
+    var pickerEl = document.getElementById('pickerSelect');
+    if(pickerEl){
+      pickerEl.addEventListener('change', function(){
+        orderDetail.pickedBy = pickerEl.value;
+        fetch('/api/picking-set-picker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopName: orderDetail.stopName, picker: pickerEl.value })
+        }).then(function(){
+          renderOrder();
+        });
+      });
+    }
+
+    var finishEl = document.getElementById('finishBtn');
+    if(finishEl){
+      finishEl.addEventListener('click', function(){
+        showFinishConfirmation(picked, missing, total);
+      });
+    }
+
+    document.querySelectorAll('[data-scan-idx]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        openScanner(parseInt(btn.dataset.scanIdx, 10));
+      });
+    });
+
+    document.querySelectorAll('.tap-btn').forEach(function(el){
+      if(isLocked) return;
       el.addEventListener('click', function(){
         var idx = this.dataset.idx;
         if(idx === undefined) return;
