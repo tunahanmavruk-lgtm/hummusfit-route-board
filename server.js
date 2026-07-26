@@ -365,7 +365,7 @@ async function fetchTodaysStopOrders() {
               createdAt
               customer { tags }
               lineItems(first: 50) {
-                edges { node { title quantity sku } }
+                edges { node { title quantity sku variantTitle } }
               }
             }
           }
@@ -401,7 +401,16 @@ async function fetchTodaysStopOrders() {
           orderId: order.id,
           orderName: order.name,
           createdAt: order.createdAt,
-          lineItems: order.lineItems.edges.map((e) => e.node),
+          lineItems: order.lineItems.edges.map((e) => {
+            const node = e.node;
+            const hasRealVariant =
+              node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
+            return {
+              title: hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title,
+              quantity: node.quantity,
+              sku: node.sku,
+            };
+          }),
           isB2B: stopMeta.isB2B,
         };
       }
