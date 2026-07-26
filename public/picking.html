@@ -373,37 +373,36 @@
   #crateFab{
     position: fixed;
     right: 18px;
-    bottom: calc(96px + env(safe-area-inset-bottom));
+    bottom: calc(100px + env(safe-area-inset-bottom));
     z-index: 150;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    width: 76px;
-    height: 76px;
+    justify-content: center;
+    gap: 0px;
+    width: 88px;
+    height: 88px;
     border-radius: 50%;
-    border: none;
+    border: 3px solid #fff;
     background: var(--ink);
     color: #fff;
-    box-shadow: 0 8px 24px rgba(20,19,17,0.35);
+    box-shadow: 0 8px 24px rgba(20,19,17,0.4);
     cursor: pointer;
+    padding: 0;
   }
   #crateFab:active{ transform: scale(0.94); }
   #crateFab:disabled{
     opacity: 0.35;
     cursor: default;
   }
-  #crateFab .fab-label{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 9px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.03em;
-    line-height:1.15;
+  #crateFab .fab-icon{
+    font-size: 18px;
+    line-height:1;
+    margin-bottom: 2px;
   }
   #crateFab .fab-count{
     font-family:'Bebas Neue', sans-serif;
-    font-size: 22px;
+    font-size: 30px;
     line-height:1;
   }
 
@@ -433,6 +432,18 @@
     max-width: 380px;
     width:100%;
     box-shadow: 0 20px 60px rgba(20,19,17,0.25);
+  }
+  .print-modal-box{
+    max-width: 420px;
+  }
+  .print-preview-frame{
+    width: 100%;
+    height: 50vh;
+    min-height: 320px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    margin: 14px 0;
+    background: #fff;
   }
   .modal-title{
     font-family:'Bebas Neue', sans-serif;
@@ -681,7 +692,7 @@
      70-item order never needs scrolling to the bottom just to close
      out a crate. -->
 <button id="crateFab" style="display:none;">
-  <span class="fab-label">Crate Full</span>
+  <span class="fab-icon">📦</span>
   <span class="fab-count" id="crateFabCount">0</span>
 </button>
 
@@ -934,39 +945,40 @@
   // whatever the picker's already looking at; once they tap Print (or
   // cancel), they're right back where they left off, mid-order.
   function printPdfInPlace(url){
-    var iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '1px';
-    iframe.style.height = '1px';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    var didPrint = false;
-    var fallbackTimer = setTimeout(function(){
-      // If the print dialog never triggered within a couple seconds
-      // (some browsers restrict this), fall back to the reliable
-      // open-in-new-tab approach instead of silently failing.
-      if(!didPrint){
-        window.open(url, '_blank');
-      }
-    }, 2500);
-    iframe.onload = function(){
+    var html =
+      '<div class="modal-overlay" id="printModalOverlay">' +
+        '<div class="modal-box print-modal-box">' +
+          '<div class="modal-title">Ready to Print</div>' +
+          '<iframe id="printPreviewFrame" class="print-preview-frame" src="' + url + '"></iframe>' +
+          '<div class="modal-actions">' +
+            '<div class="modal-btn" id="printModalCloseBtn">Close</div>' +
+            '<div class="modal-btn confirm" id="printModalPrintBtn">Print</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('modalContainer').innerHTML = html;
+
+    function closePrintModal(){
+      document.getElementById('modalContainer').innerHTML = '';
+    }
+
+    document.getElementById('printModalCloseBtn').addEventListener('click', closePrintModal);
+    document.getElementById('printModalOverlay').addEventListener('click', function(e){
+      if(e.target.id === 'printModalOverlay') closePrintModal();
+    });
+    document.getElementById('printModalPrintBtn').addEventListener('click', function(){
+      // By this point the picker has actually seen the label rendered
+      // on screen, so the PDF has genuinely finished loading — that's
+      // what was causing blank pages before, calling print() before
+      // the PDF viewer had actually painted anything yet.
+      var frame = document.getElementById('printPreviewFrame');
       try{
-        didPrint = true;
-        clearTimeout(fallbackTimer);
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
       } catch(e){
-        clearTimeout(fallbackTimer);
         window.open(url, '_blank');
       }
-      setTimeout(function(){
-        if(iframe.parentNode){ iframe.parentNode.removeChild(iframe); }
-      }, 60000);
-    };
-    iframe.src = url;
-    document.body.appendChild(iframe);
+    });
   }
 
   function focusHwScanInput(){
