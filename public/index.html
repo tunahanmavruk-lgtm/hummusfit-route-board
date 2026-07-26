@@ -164,8 +164,21 @@
     font-family:'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight:700;
-    color: var(--teal);
+    color: var(--dim);
     margin-left:auto;
+  }
+  .eta-summary.live{
+    color: var(--teal);
+  }
+
+  .started-time-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--orange);
+    background: var(--orange-tint);
+    padding: 6px 12px;
+    border-radius: 999px;
   }
 
   .hq-address{
@@ -578,12 +591,20 @@
       var startBtn = meta.startedAt
         ? '<span class="action-btn started">Started ' + fmtTime(meta.startedAt) + '</span>'
         : '<button class="action-btn start" data-start="' + route.id + '">Start Route</button>';
+
+      // A clearly distinct badge showing the actual start time, separate
+      // from the button label — makes it obvious at a glance that this
+      // route is actively live, not just planned.
+      var startedTimeBadge = meta.startedAt
+        ? '<span class="started-time-badge">🕐 Started at ' + fmtTime(meta.startedAt) + '</span>'
+        : '';
+
       var etaSummary = '';
       if(eta && eta.available && eta.etaBackToHQ){
-        etaSummary = '<span class="eta-summary">Back to HQ ~' + fmtTime(eta.etaBackToHQ) + '</span>';
+        etaSummary = '<span class="eta-summary live">Live — Back to HQ ~' + fmtTime(eta.etaBackToHQ) + '</span>';
       } else if(meta.totalDurationSeconds){
         var mins = Math.round(meta.totalDurationSeconds / 60);
-        etaSummary = '<span class="eta-summary">Est. total drive: ' + mins + ' min</span>';
+        etaSummary = '<span class="eta-summary">Planned — Est. total drive: ' + mins + ' min</span>';
       }
 
       // Once a route has been optimized, build a real Google Maps link —
@@ -633,7 +654,7 @@
           (assignment.van ? vanLiveHtml(assignment.van) : '') +
         '</div>' +
         '<div class="route-actions">' +
-          optimizeBtn + startBtn + openMapsBtn + etaSummary +
+          optimizeBtn + startBtn + openMapsBtn + startedTimeBadge + etaSummary +
         '</div>' +
         '<div class="stops">' + stopsHtml + '</div>';
 
