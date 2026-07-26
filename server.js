@@ -164,6 +164,17 @@ function pickerPhotoFor(name) {
   return PICKER_PHOTOS[name] || null;
 }
 
+// Employee names come in two formats — "Hazar Kutuk" or "Chavez, Richy
+// C" (Last, First Middle) — this pulls out just the first name either
+// way, for a friendlier "Look who picked your order!" caption.
+function firstNameOf(fullName) {
+  if (fullName.includes(",")) {
+    const afterComma = fullName.split(",")[1].trim();
+    return afterComma.split(/\s+/)[0];
+  }
+  return fullName.split(/\s+/)[0];
+}
+
 const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
 
 // How long a driver realistically needs to unload at each stop before
@@ -441,15 +452,36 @@ app.get("/api/today-orders", async (req, res) => {
   });
   try {
     const cache = await fetchTodaysStopOrders();
+    const state = loadState();
+    const pickingStatus = {};
+    Object.keys(cache.byStopName).forEach((key) => {
+      const order = cache.byStopName[key];
+      const record = state.picking[key];
+      if (!record || record.orderId !== order.orderId) {
+        pickingStatus[key] = { status: "not_started" };
+        return;
+      }
+      if (record.completedAt) {
+        pickingStatus[key] = { status: "completed", pickedBy: record.completedBy };
+        return;
+      }
+      const anyTouched = Object.keys(record.itemStatus || {}).length > 0;
+      if (record.pickedBy || anyTouched) {
+        pickingStatus[key] = { status: "in_progress", pickedBy: record.pickedBy };
+        return;
+      }
+      pickingStatus[key] = { status: "not_started" };
+    });
     res.json({
       byStopName: cache.byStopName,
       windowStart: cache.windowStart,
       windowEnd: cache.windowEnd,
       scheduledToday,
+      pickingStatus,
       configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
     });
   } catch (err) {
-    res.json({ byStopName: {}, scheduledToday, configured: false, error: err.message });
+    res.json({ byStopName: {}, scheduledToday, pickingStatus: {}, configured: false, error: err.message });
   }
 });
 
@@ -1097,6 +1129,60 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
       const afterY = doc.y;
       doc.y = Math.max(afterY, rowY + 14) + 5;
     });
+
+    // "Look who picked your order!" — a friendly human touch at the
+    // bottom of the label. Uses a real photo when one's on file,
+    // otherwise falls back to the same initials-badge style used
+    // elsewhere, so it always shows something clean either way.
+    if (record.pickedBy) {
+      doc.moveDown(1);
+      doc.moveTo(16, doc.y).lineTo(272, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
+      doc.moveDown(0.7);
+
+      const sectionY = doc.y;
+      const circleD = 46;
+      const circleR = circleD / 2;
+      const circleCX = 16 + circleR;
+      const circleCY = sectionY + circleR;
+
+      let photoDrawn = false;
+      const photoUrl = pickerPhotoFor(record.pickedBy);
+      if (photoUrl) {
+        const filePath = path.join(__dirname, "public", photoUrl);
+        if (fs.existsSync(filePath)) {
+          try {
+            doc.save();
+            doc.circle(circleCX, circleCY, circleR).clip();
+            doc.image(filePath, circleCX - circleR, circleCY - circleR, { width: circleD, height: circleD });
+            doc.restore();
+            photoDrawn = true;
+          } catch (imgErr) {
+            photoDrawn = false;
+          }
+        }
+      }
+      if (!photoDrawn) {
+        doc.circle(circleCX, circleCY, circleR).fill("#111111");
+        const initials = record.pickedBy
+          .split(/[\s,]+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((w) => w.charAt(0).toUpperCase())
+          .join("");
+        doc.font("Helvetica-Bold").fontSize(14).fillColor("#FFFFFF");
+        const iw = doc.widthOfString(initials);
+        doc.text(initials, circleCX - iw / 2, circleCY - 7);
+      }
+
+      const textX = circleCX + circleR + 12;
+      const textWidth = 288 - 16 - textX;
+      doc.font("Helvetica").fontSize(9.5).fillColor("#666666")
+        .text("Look who picked your order!", textX, sectionY + 6, { width: textWidth });
+      doc.font("Helvetica-Bold").fontSize(18).fillColor("#111111")
+        .text(firstNameOf(record.pickedBy).toUpperCase(), textX, sectionY + 19, { width: textWidth });
+
+      doc.y = sectionY + circleD + 8;
+    }
 
     doc.end();
   } catch (err) {

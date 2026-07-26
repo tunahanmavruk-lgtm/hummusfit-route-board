@@ -252,6 +252,33 @@
     white-space:nowrap;
   }
 
+  .picking-flash-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:800;
+    letter-spacing:0.03em;
+    white-space:nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: #fff;
+    background: #E8612C;
+    animation: pickingFlash 1s ease-in-out infinite;
+  }
+  @keyframes pickingFlash{
+    0%, 100% { background: #E8612C; box-shadow: 0 0 0 rgba(232,97,44,0); }
+    50% { background: #FF2D55; box-shadow: 0 0 10px rgba(255,45,85,0.6); }
+  }
+  .picking-done-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    white-space:nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: var(--teal);
+    background: var(--teal-tint);
+  }
+
   .assign-row{
     display:flex;
     gap: 12px;
@@ -464,6 +491,7 @@
   var hqData = { name: '', address: '' };
   var stateData = { assignments: {}, stopStatus: {}, routeMeta: {} };
   var ordersByStop = {};
+  var pickingStatusByStop = {};
   var scheduledToday = {};
   var vanStatusList = [];
   var etaCache = {}; // routeId -> eta response
@@ -574,12 +602,21 @@
         }
         var arrivedChip = stopState.arrivedAt ? '<span class="eta-chip">Arrived ' + fmtTime(stopState.arrivedAt) + '</span>' : '';
 
+        var pickingInfo = pickingStatusByStop[stopKey] || { status: 'not_started' };
+        var pickingChip = '';
+        if(pickingInfo.status === 'in_progress'){
+          pickingChip = '<span class="picking-flash-chip">⚡ PICKING IN PROGRESS' + (pickingInfo.pickedBy ? ' — ' + pickingInfo.pickedBy.toUpperCase() : '') + '</span>';
+        } else if(pickingInfo.status === 'completed'){
+          pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + '</span>';
+        }
+
         stopsHtml +=
           '<div class="stop-row">' +
             '<div class="status-dot ' + status + '" data-stop="' + stop.id + '"></div>' +
             '<div class="stop-name">' + stop.name + '</div>' +
             (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
             '<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>' +
+            pickingChip +
             (etaChip || arrivedChip) +
             '<button class="issue-toggle' + (stopState.issue ? ' active' : '') + '" data-issue-stop="' + stop.id + '" title="Report an issue">!</button>' +
             pillHtml +
@@ -796,6 +833,7 @@
       stateData = results[1];
       ordersByStop = results[2].byStopName || {};
       scheduledToday = results[2].scheduledToday || {};
+      pickingStatusByStop = results[2].pickingStatus || {};
       vanStatusList = results[3].vehicles || [];
       render();
       refreshAllStartedEtas();
@@ -814,6 +852,7 @@
       stateData = results[0];
       ordersByStop = results[1].byStopName || {};
       scheduledToday = results[1].scheduledToday || {};
+      pickingStatusByStop = results[1].pickingStatus || {};
       vanStatusList = results[2].vehicles || [];
       render();
       refreshAllStartedEtas();
