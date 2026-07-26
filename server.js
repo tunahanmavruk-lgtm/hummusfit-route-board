@@ -157,7 +157,7 @@ const PICKERS = [
 // frontend — so this works today with zero photos on file, and each
 // name upgrades to a real photo the moment one gets added here.
 const PICKER_PHOTOS = {
-  "Hazar Kutuk": "/headshots/hazar-kutuk.jpg",
+  "Hazar Kutuk": "/headshots/hazar-kutuk.png",
 };
 
 function pickerPhotoFor(name) {
