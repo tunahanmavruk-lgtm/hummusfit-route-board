@@ -593,7 +593,11 @@
           var pct = (pickingInfo.percent !== undefined) ? pickingInfo.percent : 0;
           pickingChip = '<span class="picking-flash-chip">⚡ PICKING IN PROGRESS — ' + pct + '%' + (pickingInfo.pickedBy ? ' — ' + pickingInfo.pickedBy.toUpperCase() : '') + '</span>';
         } else if(pickingInfo.status === 'completed'){
-          pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + '</span>';
+          var timeRange = '';
+          if(pickingInfo.startedAt && pickingInfo.completedAt){
+            timeRange = ' — ' + fmtTime(pickingInfo.startedAt) + ' to ' + fmtTime(pickingInfo.completedAt);
+          }
+          pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + timeRange + '</span>';
         }
 
         // Showing "NOT STARTED" (delivery status) right next to a

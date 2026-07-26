@@ -462,7 +462,12 @@ app.get("/api/today-orders", async (req, res) => {
         return;
       }
       if (record.completedAt) {
-        pickingStatus[key] = { status: "completed", pickedBy: record.completedBy };
+        pickingStatus[key] = {
+          status: "completed",
+          pickedBy: record.completedBy,
+          startedAt: record.startedAt,
+          completedAt: record.completedAt,
+        };
         return;
       }
       const statuses = Object.values(record.itemStatus || {});
@@ -647,6 +652,7 @@ function getPickingRecord(state, stopName, order) {
       currentCrateNumber: 1, // crate currently being filled; increments via "New Crate"
       closedCrates: [], // list of crate numbers already closed out (label already printed)
       pickedBy: null, // employee name working this order
+      startedAt: null, // set once, the first moment picking actually begins
       completedAt: null, // set once Finish Order succeeds
       completedBy: null,
     };
@@ -655,6 +661,7 @@ function getPickingRecord(state, stopName, order) {
   if (!state.picking[key].itemCrateNumber) state.picking[key].itemCrateNumber = {};
   if (!state.picking[key].currentCrateNumber) state.picking[key].currentCrateNumber = 1;
   if (!state.picking[key].closedCrates) state.picking[key].closedCrates = [];
+  if (state.picking[key].startedAt === undefined) state.picking[key].startedAt = null;
   return state.picking[key];
 }
 
@@ -874,6 +881,9 @@ app.post("/api/picking-item", async (req, res) => {
 
     const state = loadState();
     const record = getPickingRecord(state, key, order);
+    if (!record.startedAt) {
+      record.startedAt = new Date().toISOString();
+    }
     record.itemStatus[itemIndex] = status;
     if (note !== undefined) {
       record.itemNotes[itemIndex] = note;
@@ -953,6 +963,9 @@ app.post("/api/picking-set-picker", async (req, res) => {
     const state = loadState();
     const record = getPickingRecord(state, key, order);
     record.pickedBy = picker || null;
+    if (picker && !record.startedAt) {
+      record.startedAt = new Date().toISOString();
+    }
     saveState(state);
     res.json({ ok: true, pickedBy: record.pickedBy, pickedByPhoto: record.pickedBy ? pickerPhotoFor(record.pickedBy) : null });
   } catch (err) {
@@ -1113,7 +1126,17 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
 
     // CRATE number — significantly larger now, genuinely hard to miss
     doc.font("Helvetica-Bold").fontSize(36).fillColor("#111111").text(`CRATE ${crateNumber}`, 16, doc.y, { width: usableWidth });
-    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`);
+    const orderLineY = doc.y;
+    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`, 16, orderLineY, { width: usableWidth });
+
+    // Small, subtle "Picked by [name]" — right-aligned on the same line
+    // as the order number, right above the divider. No badge, no photo,
+    // just quiet text.
+    if (record.pickedBy) {
+      doc.font("Helvetica").fontSize(9).fillColor("#999999")
+        .text("Picked by " + firstNameOf(record.pickedBy), 16, orderLineY, { width: usableWidth, align: "right" });
+    }
+
     doc.moveDown(0.8);
     doc.moveTo(16, doc.y).lineTo(272, doc.y).strokeColor("#222222").lineWidth(1).stroke();
     doc.moveDown(0.6);
@@ -1133,69 +1156,6 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
       const afterY = doc.y;
       doc.y = Math.max(afterY, rowY + 14) + 5;
     });
-
-    // "Look who picked your order!" — a friendly human touch at the
-    // bottom of the label. Uses a real photo when one's on file,
-    // otherwise falls back to the same initials-badge style used
-    // elsewhere, so it always shows something clean either way.
-    if (record.pickedBy) {
-      doc.moveDown(1);
-      doc.moveTo(16, doc.y).lineTo(272, doc.y).strokeColor("#dddddd").lineWidth(1).stroke();
-      doc.moveDown(0.7);
-
-      const sectionY = doc.y;
-      const circleD = 46;
-      const circleR = circleD / 2;
-      const circleCX = 16 + circleR;
-      const circleCY = sectionY + circleR;
-
-      let photoDrawn = false;
-      const photoUrl = pickerPhotoFor(record.pickedBy);
-      if (photoUrl) {
-        const filePath = path.join(__dirname, "public", photoUrl);
-        if (fs.existsSync(filePath)) {
-          let clipped = false;
-          try {
-            doc.save();
-            doc.circle(circleCX, circleCY, circleR).clip();
-            clipped = true;
-            doc.image(filePath, circleCX - circleR, circleCY - circleR, { width: circleD, height: circleD });
-            photoDrawn = true;
-          } catch (imgErr) {
-            photoDrawn = false;
-          } finally {
-            // Critical: doc.save() opened a graphics-state frame that
-            // MUST be closed with doc.restore() no matter what happens
-            // in between — otherwise the PDF's internal state gets
-            // unbalanced and can corrupt everything drawn after this
-            // point, making the whole file fail to load rather than
-            // just the photo.
-            if (clipped) doc.restore();
-          }
-        }
-      }
-      if (!photoDrawn) {
-        doc.circle(circleCX, circleCY, circleR).fill("#111111");
-        const initials = record.pickedBy
-          .split(/[\s,]+/)
-          .filter(Boolean)
-          .slice(0, 2)
-          .map((w) => w.charAt(0).toUpperCase())
-          .join("");
-        doc.font("Helvetica-Bold").fontSize(14).fillColor("#FFFFFF");
-        const iw = doc.widthOfString(initials);
-        doc.text(initials, circleCX - iw / 2, circleCY - 7);
-      }
-
-      const textX = circleCX + circleR + 12;
-      const textWidth = 288 - 16 - textX;
-      doc.font("Helvetica").fontSize(9.5).fillColor("#666666")
-        .text("Look who picked your order!", textX, sectionY + 6, { width: textWidth });
-      doc.font("Helvetica-Bold").fontSize(18).fillColor("#111111")
-        .text(firstNameOf(record.pickedBy).toUpperCase(), textX, sectionY + 19, { width: textWidth });
-
-      doc.y = sectionY + circleD + 8;
-    }
 
     doc.end();
   } catch (err) {
