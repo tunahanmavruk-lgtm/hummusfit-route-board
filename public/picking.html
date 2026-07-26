@@ -245,6 +245,22 @@
     letter-spacing:0.06em;
   }
 
+  .scanner-ready-hint{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    color: var(--teal);
+    margin-bottom: 14px;
+  }
+  .scanner-ready-hint .dot{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal-glow);
+  }
+
   .picker-row{
     margin-bottom: 18px;
   }
@@ -634,6 +650,14 @@
   <div id="reader"></div>
 </div>
 
+<!-- Invisible input that captures real Bluetooth scanner "keyboard"
+     input. A paired hardware scanner types the barcode into whatever
+     text field is focused, then sends Enter — this field stays
+     silently focused during picking so a scan works no matter what
+     the picker is looking at on screen, no button tap required. -->
+<input type="text" id="hwScanInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+  style="position:fixed; top:-100px; left:-100px; width:1px; height:1px; opacity:0; pointer-events:none;">
+
 <script>
 (function(){
   var view = 'list';
@@ -820,6 +844,79 @@
 
   document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
 
+  // ---- Real Bluetooth (hardware) scanner support ----
+  // A paired Bluetooth scanner acts like a keyboard: it types the
+  // barcode into this invisible field, then sends Enter automatically.
+  // Unlike the camera flow, no item needs to be pre-selected — the
+  // picker just scans whatever product is in their hand, and the
+  // system finds which line item it matches.
+  var hwScanInputEl = document.getElementById('hwScanInput');
+
+  function focusHwScanInput(){
+    if(view === 'order' && orderDetail && !orderDetail.completedAt){
+      hwScanInputEl.focus();
+    }
+  }
+
+  hwScanInputEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      var code = hwScanInputEl.value.trim();
+      hwScanInputEl.value = '';
+      if(code){ handleHardwareScan(code); }
+    }
+  });
+
+  // iOS Safari can drop focus after alerts, taps elsewhere, or the app
+  // being backgrounded — keep pulling it back so a physical scan works
+  // at any moment without the picker having to tap anything first.
+  document.addEventListener('click', function(e){
+    if(e.target && e.target.id === 'hwScanInput') return;
+    setTimeout(focusHwScanInput, 50);
+  });
+  window.addEventListener('focus', function(){ setTimeout(focusHwScanInput, 50); });
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) setTimeout(focusHwScanInput, 50);
+  });
+
+  function handleHardwareScan(scannedCode){
+    if(!orderDetail || !orderDetail.lineItems) return;
+
+    var matchIdx = -1;
+    for(var i = 0; i < orderDetail.lineItems.length; i++){
+      var item = orderDetail.lineItems[i];
+      var expectedSku = (item.sku || '').trim();
+      var currentStatus = orderDetail.itemStatus[i] || 'not_picked';
+      if(expectedSku && expectedSku === scannedCode && currentStatus !== 'picked'){
+        matchIdx = i;
+        break;
+      }
+    }
+
+    if(matchIdx === -1){
+      var alreadyPicked = orderDetail.lineItems.some(function(item, i){
+        return (item.sku || '').trim() === scannedCode && (orderDetail.itemStatus[i] === 'picked');
+      });
+      if(alreadyPicked){
+        alert('That item is already marked picked.');
+      } else {
+        alert('Scanned code doesn\'t match any item in this order. Double-check you grabbed the right product.');
+      }
+      focusHwScanInput();
+      return;
+    }
+
+    orderDetail.itemStatus[matchIdx] = 'picked';
+    orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
+    orderDetail.itemCrateNumber[matchIdx] = orderDetail.currentCrateNumber;
+    renderOrder();
+    fetch('/api/picking-item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: matchIdx, status: 'picked' })
+    });
+  }
+
   function renderOrder(){
     view = 'order';
     document.getElementById('pageTitle').textContent = orderDetail.stopName;
@@ -866,6 +963,7 @@
       '</div>';
 
     if(!isLocked){
+      html += '<div class="scanner-ready-hint"><span class="dot"></span>Bluetooth scanner ready — scan any item, no tap needed</div>';
       html +=
         '<div class="picker-row">' +
           '<div class="picker-label">Who\'s picking this order</div>' +
@@ -1096,6 +1194,8 @@
         }, 500);
       });
     });
+
+    focusHwScanInput();
   }
 
   function openOrder(stopName){
