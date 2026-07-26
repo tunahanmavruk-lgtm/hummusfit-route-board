@@ -509,7 +509,15 @@
       var meta = stateData.routeMeta[route.id] || {};
       var eta = etaCache[route.id];
 
-      var deliveredCount = route.stops.filter(function(s){
+      // Stops that aren't scheduled to deliver today (e.g. Natural Body's
+      // Mon/Wed/Fri-only schedule) are fully hidden from the board, not
+      // just muted — the route visually shrinks on its off days.
+      var visibleStops = route.stops.filter(function(s){
+        var key = s.name.toLowerCase();
+        return scheduledToday[key] !== false;
+      });
+
+      var deliveredCount = visibleStops.filter(function(s){
         var st = stateData.stopStatus[s.id];
         return st && st.status === 'delivered';
       }).length;
@@ -518,11 +526,11 @@
       card.className = 'route-card';
 
       // Determine stop display order: optimized order if we have it, otherwise original
-      var orderedStops = route.stops;
+      var orderedStops = visibleStops;
       if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length){
-        orderedStops = meta.optimizedStopIds.map(function(id){
-          return route.stops.find(function(s){ return s.id === id; });
-        });
+        orderedStops = meta.optimizedStopIds
+          .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
+          .filter(function(s){ return s && scheduledToday[s.name.toLowerCase()] !== false; });
       }
 
       var stopsHtml = '';
@@ -585,7 +593,7 @@
           '<span class="route-name">' + route.name + '</span>' +
           '<span class="route-time">' + route.time + '</span>' +
           '<span class="route-size">' + route.vanSize + '</span>' +
-          '<span class="route-progress">' + deliveredCount + '/' + route.stops.length + ' delivered</span>' +
+          '<span class="route-progress">' + deliveredCount + '/' + visibleStops.length + ' delivered</span>' +
         '</div>' +
         '<div class="hq-address">Starts &amp; ends at ' + hqData.name + ' — ' + hqData.address + '</div>' +
         parkwayWarning +
