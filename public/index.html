@@ -152,6 +152,13 @@
   .action-btn.optimize{ background: var(--black); color:#fff; }
   .action-btn.start{ background: var(--orange); color:#fff; }
   .action-btn.started{ background: var(--teal-tint); color: var(--teal); }
+  .action-btn.maps{
+    background: #fff;
+    color: var(--teal);
+    border: 1.5px solid var(--teal);
+    text-decoration:none;
+  }
+  .action-btn.maps:hover{ background: var(--teal-tint); }
 
   .eta-summary{
     font-family:'JetBrains Mono', monospace;
@@ -579,6 +586,25 @@
         etaSummary = '<span class="eta-summary">Est. total drive: ' + mins + ' min</span>';
       }
 
+      // Once a route has been optimized, build a real Google Maps link —
+      // the same kind you could tap on a phone — pre-loaded with HQ as
+      // start/end and every stop in the exact optimized order, so a
+      // driver gets actual turn-by-turn navigation, not just a number.
+      var openMapsBtn = '';
+      if(meta.optimizedStopIds && meta.optimizedStopIds.length){
+        var orderedForMaps = meta.optimizedStopIds
+          .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
+          .filter(function(s){ return s && s.address && scheduledToday[s.name.toLowerCase()] !== false; });
+        if(orderedForMaps.length){
+          var origin = encodeURIComponent(hqData.address);
+          var destination = encodeURIComponent(hqData.address);
+          var waypoints = orderedForMaps.map(function(s){ return encodeURIComponent(s.address); }).join('|');
+          var mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + origin +
+            '&destination=' + destination + '&waypoints=' + waypoints + '&travelmode=driving';
+          openMapsBtn = '<a class="action-btn maps" href="' + mapsUrl + '" target="_blank" rel="noopener">Open in Google Maps</a>';
+        }
+      }
+
       var parkwayWarning = '';
       if(meta.flaggedParkways && meta.flaggedParkways.length > 0){
         parkwayWarning =
@@ -607,7 +633,7 @@
           (assignment.van ? vanLiveHtml(assignment.van) : '') +
         '</div>' +
         '<div class="route-actions">' +
-          optimizeBtn + startBtn + etaSummary +
+          optimizeBtn + startBtn + openMapsBtn + etaSummary +
         '</div>' +
         '<div class="stops">' + stopsHtml + '</div>';
 
