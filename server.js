@@ -440,17 +440,23 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const itemWidth = 375;
     const boxSize = 14;
     const BRAND_ORANGE = "#E8612C";
-    const BRAND_TEAL = "#2BBFAA";
-    const BRAND_TEAL_TINT = "#EAF7F5";
+    const INK_DARK = "#222222";
+    const ZEBRA_TINT = "#F3F3F1";
 
+    // Reliable, fixed-height column header — draws all three labels at
+    // the exact same y-coordinate (never relies on doc.y auto-advancing
+    // inconsistently between calls), then explicitly sets doc.y for the
+    // divider line so it always sits cleanly below the text with no
+    // chance of the line crossing through the letters.
     function drawColumnHeaders() {
+      const headerY = doc.y;
       doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580");
-      doc.text("PICKED", checkboxX, doc.y, { width: 50, lineBreak: false });
-      doc.text("QTY", qtyX, doc.y - 11, { width: 35, lineBreak: false });
-      doc.text("ITEM", itemX, doc.y - 11, { lineBreak: false });
-      doc.moveDown(0.6);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(BRAND_TEAL).lineWidth(1.5).stroke();
-      doc.moveDown(0.6);
+      doc.text("PICKED", checkboxX, headerY, { width: 50, lineBreak: false });
+      doc.text("QTY", qtyX, headerY, { width: 35, lineBreak: false });
+      doc.text("ITEM", itemX, headerY, { lineBreak: false });
+      doc.y = headerY + 16;
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(INK_DARK).lineWidth(1).stroke();
+      doc.y += 10;
     }
 
     const pageUsableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -465,12 +471,9 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const stopFontSize = fitTextFontSize(doc, stopNameUpper, pageUsableWidth, 60, 32);
     doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#FFFFFF")
       .text(stopNameUpper, 50, 62, { width: pageUsableWidth });
-    // Thin teal accent stripe right under the band for a pop of the
-    // secondary brand color as it transitions into the white body
-    doc.rect(0, BAND_HEIGHT, doc.page.width, 6).fill(BRAND_TEAL);
 
     doc.y = BAND_HEIGHT + 26;
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(BRAND_TEAL).text("PACKING SLIP", { align: "left" });
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(INK_DARK).text("PACKING SLIP", { align: "left" });
     doc.moveDown(0.6);
 
     doc.font("Helvetica-Bold").fontSize(13).fillColor("#111111").text(`Order: ${order.orderName}`);
@@ -501,14 +504,14 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
       // Alternate a light teal tint behind every other row — same idea as
       // before, just recolored to match the brand instead of plain gray
       if (idx % 2 === 1) {
-        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill(BRAND_TEAL_TINT);
+        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill(ZEBRA_TINT);
       }
 
       // Draw an actual empty checkbox square to physically check off by hand
       doc
         .rect(checkboxX, rowY, boxSize, boxSize)
         .lineWidth(1.4)
-        .strokeColor(BRAND_TEAL)
+        .strokeColor(INK_DARK)
         .stroke();
 
       doc.fontSize(11).fillColor("#111111");
