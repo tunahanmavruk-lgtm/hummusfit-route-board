@@ -561,7 +561,7 @@
         var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
         var pillHtml;
         if(order){
-          pillHtml = '<a class="order-pill lit" href="/api/packing-slip/' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
+          pillHtml = '<a class="order-pill lit" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
         } else if(!isScheduled){
           pillHtml = '<span class="order-pill not-scheduled">No delivery today</span>';
         } else {

@@ -961,7 +961,17 @@
     }
   }
 
-  loadList();
+  // Support deep-linking straight into a specific order, e.g.
+  // /picking?stop=Lindenhurst — used by the "order number" link on the
+  // main Route Board so dispatch/drivers land right on that order
+  // instead of having to find it in the list themselves.
+  var urlParams = new URLSearchParams(window.location.search);
+  var deepLinkStop = urlParams.get('stop');
+  if(deepLinkStop){
+    openOrder(deepLinkStop);
+  } else {
+    loadList();
+  }
   setInterval(poll, 15000);
 })();
 </script>
