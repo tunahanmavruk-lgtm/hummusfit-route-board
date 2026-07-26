@@ -3,6 +3,22 @@ const path = require("path");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
 
+// Finds the largest font size (within a min/max range) that still fits
+// the given text on a single line at the specified width — used so a
+// short store name like "Islip" renders huge, while a longer one like
+// "Lindenhurst" automatically steps down just enough to still fit on
+// one line, without ever looking cramped or wrapping awkwardly.
+function fitTextFontSize(doc, text, maxWidth, maxSize, minSize) {
+  doc.font("Helvetica-Bold");
+  let size = maxSize;
+  doc.fontSize(size);
+  while (size > minSize && doc.widthOfString(text) > maxWidth) {
+    size -= 2;
+    doc.fontSize(size);
+  }
+  return size;
+}
+
 const app = express();
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, "data.json");
@@ -423,24 +439,42 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const itemX = 150;
     const itemWidth = 375;
     const boxSize = 14;
+    const BRAND_ORANGE = "#E8612C";
+    const BRAND_TEAL = "#2BBFAA";
+    const BRAND_TEAL_TINT = "#EAF7F5";
 
     function drawColumnHeaders() {
-      doc.fontSize(9).fillColor("#999999");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580");
       doc.text("PICKED", checkboxX, doc.y, { width: 50, lineBreak: false });
       doc.text("QTY", qtyX, doc.y - 11, { width: 35, lineBreak: false });
       doc.text("ITEM", itemX, doc.y - 11, { lineBreak: false });
       doc.moveDown(0.6);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(BRAND_TEAL).lineWidth(1.5).stroke();
       doc.moveDown(0.6);
     }
 
-    doc.fontSize(20).fillColor("#111111").text("HUMMUS FIT", { align: "left" });
-    doc.fontSize(11).fillColor("#666666").text("Packing Slip", { align: "left" });
-    doc.moveDown(1);
+    const pageUsableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const stopNameUpper = req.params.stopName.toUpperCase();
 
-    doc.fontSize(13).fillColor("#111111").text(`Order: ${order.orderName}`);
-    doc.fontSize(10).fillColor("#666666").text(`Ship To: ${req.params.stopName}`);
-    doc.text(`Date: ${new Date(order.createdAt).toLocaleString("en-US", { timeZone: "America/New_York" })}`);
+    // Full-bleed brand-orange header band — this is what makes the slip
+    // feel like Hummus Fit instead of a generic warehouse form.
+    const BAND_HEIGHT = 150;
+    doc.rect(0, 0, doc.page.width, BAND_HEIGHT).fill(BRAND_ORANGE);
+    doc.font("Helvetica-Bold").fontSize(18).fillColor("#FFFFFF")
+      .text("HUMMUS FIT", 50, 34, { width: pageUsableWidth });
+    const stopFontSize = fitTextFontSize(doc, stopNameUpper, pageUsableWidth, 60, 32);
+    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#FFFFFF")
+      .text(stopNameUpper, 50, 62, { width: pageUsableWidth });
+    // Thin teal accent stripe right under the band for a pop of the
+    // secondary brand color as it transitions into the white body
+    doc.rect(0, BAND_HEIGHT, doc.page.width, 6).fill(BRAND_TEAL);
+
+    doc.y = BAND_HEIGHT + 26;
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(BRAND_TEAL).text("PACKING SLIP", { align: "left" });
+    doc.moveDown(0.6);
+
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#111111").text(`Order: ${order.orderName}`);
+    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Date: ${new Date(order.createdAt).toLocaleString("en-US", { timeZone: "America/New_York" })}`);
     doc.moveDown(1);
 
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
@@ -464,17 +498,17 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
 
       const rowY = doc.y;
 
-      // Alternate a light gray band behind every other row for easier
-      // scanning while picking — drawn first, before anything on top of it
+      // Alternate a light teal tint behind every other row — same idea as
+      // before, just recolored to match the brand instead of plain gray
       if (idx % 2 === 1) {
-        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill("#F3F3F1");
+        doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill(BRAND_TEAL_TINT);
       }
 
       // Draw an actual empty checkbox square to physically check off by hand
       doc
         .rect(checkboxX, rowY, boxSize, boxSize)
-        .lineWidth(1.2)
-        .strokeColor("#333333")
+        .lineWidth(1.4)
+        .strokeColor(BRAND_TEAL)
         .stroke();
 
       doc.fontSize(11).fillColor("#111111");
@@ -651,13 +685,19 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
       doc.moveDown(0.6);
     }
 
-    doc.fontSize(20).fillColor("#B23A2E").text("HUMMUS FIT", { align: "left" });
-    doc.fontSize(13).fillColor("#B23A2E").text("MISSING ITEMS REPORT", { align: "left" });
+    const pageUsableWidthMissing = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const stopNameUpperMissing = req.params.stopName.toUpperCase();
+
+    doc.font("Helvetica-Bold").fontSize(18).fillColor("#555555").text("HUMMUS FIT", { align: "left" });
+    doc.moveDown(0.1);
+    const stopFontSizeMissing = fitTextFontSize(doc, stopNameUpperMissing, pageUsableWidthMissing, 60, 32);
+    doc.font("Helvetica-Bold").fontSize(stopFontSizeMissing).fillColor("#111111").text(stopNameUpperMissing, { align: "left" });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#B23A2E").text("MISSING ITEMS REPORT", { align: "left" });
+    doc.font("Helvetica");
     doc.moveDown(1);
 
     doc.fontSize(13).fillColor("#111111").text(`Order: ${order.orderName}`);
-    doc.fontSize(10).fillColor("#666666").text(`Store: ${req.params.stopName}`);
-    doc.text(
+    doc.fontSize(10).fillColor("#666666").text(
       `Reported: ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}`
     );
     doc.moveDown(1);
