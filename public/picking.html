@@ -9,35 +9,34 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#08090B;
-    --card:#121418;
-    --card-2:#181B20;
-    --line:rgba(255,255,255,0.08);
-    --ink:#F2F3F5;
-    --dim:#8A9099;
-    --teal:#2BE0C4;
-    --teal-glow: rgba(43,224,196,0.35);
-    --orange:#FF7A3D;
-    --orange-glow: rgba(255,122,61,0.35);
-    --red:#FF4D5E;
-    --red-glow: rgba(255,77,94,0.35);
+    --bg:#F7F6F3;
+    --card:#FFFFFF;
+    --card-2:#F1F0EC;
+    --line:rgba(20,19,17,0.10);
+    --ink:#141311;
+    --dim:#7A776E;
+    --teal:#1FA98F;
+    --teal-glow: rgba(31,169,143,0.22);
+    --orange:#E8612C;
+    --orange-glow: rgba(232,97,44,0.20);
+    --red:#DA4A3F;
+    --red-glow: rgba(218,74,63,0.20);
   }
-  /* Out-of-state / B2B mode — swaps the whole accent scheme from teal to
-     gold on a deep violet tint, so it's unmistakable at a glance that
-     this is NOT a local store order. Every rule below already reads
-     from these same variable names, so this one class flips the entire
-     screen's identity without duplicating any component styles. */
+  /* Out-of-state / B2B mode — swaps the accent from teal to a warm gold
+     on a light cream tint, so it's unmistakable at a glance that this
+     is NOT a local store order, while staying just as clean/light as
+     the rest of the interface. */
   body.b2b-mode{
-    --teal:#E8B93B;
-    --teal-glow: rgba(232,185,59,0.45);
-    --bg:#0C0812;
+    --teal:#B8860B;
+    --teal-glow: rgba(184,134,11,0.22);
+    --bg:#FBF6EC;
   }
   body.b2b-mode::before{
     content:"";
     position:fixed; inset:0;
     background:
-      radial-gradient(circle at 10% 0%, rgba(232,185,59,0.14), transparent 45%),
-      radial-gradient(circle at 90% 15%, rgba(120,60,220,0.18), transparent 45%);
+      radial-gradient(circle at 10% 0%, rgba(184,134,11,0.10), transparent 45%),
+      radial-gradient(circle at 90% 15%, rgba(232,97,44,0.06), transparent 45%);
     pointer-events:none;
     z-index:0;
   }
@@ -45,20 +44,20 @@
   html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif; height:100%;}
   body{
     background:
-      radial-gradient(circle at 10% 0%, rgba(43,224,196,0.10), transparent 40%),
-      radial-gradient(circle at 90% 10%, rgba(255,122,61,0.10), transparent 40%),
+      radial-gradient(circle at 8% 0%, rgba(232,97,44,0.06), transparent 40%),
+      radial-gradient(circle at 92% 8%, rgba(31,169,143,0.07), transparent 40%),
       var(--bg);
     padding-bottom: 60px;
     min-height:100vh;
   }
-  ::selection{ background: var(--teal); color:#000; }
+  ::selection{ background: var(--orange); color:#fff; }
 
   header{
     padding: max(20px, env(safe-area-inset-top)) 5vw 20px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1.5px solid var(--ink);
     position: sticky;
     top:0;
-    background: rgba(8,9,11,0.85);
+    background: rgba(247,246,243,0.92);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     z-index: 50;
@@ -69,7 +68,7 @@
     font-weight:700;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--teal);
+    color: var(--orange);
     display:flex;
     align-items:center;
     gap:8px;
@@ -77,8 +76,8 @@
   }
   .eyebrow .dot{
     width:6px; height:6px; border-radius:50%;
-    background: var(--teal);
-    box-shadow: 0 0 8px var(--teal);
+    background: var(--orange);
+    box-shadow: 0 0 8px var(--orange-glow);
     animation: pulse 2s infinite;
   }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
@@ -86,6 +85,7 @@
     font-family:'Bebas Neue', sans-serif;
     font-size: clamp(30px, 8vw, 42px);
     letter-spacing:0.01em;
+    color: var(--ink);
   }
   h1 span{ color: var(--orange); }
 
@@ -115,16 +115,18 @@
     justify-content:space-between;
     gap:14px;
     cursor:pointer;
-    transition: transform .12s ease, border-color .12s ease;
+    box-shadow: 0 1px 2px rgba(20,19,17,0.03), 0 6px 18px rgba(20,19,17,0.05);
+    transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
   .stop-card:active{ transform: scale(0.98); }
-  .stop-card.complete{ border-color: rgba(43,224,196,0.4); }
+  .stop-card.complete{ border-color: rgba(31,169,143,0.45); }
   .stop-info{ flex:1; min-width:0; }
   .stop-name{
     font-family:'Bebas Neue', sans-serif;
     font-size: 24px;
     letter-spacing:0.01em;
     text-transform: capitalize;
+    color: var(--ink);
   }
   .stop-order{
     font-family:'JetBrains Mono', monospace;
@@ -144,6 +146,7 @@
     font-family:'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight:700;
+    color: var(--ink);
   }
   .stop-badge-complete{
     font-family:'JetBrains Mono', monospace;
@@ -153,13 +156,13 @@
     text-transform:uppercase;
     padding: 4px 10px;
     border-radius:999px;
-    background: rgba(43,224,196,0.14);
+    background: rgba(31,169,143,0.12);
     color: var(--teal);
   }
 
   .stop-card.b2b{
-    border-color: rgba(232,185,59,0.5);
-    background: linear-gradient(135deg, rgba(232,185,59,0.06), transparent 60%);
+    border-color: rgba(184,134,11,0.4);
+    background: linear-gradient(135deg, rgba(184,134,11,0.05), var(--card) 60%);
   }
   .b2b-tag{
     display:inline-flex;
@@ -172,8 +175,8 @@
     text-transform:uppercase;
     padding: 4px 10px;
     border-radius:999px;
-    background: rgba(232,185,59,0.16);
-    color: #E8B93B;
+    background: rgba(184,134,11,0.14);
+    color: #8A6508;
     margin-top:8px;
   }
   .b2b-tag::before{ content:"⬢"; font-size:10px; }
@@ -182,8 +185,8 @@
     display:flex;
     align-items:center;
     gap:10px;
-    background: linear-gradient(90deg, rgba(232,185,59,0.16), rgba(120,60,220,0.12));
-    border: 1.5px solid rgba(232,185,59,0.4);
+    background: linear-gradient(90deg, rgba(184,134,11,0.12), rgba(232,97,44,0.06));
+    border: 1.5px solid rgba(184,134,11,0.35);
     border-radius: 14px;
     padding: 14px 18px;
     margin-bottom: 18px;
@@ -192,7 +195,7 @@
     font-weight:700;
     letter-spacing:0.06em;
     text-transform:uppercase;
-    color: #E8B93B;
+    color: #8A6508;
   }
   .b2b-banner .icon{ font-size:18px; }
 
@@ -217,6 +220,7 @@
     font-family:'Bebas Neue', sans-serif;
     font-size: 30px;
     text-transform:capitalize;
+    color: var(--ink);
   }
   .order-sub{
     font-family:'JetBrains Mono', monospace;
@@ -231,7 +235,7 @@
   .order-total-count{
     font-family:'Bebas Neue', sans-serif;
     font-size: 30px;
-    color: var(--teal);
+    color: var(--orange);
   }
   .order-total-label{
     font-family:'JetBrains Mono', monospace;
@@ -265,14 +269,14 @@
     font-size: 15px;
     outline:none;
   }
-  .picker-select:focus{ border-color: var(--teal); }
+  .picker-select:focus{ border-color: var(--orange); }
 
   .completed-banner{
     display:flex;
     align-items:center;
     gap:10px;
-    background: rgba(43,224,196,0.12);
-    border: 1.5px solid rgba(43,224,196,0.4);
+    background: rgba(31,169,143,0.10);
+    border: 1.5px solid rgba(31,169,143,0.35);
     border-radius: 14px;
     padding: 14px 18px;
     margin-bottom: 18px;
@@ -317,13 +321,15 @@
     text-align:center;
     cursor:pointer;
     border: none;
-    background: var(--teal);
-    color: #06231D;
+    background: var(--orange);
+    color: #fff;
     margin-bottom: 12px;
+    box-shadow: 0 4px 14px rgba(232,97,44,0.3);
   }
   .finish-btn:disabled{
     opacity: 0.3;
     cursor: default;
+    box-shadow:none;
   }
   .finish-hint{
     text-align:center;
@@ -336,7 +342,7 @@
   .modal-overlay{
     position:fixed;
     inset:0;
-    background: rgba(0,0,0,0.75);
+    background: rgba(20,19,17,0.55);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -350,11 +356,13 @@
     padding: 28px 24px;
     max-width: 380px;
     width:100%;
+    box-shadow: 0 20px 60px rgba(20,19,17,0.25);
   }
   .modal-title{
     font-family:'Bebas Neue', sans-serif;
     font-size: 26px;
     margin-bottom: 14px;
+    color: var(--ink);
   }
   .modal-stat-row{
     display:flex;
@@ -362,6 +370,7 @@
     padding: 8px 0;
     border-bottom: 1px solid var(--line);
     font-size: 14px;
+    color: var(--ink);
   }
   .modal-actions{
     display:flex;
@@ -383,9 +392,9 @@
     color: var(--ink);
   }
   .modal-btn.confirm{
-    background: var(--teal);
-    color: #06231D;
-    border-color: var(--teal);
+    background: var(--orange);
+    color: #fff;
+    border-color: var(--orange);
   }
 
   #scannerOverlay{
@@ -402,6 +411,8 @@
     justify-content:space-between;
     align-items:center;
     color:#fff;
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
   }
   #scannerOverlay .scanner-close{
     font-size: 22px;
@@ -420,10 +431,11 @@
     display:flex;
     align-items:center;
     gap: 16px;
+    box-shadow: 0 1px 2px rgba(20,19,17,0.03), 0 4px 14px rgba(20,19,17,0.04);
     transition: border-color .15s ease, background .15s ease;
   }
-  .item-card.picked{ border-color: rgba(43,224,196,0.5); background: linear-gradient(90deg, rgba(43,224,196,0.08), transparent 40%); }
-  .item-card.missing{ border-color: rgba(255,77,94,0.5); background: linear-gradient(90deg, rgba(255,77,94,0.08), transparent 40%); }
+  .item-card.picked{ border-color: rgba(31,169,143,0.45); background: linear-gradient(90deg, rgba(31,169,143,0.06), var(--card) 40%); }
+  .item-card.missing{ border-color: rgba(218,74,63,0.45); background: linear-gradient(90deg, rgba(218,74,63,0.06), var(--card) 40%); }
 
   .item-qty{
     font-family:'Bebas Neue', sans-serif;
@@ -437,7 +449,7 @@
   .item-card.missing .item-qty{ color: var(--red); }
 
   .item-info{ flex:1; min-width:0; }
-  .item-title{ font-size: 15.5px; font-weight:600; line-height:1.3; }
+  .item-title{ font-size: 15.5px; font-weight:600; line-height:1.3; color: var(--ink); }
   .item-status-label{
     font-family:'JetBrains Mono', monospace;
     font-size: 10.5px;
@@ -466,15 +478,15 @@
   .tap-btn:active{ transform: scale(0.88); }
   .item-card.picked .tap-btn{
     border-color: var(--teal);
-    background: rgba(43,224,196,0.16);
+    background: rgba(31,169,143,0.12);
     color: var(--teal);
-    box-shadow: 0 0 20px var(--teal-glow);
+    box-shadow: 0 4px 16px var(--teal-glow);
   }
   .item-card.missing .tap-btn{
     border-color: var(--red);
-    background: rgba(255,77,94,0.16);
+    background: rgba(218,74,63,0.12);
     color: var(--red);
-    box-shadow: 0 0 20px var(--red-glow);
+    box-shadow: 0 4px 16px var(--red-glow);
   }
 
   .missing-note-row{
@@ -483,8 +495,8 @@
   }
   .missing-note-row input{
     width:100%;
-    background: var(--card-2);
-    border: 1.5px solid rgba(255,77,94,0.35);
+    background: var(--card);
+    border: 1.5px solid rgba(218,74,63,0.3);
     border-radius: 10px;
     padding: 10px 12px;
     color: var(--ink);
@@ -497,10 +509,10 @@
   .bottom-bar{
     position: sticky;
     bottom: 0;
-    background: rgba(8,9,11,0.9);
+    background: rgba(247,246,243,0.92);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid var(--line);
+    border-top: 1.5px solid var(--ink);
     padding: 16px 5vw max(16px, env(safe-area-inset-bottom));
     display:flex;
     gap: 10px;
@@ -526,13 +538,13 @@
   .big-btn:active{ transform: scale(0.97); }
   .big-btn.primary{
     background: var(--teal);
-    color: #06231D;
+    color: #fff;
     border-color: var(--teal);
   }
   .big-btn.danger{
-    background: rgba(255,77,94,0.14);
+    background: rgba(218,74,63,0.10);
     color: var(--red);
-    border-color: rgba(255,77,94,0.4);
+    border-color: rgba(218,74,63,0.4);
   }
   .big-btn:disabled, .big-btn.disabled{
     opacity:0.35;
