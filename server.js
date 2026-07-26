@@ -613,6 +613,128 @@ function routeInfoForStop(stopName) {
   return { routeName: "", routeTime: "" };
 }
 
+// Every real stop across every route, in a fixed order — this is the
+// full known universe of stores we ever print labels for.
+const ALL_STOP_NAMES = ROUTES.flatMap((route) => route.stops.map((s) => s.name));
+
+const CRATE_PATTERN_TYPES = ["diagonal", "dots", "crosshatch", "chevron", "vertical", "horizontal", "brick", "waves"];
+
+// Builds a genuinely unique visual identity (a monogram + a fill pattern)
+// for every store, guaranteed never to collide — two stores sharing a
+// first letter automatically get a two-letter monogram instead, and if
+// that ever collides too, a number gets appended. This is what makes
+// every store's crate label look different at a glance, not just have
+// different text.
+function buildStoreIdentities(allStopNames) {
+  const identities = {};
+  const firstLetterCount = {};
+  allStopNames.forEach((name) => {
+    const letter = name.trim().charAt(0).toUpperCase();
+    firstLetterCount[letter] = (firstLetterCount[letter] || 0) + 1;
+  });
+
+  allStopNames.forEach((name, idx) => {
+    const trimmed = name.trim();
+    const firstLetter = trimmed.charAt(0).toUpperCase();
+    let monogram;
+    if (firstLetterCount[firstLetter] === 1) {
+      monogram = firstLetter;
+    } else {
+      const words = trimmed.split(/\s+/);
+      monogram =
+        words.length > 1
+          ? (words[0].charAt(0) + words[1].charAt(0)).toUpperCase()
+          : trimmed.slice(0, 2).toUpperCase();
+    }
+    identities[name.toLowerCase()] = {
+      monogram,
+      pattern: CRATE_PATTERN_TYPES[idx % CRATE_PATTERN_TYPES.length],
+      index: idx,
+    };
+  });
+
+  const seenMonograms = {};
+  Object.keys(identities).forEach((key) => {
+    const id = identities[key];
+    if (seenMonograms[id.monogram]) {
+      id.monogram = id.monogram + (id.index + 1);
+    }
+    seenMonograms[id.monogram] = true;
+  });
+
+  return identities;
+}
+
+const STORE_IDENTITIES = buildStoreIdentities(ALL_STOP_NAMES);
+
+function storeIdentityFor(stopName) {
+  return (
+    STORE_IDENTITIES[stopName.toLowerCase()] || {
+      monogram: stopName.trim().charAt(0).toUpperCase(),
+      pattern: "diagonal",
+    }
+  );
+}
+
+// Draws one of the 8 black-ink-only fill patterns into a rectangular
+// area — this is what gives each store's label a distinct "texture,"
+// readable even on a printer with zero color capability.
+function drawPattern(doc, pattern, x, y, width, height) {
+  doc.save();
+  doc.rect(x, y, width, height).clip();
+  doc.fillColor("#111111").strokeColor("#111111");
+
+  if (pattern === "diagonal") {
+    for (let i = -height; i < width; i += 10) {
+      doc.moveTo(x + i, y + height).lineTo(x + i + height, y).lineWidth(2.5).stroke();
+    }
+  } else if (pattern === "dots") {
+    for (let dy = 6; dy < height; dy += 12) {
+      for (let dx = 6; dx < width; dx += 12) {
+        doc.circle(x + dx, y + dy, 2.2).fill();
+      }
+    }
+  } else if (pattern === "crosshatch") {
+    for (let i = -height; i < width; i += 12) {
+      doc.moveTo(x + i, y + height).lineTo(x + i + height, y).lineWidth(1.3).stroke();
+      doc.moveTo(x + i, y).lineTo(x + i + height, y + height).lineWidth(1.3).stroke();
+    }
+  } else if (pattern === "chevron") {
+    for (let cy = y; cy < y + height; cy += 10) {
+      for (let cx = x; cx < x + width; cx += 16) {
+        doc.moveTo(cx, cy + 8).lineTo(cx + 8, cy).lineTo(cx + 16, cy + 8).lineWidth(2).stroke();
+      }
+    }
+  } else if (pattern === "vertical") {
+    for (let i = x; i < x + width; i += 9) {
+      doc.moveTo(i, y).lineTo(i, y + height).lineWidth(3).stroke();
+    }
+  } else if (pattern === "horizontal") {
+    for (let i = y; i < y + height; i += 9) {
+      doc.moveTo(x, i).lineTo(x + width, i).lineWidth(3).stroke();
+    }
+  } else if (pattern === "brick") {
+    let row = 0;
+    for (let by = y; by < y + height; by += 10) {
+      const offset = row % 2 === 0 ? 0 : 12;
+      for (let bx = x - 12; bx < x + width; bx += 24) {
+        doc.rect(bx + offset, by, 20, 8).lineWidth(1.3).stroke();
+      }
+      row++;
+    }
+  } else if (pattern === "waves") {
+    for (let wy = y; wy < y + height + 10; wy += 10) {
+      doc.moveTo(x, wy);
+      for (let wx = x; wx < x + width; wx += 10) {
+        doc.quadraticCurveTo(wx + 5, wy - 5, wx + 10, wy);
+      }
+      doc.lineWidth(1.6).stroke();
+    }
+  }
+
+  doc.restore();
+}
+
 // List every stop that has an order in the current window, with picking
 // progress, so the crew can see what's left to do at a glance.
 app.get("/api/picking-list", async (req, res) => {
@@ -889,6 +1011,7 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
 
     const { routeName } = routeInfoForStop(req.params.stopName);
     const stopNameUpper = decodeURIComponent(req.params.stopName).toUpperCase();
+    const identity = storeIdentityFor(decodeURIComponent(req.params.stopName));
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -902,12 +1025,30 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
 
     const usableWidth = 288 - 32;
 
-    doc.rect(0, 0, 288, 90).fill("#E8612C");
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF").text(routeName || "HUMMUS FIT", 16, 14, { width: usableWidth });
-    const stopFontSize = fitTextFontSize(doc, stopNameUpper, usableWidth, 34, 18);
-    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#FFFFFF").text(stopNameUpper, 16, 36, { width: usableWidth });
+    // Pattern band across the top — this, combined with the monogram
+    // below, is what makes every store's label genuinely look different
+    // at a glance, not just have different text. Pure black ink, works
+    // on any thermal printer with zero color capability.
+    drawPattern(doc, identity.pattern, 0, 0, 288, 22);
+    doc.moveTo(0, 22).lineTo(288, 22).strokeColor("#111111").lineWidth(1).stroke();
 
-    doc.y = 100;
+    // Monogram badge — solid black circle, store initials in white
+    const badgeCenterX = 16 + 26;
+    const badgeCenterY = 22 + 16 + 26;
+    doc.circle(badgeCenterX, badgeCenterY, 26).fill("#111111");
+    const monogramSize = identity.monogram.length > 1 ? 20 : 26;
+    doc.font("Helvetica-Bold").fontSize(monogramSize).fillColor("#FFFFFF");
+    const monoWidth = doc.widthOfString(identity.monogram);
+    doc.text(identity.monogram, badgeCenterX - monoWidth / 2, badgeCenterY - monogramSize / 2 + 2);
+
+    // Store name + route, next to the badge
+    const textX = badgeCenterX + 26 + 12;
+    const textWidth = 288 - 16 - textX;
+    doc.font("Helvetica-Bold").fontSize(9).fillColor("#666666").text(routeName || "HUMMUS FIT", textX, 30, { width: textWidth });
+    const stopFontSize = fitTextFontSize(doc, stopNameUpper, textWidth, 22, 13);
+    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#111111").text(stopNameUpper, textX, 44, { width: textWidth });
+
+    doc.y = 22 + 16 + 52 + 10;
     doc.font("Helvetica-Bold").fontSize(20).fillColor("#111111").text(`CRATE ${crateNumber}`, { align: "left" });
     doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`);
     doc.moveDown(0.8);
