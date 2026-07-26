@@ -828,13 +828,14 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
     doc.pipe(res);
 
     function drawMissingHeaders() {
-      doc.fontSize(9).fillColor("#999999");
-      doc.text("QTY", 50, doc.y, { width: 40, lineBreak: false });
-      doc.text("ITEM", 95, doc.y - 11, { width: 280, lineBreak: false });
-      doc.text("REASON", 380, doc.y - 11, { lineBreak: false });
-      doc.moveDown(0.6);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
-      doc.moveDown(0.6);
+      const headerY = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580");
+      doc.text("QTY", 50, headerY, { width: 40, lineBreak: false });
+      doc.text("ITEM", 95, headerY, { width: 280, lineBreak: false });
+      doc.text("REASON", 380, headerY, { lineBreak: false });
+      doc.y = headerY + 16;
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#222222").lineWidth(1).stroke();
+      doc.y += 10;
     }
 
     const pageUsableWidthMissing = doc.page.width - doc.page.margins.left - doc.page.margins.right;
