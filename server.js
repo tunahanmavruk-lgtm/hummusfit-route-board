@@ -57,7 +57,7 @@ const ROUTES = [
   },
   {
     id: "r3",
-    name: "Route #3 — Üçüncü",
+    name: "Route #3",
     time: "9:00 AM",
     vanSize: "Small",
     stops: [
@@ -918,16 +918,20 @@ async function optimizeRouteWithGoogle(route) {
   const legDurations = legs.map((leg) => leg.duration.value); // seconds
   const legDistances = legs.map((leg) => leg.distance.text);
 
-  // Scan every turn-by-turn step across every leg for parkway mentions
+  // Scan every turn-by-turn step across every leg for parkway mentions.
+  // Only flag ones that match the actual real restricted-parkway list —
+  // plenty of ordinary roads have "Parkway" or "Pkwy" in their name
+  // without being one of the legally-restricted ones (e.g. HQ's own
+  // street, Motor Pkwy, is a normal local road, not a state parkway).
   const flaggedSet = new Set();
   legs.forEach((leg) => {
     (leg.steps || []).forEach((step) => {
       const mentions = extractParkwayMentions(step.html_instructions || "");
       mentions.forEach((mention) => {
         const isKnownRestricted = restrictedLower.includes(mention.toLowerCase());
-        // Flag it if it matches our known list OR just generically looks like
-        // a parkway (better to over-flag for manual review than miss one)
-        flaggedSet.add(mention);
+        if (isKnownRestricted) {
+          flaggedSet.add(mention);
+        }
       });
     });
   });

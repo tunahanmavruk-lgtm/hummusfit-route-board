@@ -433,7 +433,6 @@
   <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
 </main>
 
-<div class="refresh-note">Orange pill lights up when a store's order comes in — tap it for the packing slip. Tap the dot to cycle delivery status. Only shows orders from the current 12pm–11pm order window, never stale/previous days. Syncs every 10 seconds.</div>
 
 <script>
   var STATUS_CYCLE = ['not_started', 'picked', 'enroute', 'arrived', 'delivered'];
@@ -595,7 +594,6 @@
           '<span class="route-size">' + route.vanSize + '</span>' +
           '<span class="route-progress">' + deliveredCount + '/' + visibleStops.length + ' delivered</span>' +
         '</div>' +
-        '<div class="hq-address">Starts &amp; ends at ' + hqData.name + ' — ' + hqData.address + '</div>' +
         parkwayWarning +
         '<div class="assign-row">' +
           '<div class="assign-field">' +
@@ -658,11 +656,20 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ routeId: routeId })
-        }).then(function(r){ return r.json(); }).then(function(data){
-          if(data.error){ alert('Could not optimize route: ' + data.error); }
-          if(data.state){ stateData = data.state; }
+        }).then(function(r){
+          return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+        }).then(function(result){
+          if(!result.ok || result.data.error){
+            alert('Could not create route: ' + (result.data.error || 'Unknown server error. Check that GOOGLE_MAPS_API_KEY is set in Railway.'));
+            render();
+            return;
+          }
+          if(result.data.state){ stateData = result.data.state; }
           render();
-        }).catch(function(){ render(); });
+        }).catch(function(err){
+          alert('Could not reach the server to create the route: ' + err.message);
+          render();
+        });
       });
     });
 
