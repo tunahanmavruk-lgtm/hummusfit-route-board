@@ -436,6 +436,7 @@
   }
   .item-card.picked{ border-color: rgba(31,169,143,0.45); background: linear-gradient(90deg, rgba(31,169,143,0.06), var(--card) 40%); }
   .item-card.missing{ border-color: rgba(218,74,63,0.45); background: linear-gradient(90deg, rgba(218,74,63,0.06), var(--card) 40%); }
+  .item-card.partial{ border-color: rgba(200,140,20,0.5); background: linear-gradient(90deg, rgba(200,140,20,0.08), var(--card) 40%); }
 
   .item-qty{
     font-family:'Bebas Neue', sans-serif;
@@ -447,6 +448,7 @@
   }
   .item-card.picked .item-qty{ color: var(--teal); }
   .item-card.missing .item-qty{ color: var(--red); }
+  .item-card.partial .item-qty{ color: #B8860B; }
 
   .item-info{ flex:1; min-width:0; }
   .item-title{ font-size: 15.5px; font-weight:600; line-height:1.3; color: var(--ink); }
@@ -460,6 +462,16 @@
   }
   .item-card.picked .item-status-label{ color: var(--teal); }
   .item-card.missing .item-status-label{ color: var(--red); }
+  .item-card.partial .item-status-label{ color: #B8860B; }
+
+  .partial-link{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    text-decoration:underline;
+    margin-top: 5px;
+    cursor:pointer;
+  }
 
   .tap-btn{
     flex-shrink:0;
@@ -487,6 +499,12 @@
     background: rgba(218,74,63,0.12);
     color: var(--red);
     box-shadow: 0 4px 16px var(--red-glow);
+  }
+  .item-card.partial .tap-btn{
+    border-color: #B8860B;
+    background: rgba(184,134,11,0.12);
+    color: #B8860B;
+    box-shadow: 0 4px 16px rgba(184,134,11,0.22);
   }
 
   .missing-note-row{
@@ -644,12 +662,13 @@
     document.getElementById('modalContainer').innerHTML = '';
   }
 
-  function showFinishConfirmation(picked, missing, total){
+  function showFinishConfirmation(picked, missing, partial, total){
     var html =
       '<div class="modal-overlay" id="finishModalOverlay">' +
         '<div class="modal-box">' +
           '<div class="modal-title">Finish Order?</div>' +
           '<div class="modal-stat-row"><span>Picked</span><span>' + picked + '</span></div>' +
+          '<div class="modal-stat-row"><span>Partial (short)</span><span>' + partial + '</span></div>' +
           '<div class="modal-stat-row"><span>Missing</span><span>' + missing + '</span></div>' +
           '<div class="modal-stat-row"><span>Total items</span><span>' + total + '</span></div>' +
           '<div class="modal-actions">' +
@@ -760,15 +779,16 @@
 
     document.body.classList.toggle('b2b-mode', Boolean(orderDetail.isB2B));
 
-    var picked = 0, missing = 0, notPicked = 0;
+    var picked = 0, missing = 0, partial = 0, notPicked = 0;
     orderDetail.lineItems.forEach(function(item, idx){
       var s = orderDetail.itemStatus[idx] || 'not_picked';
       if(s === 'picked') picked++;
       else if(s === 'missing') missing++;
+      else if(s === 'partial') partial++;
       else notPicked++;
     });
     var total = orderDetail.lineItems.length;
-    var done = picked + missing;
+    var done = picked + missing + partial;
     var isLocked = Boolean(orderDetail.completedAt);
 
     var html = '';
@@ -811,28 +831,33 @@
 
     orderDetail.lineItems.forEach(function(item, idx){
       var status = orderDetail.itemStatus[idx] || 'not_picked';
-      var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : '');
-      var label = status === 'picked' ? 'Picked' : (status === 'missing' ? 'Missing' : 'Tap when picked');
+      var pickedQty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined) ? orderDetail.itemPickedQty[idx] : null;
+      var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : (status === 'partial' ? '½' : ''));
+      var label = status === 'picked' ? 'Picked' :
+        (status === 'missing' ? 'Missing' :
+        (status === 'partial' ? 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked' : 'Tap when picked'));
+      var qtyDisplay = (status === 'partial' && pickedQty !== null) ? (pickedQty + '/' + item.quantity) : item.quantity;
       html +=
         '<div class="item-card ' + status + '" data-idx="' + idx + '" style="' + (isLocked ? 'opacity:0.7;' : '') + '">' +
-          '<div class="item-qty">' + item.quantity + '</div>' +
+          '<div class="item-qty">' + qtyDisplay + '</div>' +
           '<div class="item-info">' +
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
+            (isLocked ? '' : '<div class="partial-link" data-partial-idx="' + idx + '">Only had some? Enter partial quantity</div>') +
           '</div>' +
           (isLocked ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
           '<div class="tap-btn" data-idx="' + idx + '">' + icon + '</div>' +
         '</div>';
-      if(status === 'missing'){
+      if(status === 'missing' || status === 'partial'){
         html +=
           '<div class="missing-note-row">' +
-            '<input type="text" placeholder="Why is it missing? (optional)" data-note-idx="' + idx + '" value="' +
+            '<input type="text" placeholder="Why is it short? (optional)" data-note-idx="' + idx + '" value="' +
             (orderDetail.itemNotes[idx] || '').replace(/"/g,'&quot;') + '" ' + (isLocked ? 'disabled' : '') + '>' +
           '</div>';
       }
     });
 
-    var hasMissing = missing > 0;
+    var hasMissing = (missing + partial) > 0;
     var canFinish = !isLocked && notPicked === 0 && total > 0;
 
     if(!isLocked){
@@ -890,13 +915,48 @@
     var finishEl = document.getElementById('finishBtn');
     if(finishEl){
       finishEl.addEventListener('click', function(){
-        showFinishConfirmation(picked, missing, total);
+        showFinishConfirmation(picked, missing, partial, total);
       });
     }
 
     document.querySelectorAll('[data-scan-idx]').forEach(function(btn){
       btn.addEventListener('click', function(){
         openScanner(parseInt(btn.dataset.scanIdx, 10));
+      });
+    });
+
+    document.querySelectorAll('[data-partial-idx]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var idx = parseInt(el.dataset.partialIdx, 10);
+        var item = orderDetail.lineItems[idx];
+        var currentQty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined)
+          ? orderDetail.itemPickedQty[idx] : item.quantity;
+        var entered = prompt('How many of "' + item.title + '" do you actually have? (Ordered: ' + item.quantity + ')', currentQty);
+        if(entered === null) return; // cancelled
+        var qty = parseInt(entered, 10);
+        if(isNaN(qty) || qty < 0 || qty > item.quantity){
+          alert('Enter a number between 0 and ' + item.quantity + '.');
+          return;
+        }
+        var newStatus = qty === item.quantity ? 'picked' : (qty === 0 ? 'missing' : 'partial');
+        orderDetail.itemStatus[idx] = newStatus;
+        orderDetail.itemPickedQty = orderDetail.itemPickedQty || {};
+        if(newStatus === 'partial'){
+          orderDetail.itemPickedQty[idx] = qty;
+        } else {
+          delete orderDetail.itemPickedQty[idx];
+        }
+        renderOrder();
+        fetch('/api/picking-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stopName: orderDetail.stopName,
+            itemIndex: idx,
+            status: newStatus,
+            pickedQty: newStatus === 'partial' ? qty : undefined
+          })
+        });
       });
     });
 

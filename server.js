@@ -441,6 +441,10 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     if (!order) {
       return res.status(404).send("No order found for this stop in the current order window.");
     }
+    // Load picking progress so partially-fulfilled items can show the
+    // real picked/short quantity instead of just the original order qty.
+    const pickingState = loadState();
+    const pickingRecord = pickingState.picking[key];
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${order.orderName}-packing-slip.pdf"`);
@@ -501,7 +505,13 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
     order.lineItems.forEach((item, idx) => {
-      const textHeight = doc.heightOfString(item.title, { width: itemWidth, fontSize: 11 });
+      const itemStatus = pickingRecord && pickingRecord.itemStatus ? pickingRecord.itemStatus[idx] : undefined;
+      const isPartial = itemStatus === "partial";
+      const pickedQty = isPartial && pickingRecord.itemPickedQty ? pickingRecord.itemPickedQty[idx] : undefined;
+      const qtyLabel = isPartial && pickedQty !== undefined ? `${pickedQty}/${item.quantity}` : String(item.quantity);
+      const displayTitle = isPartial ? `${item.title} (SHORT)` : item.title;
+
+      const textHeight = doc.heightOfString(displayTitle, { width: itemWidth, fontSize: 11 });
       const estimatedRowHeight = Math.max(boxSize + 8, textHeight + 8);
 
       // If this row won't fit before the bottom margin, start a fresh page
@@ -515,8 +525,8 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
 
       const rowY = doc.y;
 
-      // Alternate a light teal tint behind every other row — same idea as
-      // before, just recolored to match the brand instead of plain gray
+      // Alternate a light gray band behind every other row for easier
+      // scanning while picking
       if (idx % 2 === 1) {
         doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill(ZEBRA_TINT);
       }
@@ -529,8 +539,8 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
         .stroke();
 
       doc.fontSize(11).fillColor("#111111");
-      doc.text(String(item.quantity), qtyX, rowY + 1, { width: 35 });
-      doc.text(item.title, itemX, rowY + 1, { width: itemWidth });
+      doc.text(qtyLabel, qtyX, rowY + 1, { width: 35 });
+      doc.text(displayTitle, itemX, rowY + 1, { width: itemWidth });
 
       // Advance past the taller of (checkbox height, wrapped text height)
       const afterTextY = doc.y;
@@ -573,13 +583,15 @@ function getPickingRecord(state, stopName, order) {
     state.picking[key] = {
       orderId: order.orderId,
       orderName: order.orderName,
-      itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing'
+      itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing' | 'partial'
       itemNotes: {}, // index -> free text reason
+      itemPickedQty: {}, // index -> actual quantity picked (only meaningful for 'partial')
       pickedBy: null, // employee name working this order
       completedAt: null, // set once Finish Order succeeds
       completedBy: null,
     };
   }
+  if (!state.picking[key].itemPickedQty) state.picking[key].itemPickedQty = {}; // migrate older records
   return state.picking[key];
 }
 
@@ -649,7 +661,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
 // Update one item's pick status: not_picked -> picked -> missing -> not_picked
 app.post("/api/picking-item", async (req, res) => {
   try {
-    const { stopName, itemIndex, status, note } = req.body;
+    const { stopName, itemIndex, status, note, pickedQty } = req.body;
     if (!stopName || itemIndex === undefined || !status) {
       return res.status(400).json({ error: "stopName, itemIndex, and status required" });
     }
@@ -664,8 +676,22 @@ app.post("/api/picking-item", async (req, res) => {
     if (note !== undefined) {
       record.itemNotes[itemIndex] = note;
     }
+    if (status === "partial") {
+      if (pickedQty === undefined) {
+        return res.status(400).json({ error: "pickedQty required when status is partial" });
+      }
+      record.itemPickedQty[itemIndex] = pickedQty;
+    } else {
+      // Clear any stale partial-quantity value once the item is no longer partial
+      delete record.itemPickedQty[itemIndex];
+    }
     saveState(state);
-    res.json({ ok: true, itemStatus: record.itemStatus, itemNotes: record.itemNotes });
+    res.json({
+      ok: true,
+      itemStatus: record.itemStatus,
+      itemNotes: record.itemNotes,
+      itemPickedQty: record.itemPickedQty,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -766,8 +792,27 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
     const record = getPickingRecord(state, key, order);
 
     const missingItems = order.lineItems
-      .map((item, idx) => ({ ...item, idx, note: record.itemNotes[idx] || "" }))
-      .filter((item) => record.itemStatus[item.idx] === "missing");
+      .map((item, idx) => {
+        const status = record.itemStatus[idx];
+        if (status === "missing") {
+          return { ...item, idx, note: record.itemNotes[idx] || "", quantity: item.quantity };
+        }
+        if (status === "partial") {
+          const pickedQty = record.itemPickedQty[idx] || 0;
+          const shortQty = item.quantity - pickedQty;
+          return {
+            ...item,
+            idx,
+            note: record.itemNotes[idx] || "",
+            quantity: shortQty,
+            isPartial: true,
+            originalQty: item.quantity,
+            pickedQty,
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null);
 
     if (missingItems.length === 0) {
       return res.status(404).send("No items are currently marked missing for this order.");
@@ -815,7 +860,10 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
     missingItems.forEach((item, i) => {
-      const textHeight = doc.heightOfString(item.title, { width: 280, fontSize: 11 });
+      const displayTitle = item.isPartial
+        ? `${item.title} — SHORT (picked ${item.pickedQty} of ${item.originalQty})`
+        : item.title;
+      const textHeight = doc.heightOfString(displayTitle, { width: 280, fontSize: 11 });
       const estimatedRowHeight = Math.max(20, textHeight + 8);
 
       if (doc.y + estimatedRowHeight > pageBottom) {
@@ -830,7 +878,7 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
       }
       doc.fontSize(11).fillColor("#111111");
       doc.text(String(item.quantity), 50, rowY + 1, { width: 40 });
-      doc.text(item.title, 95, rowY + 1, { width: 280 });
+      doc.text(displayTitle, 95, rowY + 1, { width: 280 });
       doc.fontSize(10).fillColor("#666666").text(item.note || "—", 380, rowY + 1, { width: 160 });
       const afterY = Math.max(doc.y, rowY + 20);
       doc.y = afterY + 6;
