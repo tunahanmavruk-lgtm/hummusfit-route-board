@@ -229,21 +229,6 @@
   .status-dot.arrived{ background: #4F9BE8; border-color: #4F9BE8; }
   .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
 
-  .issue-toggle{
-    width: 22px; height: 22px;
-    border-radius: 6px;
-    border: 1.5px solid var(--line);
-    background: #fff;
-    color: var(--dim);
-    font-size: 12px;
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-  }
-  .issue-toggle.active{ background: var(--red); border-color: var(--red); color:#fff; }
-
   .eta-chip{
     font-family:'JetBrains Mono', monospace;
     font-size: 9.5px;
@@ -605,20 +590,29 @@
         var pickingInfo = pickingStatusByStop[stopKey] || { status: 'not_started' };
         var pickingChip = '';
         if(pickingInfo.status === 'in_progress'){
-          pickingChip = '<span class="picking-flash-chip">⚡ PICKING IN PROGRESS' + (pickingInfo.pickedBy ? ' — ' + pickingInfo.pickedBy.toUpperCase() : '') + '</span>';
+          var pct = (pickingInfo.percent !== undefined) ? pickingInfo.percent : 0;
+          pickingChip = '<span class="picking-flash-chip">⚡ PICKING IN PROGRESS — ' + pct + '%' + (pickingInfo.pickedBy ? ' — ' + pickingInfo.pickedBy.toUpperCase() : '') + '</span>';
         } else if(pickingInfo.status === 'completed'){
           pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + '</span>';
         }
+
+        // Showing "NOT STARTED" (delivery status) right next to a
+        // picking-in-progress/completed chip reads as a contradiction —
+        // it's really just two different things (delivery vs picking),
+        // but only the picking chip matters at this stage, so hide the
+        // delivery label specifically in that case. Any other delivery
+        // status (en route, arrived, delivered) still always shows.
+        var suppressStatusLabel = status === 'not_started' && (pickingInfo.status === 'in_progress' || pickingInfo.status === 'completed');
+        var statusLabelHtml = suppressStatusLabel ? '' : ('<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>');
 
         stopsHtml +=
           '<div class="stop-row">' +
             '<div class="status-dot ' + status + '" data-stop="' + stop.id + '"></div>' +
             '<div class="stop-name">' + stop.name + '</div>' +
             (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
-            '<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>' +
+            statusLabelHtml +
             pickingChip +
             (etaChip || arrivedChip) +
-            '<button class="issue-toggle' + (stopState.issue ? ' active' : '') + '" data-issue-stop="' + stop.id + '" title="Report an issue">!</button>' +
             pillHtml +
             '<div class="stop-address">' + (stop.address || '') + '</div>' +
           '</div>';
@@ -715,21 +709,6 @@
       });
     });
 
-    document.querySelectorAll('.issue-toggle').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        var stopId = btn.dataset.issueStop;
-        var current = stateData.stopStatus[stopId] || {};
-        var newIssue = !current.issue;
-        stateData.stopStatus[stopId] = Object.assign({}, current, { issue: newIssue });
-        render();
-        fetch('/api/stop-issue', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stopId: stopId, issue: newIssue })
-        });
-      });
-    });
 
     document.querySelectorAll('[data-optimize]').forEach(function(btn){
       btn.addEventListener('click', function(){

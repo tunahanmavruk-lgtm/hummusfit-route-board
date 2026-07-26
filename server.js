@@ -465,9 +465,13 @@ app.get("/api/today-orders", async (req, res) => {
         pickingStatus[key] = { status: "completed", pickedBy: record.completedBy };
         return;
       }
-      const anyTouched = Object.keys(record.itemStatus || {}).length > 0;
+      const statuses = Object.values(record.itemStatus || {});
+      const addressedCount = statuses.filter((s) => s !== "not_picked").length;
+      const totalItems = order.lineItems.length;
+      const percent = totalItems > 0 ? Math.round((addressedCount / totalItems) * 100) : 0;
+      const anyTouched = statuses.length > 0;
       if (record.pickedBy || anyTouched) {
-        pickingStatus[key] = { status: "in_progress", pickedBy: record.pickedBy };
+        pickingStatus[key] = { status: "in_progress", pickedBy: record.pickedBy, percent };
         return;
       }
       pickingStatus[key] = { status: "not_started" };
@@ -1150,14 +1154,23 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
       if (photoUrl) {
         const filePath = path.join(__dirname, "public", photoUrl);
         if (fs.existsSync(filePath)) {
+          let clipped = false;
           try {
             doc.save();
             doc.circle(circleCX, circleCY, circleR).clip();
+            clipped = true;
             doc.image(filePath, circleCX - circleR, circleCY - circleR, { width: circleD, height: circleD });
-            doc.restore();
             photoDrawn = true;
           } catch (imgErr) {
             photoDrawn = false;
+          } finally {
+            // Critical: doc.save() opened a graphics-state frame that
+            // MUST be closed with doc.restore() no matter what happens
+            // in between — otherwise the PDF's internal state gets
+            // unbalanced and can corrupt everything drawn after this
+            // point, making the whole file fail to load rather than
+            // just the photo.
+            if (clipped) doc.restore();
           }
         }
       }
