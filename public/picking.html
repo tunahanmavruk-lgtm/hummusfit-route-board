@@ -571,6 +571,8 @@
   .item-card.picked{ border-color: rgba(31,169,143,0.45); background: linear-gradient(90deg, rgba(31,169,143,0.06), var(--card) 40%); }
   .item-card.missing{ border-color: rgba(218,74,63,0.45); background: linear-gradient(90deg, rgba(218,74,63,0.06), var(--card) 40%); }
   .item-card.partial{ border-color: rgba(200,140,20,0.5); background: linear-gradient(90deg, rgba(200,140,20,0.08), var(--card) 40%); }
+  .item-card.scan-progress{ border-color: rgba(31,169,143,0.35); background: linear-gradient(90deg, rgba(31,169,143,0.05), var(--card) 40%); }
+  .item-card.scan-progress .item-status-label{ color: var(--teal); }
 
   .item-qty{
     font-family:'Bebas Neue', sans-serif;
@@ -920,17 +922,31 @@
       return;
     }
 
-    if(scanned === expectedSku){
-      orderDetail.itemStatus[idx] = 'picked';
-      renderOrder();
-      fetch('/api/picking-item', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: 'picked' })
-      });
-    } else {
+    if(scanned !== expectedSku){
       alert('That barcode doesn\'t match "' + item.title + '". Double-check you grabbed the right item.');
+      return;
     }
+
+    // Route through the same server-authoritative counting logic as the
+    // hardware scanner — one scan = one physical unit, not the whole
+    // line item, so a 30-unit order genuinely needs 30 scans.
+    fetch('/api/picking-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scanned })
+    }).then(function(r){ return r.json(); }).then(function(result){
+      if(!result.matched){
+        alert(result.alreadyResolved ? 'That item is already fully accounted for.' : 'Could not match that scan — try again.');
+        return;
+      }
+      orderDetail.itemStatus = result.itemStatus;
+      orderDetail.itemScannedCount = result.itemScannedCount;
+      orderDetail.itemCrateNumber = result.itemCrateNumber;
+      orderDetail.currentCrateNumber = result.currentCrateNumber;
+      renderOrder();
+    }).catch(function(err){
+      alert('Could not reach the server: ' + err.message);
+    });
   }
 
   document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
@@ -1072,40 +1088,29 @@
   });
 
   function handleHardwareScan(scannedCode){
-    if(!orderDetail || !orderDetail.lineItems) return;
-
-    var matchIdx = -1;
-    for(var i = 0; i < orderDetail.lineItems.length; i++){
-      var item = orderDetail.lineItems[i];
-      var expectedSku = (item.sku || '').trim();
-      var currentStatus = orderDetail.itemStatus[i] || 'not_picked';
-      if(expectedSku && expectedSku === scannedCode && currentStatus !== 'picked'){
-        matchIdx = i;
-        break;
-      }
-    }
-
-    if(matchIdx === -1){
-      var alreadyPicked = orderDetail.lineItems.some(function(item, i){
-        return (item.sku || '').trim() === scannedCode && (orderDetail.itemStatus[i] === 'picked');
-      });
-      if(alreadyPicked){
-        alert('That item is already marked picked.');
-      } else {
-        alert('Scanned code doesn\'t match any item in this order. Double-check you grabbed the right product.');
-      }
-      focusHwScanInput();
-      return;
-    }
-
-    orderDetail.itemStatus[matchIdx] = 'picked';
-    orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
-    orderDetail.itemCrateNumber[matchIdx] = orderDetail.currentCrateNumber;
-    renderOrder();
-    fetch('/api/picking-item', {
+    if(!orderDetail) return;
+    fetch('/api/picking-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: matchIdx, status: 'picked' })
+      body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scannedCode })
+    }).then(function(r){ return r.json(); }).then(function(result){
+      if(!result.matched){
+        if(result.alreadyResolved){
+          alert('That item is already fully accounted for.');
+        } else {
+          alert('Scanned code doesn\'t match any item still needed in this order. Double-check you grabbed the right product.');
+        }
+        focusHwScanInput();
+        return;
+      }
+      orderDetail.itemStatus = result.itemStatus;
+      orderDetail.itemScannedCount = result.itemScannedCount;
+      orderDetail.itemCrateNumber = result.itemCrateNumber;
+      orderDetail.currentCrateNumber = result.currentCrateNumber;
+      renderOrder();
+    }).catch(function(err){
+      alert('Could not reach the server: ' + err.message);
+      focusHwScanInput();
     });
   }
 
@@ -1188,13 +1193,19 @@
     orderDetail.lineItems.forEach(function(item, idx){
       var status = orderDetail.itemStatus[idx] || 'not_picked';
       var pickedQty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined) ? orderDetail.itemPickedQty[idx] : null;
+      var scannedSoFar = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx] !== undefined) ? orderDetail.itemScannedCount[idx] : 0;
       var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : (status === 'partial' ? '½' : ''));
-      var label = status === 'picked' ? 'Picked' :
-        (status === 'missing' ? 'Missing' :
-        (status === 'partial' ? 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked' : 'Tap when picked'));
-      var qtyDisplay = (status === 'partial' && pickedQty !== null) ? (pickedQty + '/' + item.quantity) : item.quantity;
+      var label;
+      if(status === 'picked'){ label = 'Picked'; }
+      else if(status === 'missing'){ label = 'Missing'; }
+      else if(status === 'partial'){ label = 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked'; }
+      else if(scannedSoFar > 0){ label = 'Scanned ' + scannedSoFar + ' of ' + item.quantity + ' — keep scanning'; }
+      else { label = 'Tap when picked'; }
+      var isScanInProgress = status === 'not_picked' && scannedSoFar > 0;
+      var qtyDisplay = (status === 'partial' && pickedQty !== null) ? (pickedQty + '/' + item.quantity)
+        : (isScanInProgress ? (scannedSoFar + '/' + item.quantity) : item.quantity);
       html +=
-        '<div class="item-card ' + status + '" data-idx="' + idx + '" style="' + (isLocked ? 'opacity:0.7;' : '') + '">' +
+        '<div class="item-card ' + status + (isScanInProgress ? ' scan-progress' : '') + '" data-idx="' + idx + '" style="' + (isLocked ? 'opacity:0.7;' : '') + '">' +
           '<div class="item-qty">' + qtyDisplay + '</div>' +
           '<div class="item-info">' +
             '<div class="item-title">' + item.title + '</div>' +
@@ -1297,8 +1308,17 @@
       el.addEventListener('click', function(){
         var idx = parseInt(el.dataset.partialIdx, 10);
         var item = orderDetail.lineItems[idx];
-        var currentQty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined)
-          ? orderDetail.itemPickedQty[idx] : item.quantity;
+        var scannedSoFar = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx] !== undefined) ? orderDetail.itemScannedCount[idx] : 0;
+        var currentQty;
+        if(orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined){
+          currentQty = orderDetail.itemPickedQty[idx];
+        } else if(scannedSoFar > 0){
+          // The scanner already counted real progress — use that instead
+          // of making the picker recount by hand.
+          currentQty = scannedSoFar;
+        } else {
+          currentQty = item.quantity;
+        }
         var entered = prompt('How many of "' + item.title + '" do you actually have? (Ordered: ' + item.quantity + ')', currentQty);
         if(entered === null) return; // cancelled
         var qty = parseInt(entered, 10);
