@@ -722,7 +722,7 @@ async function fetchTodaysStopOrders() {
     if (!edges.length) break;
   }
 
-  const localByStopName = {};
+  const localGroupedByStop = {};
   orders.forEach((order) => {
     // Check BOTH the order's own tags and the customer's account-level
     // tags — a shared customer account (like PWRBLD, which places
@@ -738,26 +738,47 @@ async function fetchTodaysStopOrders() {
       // campaign names, unrelated labels, etc.)
       const stopMeta = VALID_STOP_NAMES.get(key);
       if (!stopMeta || stopMeta.isB2B) return; // B2B stops are handled separately below
-      // First matching order per stop name wins (most recent order stays if duplicates)
-      if (!localByStopName[key]) {
-        localByStopName[key] = {
-          orderId: order.id,
-          orderName: order.name,
-          createdAt: order.createdAt,
-          lineItems: order.lineItems.edges.map((e) => {
-            const node = e.node;
-            const hasRealVariant =
-              node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
-            return {
-              title: hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title,
-              quantity: node.quantity,
-              sku: node.sku,
-            };
-          }),
-          isB2B: false,
-        };
-      }
+      if (!localGroupedByStop[key]) localGroupedByStop[key] = [];
+      localGroupedByStop[key].push(order);
     });
+  });
+
+  // Same reasoning as B2B: a store sometimes places a second or third
+  // order the same day (an item was out of stock on the first order,
+  // they added something after the fact, etc.) — every matching order
+  // gets combined into one merged pick list instead of only keeping the
+  // first one found, so nothing a picker needs is ever silently missed.
+  const localByStopName = {};
+  Object.keys(localGroupedByStop).forEach((key) => {
+    const stopOrders = localGroupedByStop[key];
+    const mergedItemsByKey = {};
+    stopOrders.forEach((order) => {
+      order.lineItems.edges.forEach((e) => {
+        const node = e.node;
+        const hasRealVariant =
+          node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
+        const title = hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title;
+        const itemKey = title + "::" + (node.sku || "");
+        if (mergedItemsByKey[itemKey]) {
+          mergedItemsByKey[itemKey].quantity += node.quantity;
+        } else {
+          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku };
+        }
+      });
+    });
+    // A stable id that only changes when the actual SET of orders for
+    // this stop changes — adding a new (e.g. backordered-item) order
+    // correctly resets/expands the picking record, but re-syncing the
+    // same set of orders never wipes progress already made.
+    const sortedIds = stopOrders.map((o) => o.id).sort();
+    localByStopName[key] = {
+      orderId: sortedIds.join(","),
+      orderName: stopOrders.map((o) => o.name).join(", "),
+      orderCount: stopOrders.length,
+      createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
+      lineItems: Object.values(mergedItemsByKey),
+      isB2B: false,
+    };
   });
 
   const byStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
