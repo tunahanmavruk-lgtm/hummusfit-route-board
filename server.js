@@ -314,13 +314,16 @@ const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway
 const UNLOAD_MINUTES_PER_STOP = 18;
 
 // ================= DAY / STATE PERSISTENCE =================
-function todayEastern() {
+function todayEasternFor(date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(date);
+}
+function todayEastern() {
+  return todayEasternFor(new Date());
 }
 
 // 0=Sunday, 1=Monday ... 6=Saturday, matching JS Date.getDay() convention,
@@ -446,11 +449,26 @@ function loadState() {
     const todayDateStr = todayEastern();
     let b2bChanged = false;
     b2bRouteIds.forEach((id) => {
-      if (state.b2bLastResetDate[id] !== todayDateStr) {
+      const route = B2B_ROUTES.find((r) => r.id === id);
+      if (!route) return;
+      // Always compare against the date of this route's CURRENT-OR-NEXT
+      // scheduled occurrence (never a past one). This is what lets
+      // someone assign a van/driver a day or two ahead of time — the
+      // marker doesn't change again until that occurrence has actually
+      // happened and passed, so an early assignment made Tuesday for a
+      // Wednesday route survives all the way through Wednesday, and
+      // only clears once Thursday confirms that cycle is over.
+      const now = new Date();
+      const todayDow = getEasternWeekday(now);
+      const daysUntilNext = (route.day - todayDow + 7) % 7;
+      const occurrenceDate = new Date(now);
+      occurrenceDate.setDate(occurrenceDate.getDate() + daysUntilNext);
+      const occurrenceDateStr = todayEasternFor(occurrenceDate);
+      if (state.b2bLastResetDate[id] !== occurrenceDateStr) {
         delete state.assignments[id];
         delete state.stopStatus[id];
         delete state.routeMeta[id];
-        state.b2bLastResetDate[id] = todayDateStr;
+        state.b2bLastResetDate[id] = occurrenceDateStr;
         b2bChanged = true;
       }
     });
@@ -469,9 +487,34 @@ app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
 app.get("/api/b2b-routes-today", (req, res) => {
-  const todayDow = getEasternWeekday(new Date());
-  const todaysRoutes = B2B_ROUTES.filter((r) => r.day === todayDow);
-  res.json({ routes: todaysRoutes, allRoutes: B2B_ROUTES, drivers: DRIVERS, hq: HQ, todayDow });
+  const now = new Date();
+  const todayDow = getEasternWeekday(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowDow = getEasternWeekday(tomorrow);
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  // Real B2B orders come in days ahead of the actual delivery, so by
+  // the time "today" rolls around a lot of tomorrow's picking could
+  // already be doable — showing tomorrow's route here too (clearly
+  // labeled, never confused with today's) lets the team get ahead
+  // instead of only finding out what's coming once it's already today.
+  const todaysRoutes = B2B_ROUTES.filter((r) => r.day === todayDow).map((r) => ({
+    ...r,
+    dayLabel: "Today — " + dayNames[todayDow],
+  }));
+  const tomorrowsRoutes = B2B_ROUTES.filter((r) => r.day === tomorrowDow).map((r) => ({
+    ...r,
+    dayLabel: "Tomorrow — " + dayNames[tomorrowDow],
+  }));
+
+  res.json({
+    routes: todaysRoutes.concat(tomorrowsRoutes),
+    allRoutes: B2B_ROUTES,
+    drivers: DRIVERS,
+    hq: HQ,
+    todayDow,
+  });
 });
 app.get("/api/state", (req, res) => {
   res.json(loadState());

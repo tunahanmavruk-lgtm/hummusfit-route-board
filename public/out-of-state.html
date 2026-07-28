@@ -51,6 +51,25 @@
     color: var(--orange);
     margin-bottom: 8px;
   }
+  .day-group-header{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.03em;
+    color: var(--ink);
+    margin: 28px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  .day-group-header:first-child{ margin-top: 0; }
+  .day-group-header.tomorrow{ color: var(--orange); }
+  .day-group-header .hint{
+    font-family:'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--dim);
+  }
   h1{
     font-family:'Bebas Neue', sans-serif;
     font-size: clamp(36px, 5.5vw, 60px);
@@ -558,8 +577,19 @@
   function render(){
     var container = document.getElementById('routesContainer');
     container.innerHTML = '';
+    var lastDayLabel = null;
 
     routesData.forEach(function(route){
+      if(route.dayLabel && route.dayLabel !== lastDayLabel){
+        lastDayLabel = route.dayLabel;
+        var isTomorrow = route.dayLabel.indexOf('Tomorrow') === 0;
+        var header = document.createElement('div');
+        header.className = 'day-group-header' + (isTomorrow ? ' tomorrow' : '');
+        header.innerHTML = (isTomorrow ? '📅 ' : '') + route.dayLabel
+          + (isTomorrow ? '<span class="hint"> — orders already coming in, get ahead if you can</span>' : '');
+        container.appendChild(header);
+      }
+
       var assignment = stateData.assignments[route.id] || { van: '', driver: '' };
       var meta = stateData.routeMeta[route.id] || {};
       var eta = etaCache[route.id];
