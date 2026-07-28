@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hummus Fit — Out of State Orders</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F7F6F3;
+    --card:#FFFFFF;
+    --ink:#141311;
+    --dim:#7A776E;
+    --line:rgba(20,19,17,0.09);
+    --orange:#6FA83C;
+    --orange-tint:#EDF5E4;
+    --teal:#1FA98F;
+    --teal-tint:#E3F5F1;
+    --black:#141311;
+    --gold:#E0A83B;
+    --red:#DA4A3F;
+    --shadow: 0 1px 2px rgba(20,19,17,0.04), 0 8px 24px rgba(20,19,17,0.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif;}
+  body{
+    background:
+      radial-gradient(circle at 8% 0%, rgba(232,97,44,0.07), transparent 40%),
+      radial-gradient(circle at 95% 10%, rgba(31,169,143,0.08), transparent 40%),
+      var(--bg);
+    padding-bottom: 60px;
+  }
+
+  header{
+    padding: 30px 5vw 22px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+    border-bottom: 2px solid var(--black);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+  h1{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: clamp(36px, 5.5vw, 60px);
+    line-height: 0.95;
+    letter-spacing: 0.01em;
+  }
+  h1 span{ color: var(--teal); }
+
+  .reset-btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color: var(--dim);
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    padding: 9px 16px;
+    border-radius: 999px;
+    cursor:pointer;
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .reset-btn:hover{ border-color: var(--red); color: var(--red); }
+
+  main{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 26px 5vw 0;
+  }
+
+  .route-card{
+    background: var(--card);
+    border-radius: 16px;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    overflow:hidden;
+  }
+  .route-head{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap: 10px;
+    padding: 18px 22px;
+    background: var(--black);
+    color: #fff;
+  }
+  .route-name{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 25px;
+    letter-spacing:0.01em;
+  }
+  .route-time{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    font-weight:700;
+    color: var(--black);
+    background: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  .route-size{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.55);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  .route-progress{
+    margin-left:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--teal);
+  }
+
+  .route-actions{
+    display:flex;
+    gap: 10px;
+    padding: 14px 22px;
+    flex-wrap:wrap;
+    border-bottom: 1px solid var(--line);
+    align-items:center;
+  }
+  .action-btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: none;
+    cursor:pointer;
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .action-btn:hover{ transform: translateY(-1px); }
+  .action-btn:disabled{ opacity:0.5; cursor:default; transform:none; }
+  .action-btn.optimize{ background: var(--black); color:#fff; }
+  .action-btn.start{ background: var(--orange); color:#fff; }
+  .action-btn.started{ background: var(--teal-tint); color: var(--teal); }
+  .action-btn.maps{
+    background: #fff;
+    color: var(--teal);
+    border: 1.5px solid var(--teal);
+    text-decoration:none;
+  }
+  .action-btn.maps:hover{ background: var(--teal-tint); }
+
+  .eta-summary{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--dim);
+    margin-left:auto;
+  }
+  .eta-summary.live{
+    color: var(--teal);
+  }
+
+  .started-time-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: var(--orange);
+    background: var(--orange-tint);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+
+  .hq-address{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    padding: 8px 22px 0;
+  }
+
+  .parkway-warning{
+    margin: 10px 22px 0;
+    padding: 10px 14px;
+    background: #FFF4E5;
+    border: 1.5px solid var(--gold);
+    border-radius: 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: #8A5A00;
+    line-height:1.5;
+  }
+
+  .stop-address{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    width:100%;
+    margin-top: -4px;
+    padding-left: 25px;
+  }
+
+  .status-stages{
+    display:flex;
+    align-items:center;
+    gap: 4px;
+    flex-shrink:0;
+  }
+  .status-dot{
+    width: 13px; height:13px;
+    border-radius:50%;
+    background: #fff;
+    border: 2.5px solid var(--dim);
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
+  .status-dot.picked{ background: #A25FE0; border-color: #A25FE0; }
+  .status-dot.arrived{ background: #4F9BE8; border-color: #4F9BE8; }
+  .status-dot.delivered{ background: var(--teal); border-color: var(--teal); }
+
+  .eta-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    color: var(--dim);
+    white-space:nowrap;
+  }
+
+  .picking-flash-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:800;
+    letter-spacing:0.03em;
+    white-space:nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: #fff;
+    background: #E8612C;
+    animation: pickingFlash 1s ease-in-out infinite;
+  }
+  @keyframes pickingFlash{
+    0%, 100% { background: #E8612C; box-shadow: 0 0 0 rgba(232,97,44,0); }
+    50% { background: #FF2D55; box-shadow: 0 0 10px rgba(255,45,85,0.6); }
+  }
+  .picking-done-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    white-space:nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: var(--teal);
+    background: var(--teal-tint);
+  }
+
+  .crate-count-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    white-space:nowrap;
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: var(--ink);
+    background: var(--card-2, #F1F0EC);
+    border: 1.5px solid var(--line);
+  }
+
+  .assign-row{
+    display:flex;
+    gap: 12px;
+    padding: 16px 22px;
+    flex-wrap:wrap;
+    border-bottom: 1px solid var(--line);
+    align-items:flex-end;
+  }
+  .assign-field{ flex:1; min-width: 170px; }
+  .assign-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight:700;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  select, input[type="text"]{
+    width:100%;
+    background: var(--bg);
+    border: 1.5px solid var(--line);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    outline:none;
+  }
+  select:focus, input[type="text"]:focus{ border-color: var(--teal); }
+  .fixed-van-label{
+    width:100%;
+    background: var(--card-2, #F1F0EC);
+    border: 1.5px solid var(--line);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-weight:700;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .van-live{
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--teal-tint);
+    color: var(--teal);
+    text-decoration:none;
+    white-space:nowrap;
+    transition: transform .15s ease;
+  }
+  .van-live:hover{ transform: translateY(-1px); }
+  .van-live .dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation: pulse 2s infinite;
+  }
+  .van-live.idle{ background: var(--orange-tint); color: var(--orange); }
+  .van-live.idle .dot{ background: var(--orange); box-shadow:0 0 6px var(--orange); }
+  .van-live.offline{ background: #F0EFEC; color: var(--dim); }
+  .van-live.offline .dot{ background: var(--dim); box-shadow:none; animation:none; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .stops{ padding: 14px 22px 18px; display:flex; flex-direction:column; gap:10px; }
+
+  .stop-row{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+  }
+
+  .stop-name{ font-weight:700; font-size: 14.5px; flex-shrink:0; }
+  .stop-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight:700;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    padding: 2px 8px;
+    border-radius:999px;
+    background: var(--orange-tint);
+    color: var(--orange);
+  }
+
+  .order-pill{
+    margin-left:auto;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 7px 14px;
+    border-radius: 999px;
+    white-space:nowrap;
+    border: 1.5px solid var(--line);
+    color: var(--dim);
+    background: #fff;
+  }
+  .order-pill.not-scheduled{
+    border-style: dashed;
+    color: var(--steel-light, var(--dim));
+    background: transparent;
+    opacity: 0.65;
+  }
+  .order-pill.lit{
+    background: var(--orange);
+    color: #fff;
+    border-color: var(--orange);
+    cursor:pointer;
+    text-decoration:none;
+    box-shadow: 0 2px 10px rgba(232,97,44,0.35);
+    animation: litPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes litPulse{
+    0%,100%{ box-shadow: 0 2px 10px rgba(232,97,44,0.35); }
+    50%{ box-shadow: 0 2px 18px rgba(232,97,44,0.6); }
+  }
+
+  .status-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:700;
+    text-transform:uppercase;
+    color: var(--dim);
+    width: 78px;
+  }
+  .status-label.enroute{ color: var(--gold); }
+  .status-label.picked{ color: #A25FE0; }
+  .status-label.arrived{ color: #4F9BE8; }
+  .status-label.delivered{ color: var(--teal); }
+
+  .refresh-note{
+    max-width: 1100px;
+    margin: 20px auto 0;
+    padding: 0 5vw;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+
+  .clock-block{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap: 6px;
+  }
+  .live-clock{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight:700;
+    color: var(--black);
+    font-variant-numeric: tabular-nums;
+  }
+  .window-badge{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding: 5px 11px;
+    border-radius: 999px;
+  }
+  .window-badge.open{ background: var(--orange-tint); color: var(--orange); }
+  .window-badge.closed{ background: #F0EFEC; color: var(--dim); }
+  .window-badge .dot{
+    width:6px; height:6px; border-radius:50%;
+  }
+  .window-badge.open .dot{ background: var(--orange); animation: pulse 1.5s infinite; }
+  .window-badge.closed .dot{ background: var(--dim); }
+
+  @media (max-width: 640px){
+    .stop-row{ flex-wrap:wrap; }
+    .order-pill{ margin-left:0; order:4; width:100%; text-align:center; }
+    .status-label{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">Hummus Fit / Out of State</div>
+    <h1>OUT OF STATE <span>ORDERS</span></h1>
+  </div>
+  <div class="clock-block">
+    <div class="live-clock" id="liveClock">--:--:-- --</div>
+    <div class="window-badge closed" id="windowBadge"><span class="dot"></span><span id="windowBadgeText">Checking order window…</span></div>
+    <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+  </div>
+</header>
+
+<main id="routesContainer">
+  <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
+</main>
+
+
+<script>
+  var STATUS_CYCLE = ['not_started', 'picked', 'enroute', 'arrived', 'delivered'];
+  var STATUS_LABEL = { not_started: 'Not Started', picked: 'Order Picked', enroute: 'En Route', arrived: 'Arrived', delivered: 'Delivered' };
+
+  var routesData = [];
+  var fleetData = [];
+  var driversData = [];
+  var hqData = { name: '', address: '' };
+  var stateData = { assignments: {}, stopStatus: {}, routeMeta: {} };
+  var ordersByStop = {};
+  var pickingStatusByStop = {};
+  var scheduledToday = {};
+  var vanStatusList = [];
+  var etaCache = {}; // routeId -> eta response
+
+  function nextStatus(current){
+    var i = STATUS_CYCLE.indexOf(current || 'not_started');
+    return STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
+  }
+
+  function buildVanOptions(selected){
+    var html = '<option value="">— Select van —</option>';
+    fleetData.forEach(function(v){
+      html += '<option value="' + v + '"' + (v === selected ? ' selected' : '') + '>' + v + '</option>';
+    });
+    return html;
+  }
+
+  function buildDriverOptions(selected){
+    var html = '<option value="">— Select driver —</option>';
+    driversData.forEach(function(d){
+      html += '<option value="' + d + '"' + (d === selected ? ' selected' : '') + '>' + d + '</option>';
+    });
+    return html;
+  }
+
+  function findVanStatus(vanName){
+    if(!vanName) return null;
+    var needle = vanName.toLowerCase();
+    for(var i=0;i<vanStatusList.length;i++){
+      var hay = (vanStatusList[i].nickName || '').toLowerCase();
+      if(hay && (needle.indexOf(hay) !== -1 || hay.indexOf(needle.split(' ')[0]) !== -1)){
+        return vanStatusList[i];
+      }
+    }
+    return null;
+  }
+
+  function vanLiveHtml(vanName){
+    if(!vanName) return '';
+    var v = findVanStatus(vanName);
+    if(!v){
+      return '<a class="van-live offline" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>No live data</a>';
+    }
+    var cls = v.speed > 1 ? '' : (v.isRunning ? 'idle' : 'offline');
+    var label = v.speed > 1 ? Math.round(v.speed) + ' mph' : (v.isRunning ? 'Idling' : 'Parked');
+    return '<a class="van-live ' + cls + '" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>' + label + '</a>';
+  }
+
+  var FLEET_TRACKER_URL = 'https://hummusfit-fleet-tracker-production.up.railway.app';
+
+  function fmtTime(iso){
+    if(!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' });
+  }
+
+  function render(){
+    var container = document.getElementById('routesContainer');
+    container.innerHTML = '';
+
+    routesData.forEach(function(route){
+      var assignment = stateData.assignments[route.id] || { van: '', driver: '' };
+      var meta = stateData.routeMeta[route.id] || {};
+      var eta = etaCache[route.id];
+
+      // Stops that aren't scheduled to deliver today (e.g. Natural Body's
+      // Mon/Wed/Fri-only schedule) are fully hidden from the board, not
+      // just muted — the route visually shrinks on its off days.
+      var visibleStops = route.stops.filter(function(s){
+        var key = s.name.toLowerCase();
+        return scheduledToday[key] !== false;
+      });
+
+      var deliveredCount = visibleStops.filter(function(s){
+        var st = stateData.stopStatus[s.id];
+        return st && st.status === 'delivered';
+      }).length;
+
+      var card = document.createElement('div');
+      card.className = 'route-card';
+
+      // Determine stop display order: optimized order if we have it, otherwise original
+      var orderedStops = visibleStops;
+      if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length){
+        orderedStops = meta.optimizedStopIds
+          .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
+          .filter(function(s){ return s && scheduledToday[s.name.toLowerCase()] !== false; });
+      }
+
+      var stopsHtml = '';
+      orderedStops.forEach(function(stop){
+        var stopState = stateData.stopStatus[stop.id] || {};
+        var status = stopState.status || 'not_started';
+        var stopKey = stop.name.toLowerCase();
+        var order = ordersByStop[stopKey];
+        var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
+        var pillHtml;
+        if(order){
+          pillHtml = '<a class="order-pill lit" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
+        } else if(!isScheduled){
+          pillHtml = '<span class="order-pill not-scheduled">No delivery today</span>';
+        } else {
+          pillHtml = '<span class="order-pill">No order yet</span>';
+        }
+
+        var etaChip = '';
+        if(eta && eta.available && eta.etaByStopId && eta.etaByStopId[stop.id] && status !== 'delivered'){
+          etaChip = '<span class="eta-chip">ETA ' + fmtTime(eta.etaByStopId[stop.id]) + '</span>';
+        }
+        var arrivedChip = stopState.arrivedAt ? '<span class="eta-chip">Arrived ' + fmtTime(stopState.arrivedAt) + '</span>' : '';
+
+        var pickingInfo = pickingStatusByStop[stopKey] || { status: 'not_started' };
+        var pickingChip = '';
+        if(pickingInfo.status === 'in_progress'){
+          var pct = (pickingInfo.percent !== undefined) ? pickingInfo.percent : 0;
+          pickingChip = '<span class="picking-flash-chip">⚡ PICKING IN PROGRESS — ' + pct + '%' + (pickingInfo.pickedBy ? ' — ' + pickingInfo.pickedBy.toUpperCase() : '') + '</span>';
+        } else if(pickingInfo.status === 'completed'){
+          var timeRange = '';
+          if(pickingInfo.startedAt && pickingInfo.completedAt){
+            timeRange = ' — ' + fmtTime(pickingInfo.startedAt) + ' to ' + fmtTime(pickingInfo.completedAt);
+          }
+          pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + timeRange + '</span>';
+        }
+
+        // Crate count — how many physical boxes exist for this order so
+        // far, so a driver knows how many crates to expect/load for this
+        // stop before even opening the picking screen.
+        var crateChip = '';
+        if(pickingInfo.crateCount && pickingInfo.crateCount > 0){
+          crateChip = '<span class="crate-count-chip">📦 ' + pickingInfo.crateCount + ' crate' + (pickingInfo.crateCount === 1 ? '' : 's') + '</span>';
+        }
+
+        // Showing "NOT STARTED" (delivery status) right next to a
+        // picking-in-progress/completed chip reads as a contradiction —
+        // it's really just two different things (delivery vs picking),
+        // but only the picking chip matters at this stage, so hide the
+        // delivery label specifically in that case. Any other delivery
+        // status (en route, arrived, delivered) still always shows.
+        var suppressStatusLabel = status === 'not_started' && (pickingInfo.status === 'in_progress' || pickingInfo.status === 'completed');
+        var statusLabelHtml = suppressStatusLabel ? '' : ('<div class="status-label ' + status + '">' + STATUS_LABEL[status] + '</div>');
+
+        stopsHtml +=
+          '<div class="stop-row">' +
+            '<div class="status-dot ' + status + '" data-stop="' + stop.id + '"></div>' +
+            '<div class="stop-name">' + stop.name + '</div>' +
+            (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
+            statusLabelHtml +
+            pickingChip +
+            crateChip +
+            (etaChip || arrivedChip) +
+            pillHtml +
+            '<div class="stop-address">' + (stop.address || '') + '</div>' +
+          '</div>';
+      });
+
+      var optimizeBtn = '<button class="action-btn optimize" data-optimize="' + route.id + '">Create Route</button>';
+      var startBtn = meta.startedAt
+        ? '<span class="action-btn started">Started ' + fmtTime(meta.startedAt) + '</span>'
+        : '<button class="action-btn start" data-start="' + route.id + '">Start Route</button>';
+
+      // A clearly distinct badge showing the actual start time, separate
+      // from the button label — makes it obvious at a glance that this
+      // route is actively live, not just planned.
+      var startedTimeBadge = meta.startedAt
+        ? '<span class="started-time-badge">🕐 Started at ' + fmtTime(meta.startedAt) + '</span>'
+        : '';
+
+      var etaSummary = '';
+      if(eta && eta.available && eta.etaBackToHQ){
+        etaSummary = '<span class="eta-summary live">Live — Back to HQ ~' + fmtTime(eta.etaBackToHQ) + '</span>';
+      } else if(meta.totalDurationSeconds){
+        var mins = Math.round(meta.totalDurationSeconds / 60);
+        etaSummary = '<span class="eta-summary">Planned — Est. total drive: ' + mins + ' min</span>';
+      }
+
+      // Once a route has been optimized, build a real Google Maps link —
+      // the same kind you could tap on a phone — pre-loaded with HQ as
+      // start/end and every stop in the exact optimized order, so a
+      // driver gets actual turn-by-turn navigation, not just a number.
+      var openMapsBtn = '';
+      if(meta.optimizedStopIds && meta.optimizedStopIds.length){
+        var orderedForMaps = meta.optimizedStopIds
+          .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
+          .filter(function(s){ return s && s.address && scheduledToday[s.name.toLowerCase()] !== false; });
+        if(orderedForMaps.length){
+          var origin = encodeURIComponent(hqData.address);
+          var destination = encodeURIComponent(hqData.address);
+          var waypoints = orderedForMaps.map(function(s){ return encodeURIComponent(s.address); }).join('|');
+          var mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + origin +
+            '&destination=' + destination + '&waypoints=' + waypoints + '&travelmode=driving';
+          openMapsBtn = '<a class="action-btn maps" href="' + mapsUrl + '" target="_blank" rel="noopener">Open in Google Maps</a>';
+        }
+      }
+
+      var parkwayWarning = '';
+      if(meta.flaggedParkways && meta.flaggedParkways.length > 0){
+        parkwayWarning =
+          '<div class="parkway-warning">⚠ Route may include: ' +
+          meta.flaggedParkways.join(', ') +
+          ' — verify before dispatching, commercial vans are not permitted</div>';
+      }
+
+      card.innerHTML =
+        '<div class="route-head">' +
+          '<span class="route-name">' + route.name + '</span>' +
+          '<span class="route-time">' + route.time + '</span>' +
+          '<span class="route-size">' + route.vanSize + '</span>' +
+          '<span class="route-progress">' + deliveredCount + '/' + visibleStops.length + ' delivered</span>' +
+        '</div>' +
+        parkwayWarning +
+        '<div class="assign-row">' +
+          '<div class="assign-field">' +
+            '<div class="assign-label">Van</div>' +
+            '<div class="fixed-van-label">' + (route.van || '—') + '</div>' +
+          '</div>' +
+          '<div class="assign-field">' +
+            '<div class="assign-label">Driver</div>' +
+            '<select data-route="' + route.id + '" class="driver-select">' + buildDriverOptions(assignment.driver) + '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="route-actions">' +
+          optimizeBtn + startBtn + openMapsBtn + startedTimeBadge + etaSummary +
+        '</div>' +
+        '<div class="stops">' + stopsHtml + '</div>';
+
+      container.appendChild(card);
+    });
+
+    document.querySelectorAll('.status-dot').forEach(function(dot){
+      dot.addEventListener('click', function(){
+        var stopId = dot.dataset.stop;
+        var current = (stateData.stopStatus[stopId] || {}).status || 'not_started';
+        var next = nextStatus(current);
+        stateData.stopStatus[stopId] = Object.assign({}, stateData.stopStatus[stopId], { status: next });
+        render();
+        fetch('/api/stop-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopId: stopId, status: next })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(data.state){ stateData = data.state; render(); }
+        });
+      });
+    });
+
+
+    document.querySelectorAll('[data-optimize]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var routeId = btn.dataset.optimize;
+        btn.disabled = true;
+        btn.textContent = 'Optimizing…';
+        fetch('/api/optimize-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId })
+        }).then(function(r){
+          return r.json().then(function(data){ return { ok: r.ok, data: data }; });
+        }).then(function(result){
+          if(!result.ok || result.data.error){
+            alert('Could not create route: ' + (result.data.error || 'Unknown server error. Check that GOOGLE_MAPS_API_KEY is set in Railway.'));
+            render();
+            return;
+          }
+          if(result.data.state){ stateData = result.data.state; }
+          render();
+        }).catch(function(err){
+          alert('Could not reach the server to create the route: ' + err.message);
+          render();
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-start]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var routeId = btn.dataset.start;
+        btn.disabled = true;
+        btn.textContent = 'Starting…';
+        fetch('/api/start-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(data.warning){ console.warn(data.warning); }
+          if(data.state){ stateData = data.state; }
+          fetchEtaFor(routeId);
+          render();
+        }).catch(function(){ render(); });
+      });
+    });
+
+    document.querySelectorAll('.driver-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var routeId = sel.dataset.route;
+        stateData.assignments[routeId] = stateData.assignments[routeId] || {};
+        stateData.assignments[routeId].driver = sel.value;
+        setTimeout(render, 0);
+        fetch('/api/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId, driver: sel.value })
+        });
+      });
+    });
+  }
+
+  function fetchEtaFor(routeId){
+    return fetch('/api/route-eta/' + routeId).then(function(r){ return r.json(); }).then(function(data){
+      etaCache[routeId] = data;
+      render();
+    }).catch(function(){});
+  }
+
+  function refreshAllStartedEtas(){
+    Object.keys(stateData.routeMeta || {}).forEach(function(routeId){
+      if(stateData.routeMeta[routeId].startedAt){
+        fetchEtaFor(routeId);
+      }
+    });
+  }
+
+  function loadInitial(){
+    Promise.all([
+      fetch('/api/b2b-routes-today').then(function(r){ return r.json(); }),
+      fetch('/api/state').then(function(r){ return r.json(); }),
+      fetch('/api/today-orders').then(function(r){ return r.json(); })
+    ]).then(function(results){
+      routesData = results[0].routes;
+      driversData = results[0].drivers || [];
+      hqData = results[0].hq || { name: 'HQ', address: '' };
+      stateData = results[1];
+      ordersByStop = results[2].byStopName || {};
+      scheduledToday = results[2].scheduledToday || {};
+      pickingStatusByStop = results[2].pickingStatus || {};
+      vanStatusList = [];
+      render();
+      refreshAllStartedEtas();
+    }).catch(function(){
+      document.getElementById('routesContainer').innerHTML =
+        '<div style="color:#DA4A3F; font-family:\'JetBrains Mono\', monospace; padding:30px 0;">Couldn\'t load the route board.</div>';
+    });
+  }
+
+  function pollState(){
+    Promise.all([
+      fetch('/api/state').then(function(r){ return r.json(); }),
+      fetch('/api/today-orders').then(function(r){ return r.json(); })
+    ]).then(function(results){
+      stateData = results[0];
+      ordersByStop = results[1].byStopName || {};
+      scheduledToday = results[1].scheduledToday || {};
+      pickingStatusByStop = results[1].pickingStatus || {};
+      vanStatusList = [];
+      render();
+      refreshAllStartedEtas();
+    }).catch(function(){});
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
+    fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
+  });
+
+  loadInitial();
+  setInterval(pollState, 10000);
+
+  // ---- Live clock (Eastern Time, ticks every second) ----
+  function tickClock(){
+    var now = new Date();
+    var timeStr = now.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+    });
+    document.getElementById('liveClock').textContent = timeStr + ' ET';
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // ---- Order window badge ----
+  function updateWindowBadge(){
+    fetch('/api/status').then(function(r){ return r.json(); }).then(function(data){
+      var badge = document.getElementById('windowBadge');
+      var text = document.getElementById('windowBadgeText');
+      if(!data.orderWindow){ return; }
+      var start = new Date(data.orderWindow.start);
+      var end = new Date(data.orderWindow.end);
+      var fmtOpts = { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true };
+      var startStr = start.toLocaleTimeString('en-US', fmtOpts);
+      var endStr = end.toLocaleTimeString('en-US', fmtOpts);
+      if(data.orderWindow.isOpen){
+        badge.className = 'window-badge open';
+        text.textContent = 'Orders open until ' + endStr;
+      } else {
+        badge.className = 'window-badge closed';
+        text.textContent = 'Showing orders from ' + startStr + '–' + endStr;
+      }
+    }).catch(function(){});
+  }
+  updateWindowBadge();
+  setInterval(updateWindowBadge, 30000);
+</script>
+
+</body>
+</html>

@@ -430,6 +430,11 @@ function saveState(state) {
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
+app.get("/api/b2b-routes-today", (req, res) => {
+  const todayDow = getEasternWeekday(new Date());
+  const todaysRoutes = B2B_ROUTES.filter((r) => r.day === todayDow);
+  res.json({ routes: todaysRoutes, allRoutes: B2B_ROUTES, drivers: DRIVERS, hq: HQ, todayDow });
+});
 app.get("/api/state", (req, res) => {
   res.json(loadState());
 });
@@ -1606,7 +1611,7 @@ app.get("/api/van-status", async (req, res) => {
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 function getRouteById(routeId) {
-  return ROUTES.find((r) => r.id === routeId);
+  return ROUTES.find((r) => r.id === routeId) || B2B_ROUTES.find((r) => r.id === routeId);
 }
 
 // Commercial vans can't legally use NY-area parkways (low bridge clearances,
@@ -1830,6 +1835,9 @@ app.get("/api/status", (req, res) => {
 
 app.get("/picking", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "picking.html"));
+});
+app.get("/out-of-state", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "out-of-state.html"));
 });
 
 app.use(express.static(path.join(__dirname, "public")));
