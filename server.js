@@ -226,10 +226,10 @@ const B2B_ROUTES = [
 // the picking screen uses to flip into a completely different visual
 // theme so pickers can't mistake one for a local order.
 const VALID_STOP_NAMES = new Map(
-  ROUTES.flatMap((route) =>
+  ROUTES.concat(B2B_ROUTES).flatMap((route) =>
     route.stops.map((s) => [
       s.name.toLowerCase(),
-      { isB2B: Boolean(s.isB2B), deliveryDays: s.deliveryDays || null },
+      { isB2B: Boolean(s.isB2B) || Boolean(route.day !== undefined), deliveryDays: s.deliveryDays || null },
     ])
   )
 );
@@ -388,6 +388,7 @@ function defaultState() {
     routeMeta: {},
     picking: {},
     deliveryWindowStart: getOrderWindowEastern(new Date()).windowStart.toISOString(),
+    b2bLastResetDate: {},
   };
 }
 
@@ -399,6 +400,10 @@ function loadState() {
     }
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     if (!state.picking) state.picking = {}; // migrate older saved state
+    if (!state.b2bLastResetDate) state.b2bLastResetDate = {}; // migrate older saved state
+
+    const localRouteIds = new Set(ROUTES.map((r) => r.id));
+    const b2bRouteIds = new Set(B2B_ROUTES.map((r) => r.id));
 
     // Delivery-side state (which van/driver is assigned, whether a route
     // has been started, live ETAs) only makes sense for whichever order
@@ -409,14 +414,42 @@ function loadState() {
     // exactly the stale-state bug this fixes. Picking records aren't
     // touched here since they already self-heal per-order via the
     // orderId check in getPickingRecord.
+    //
+    // This ONLY applies to local routes. B2B routes run 9-11+ hours and
+    // are scheduled by day of week, not by this same-day noon window —
+    // a Wednesday route starting at 4am could still be on the road well
+    // past noon, and this reset would wipe its "Live" status, van, and
+    // driver mid-route if it applied there too. B2B gets its own reset
+    // below instead.
     const currentWindowStart = getOrderWindowEastern(new Date()).windowStart.toISOString();
     if (state.deliveryWindowStart !== currentWindowStart) {
-      state.assignments = {};
-      state.stopStatus = {};
-      state.routeMeta = {};
+      localRouteIds.forEach((id) => {
+        delete state.assignments[id];
+        delete state.stopStatus[id];
+        delete state.routeMeta[id];
+      });
       state.deliveryWindowStart = currentWindowStart;
       saveState(state);
     }
+
+    // B2B: reset each route's own state once per calendar day, on its
+    // own schedule — not tied to local's noon boundary at all. A route
+    // only clears when today is genuinely a new day compared to the
+    // last time THAT SPECIFIC route was reset, so a long-running route
+    // that started this morning stays intact all day regardless of
+    // local's order window flipping underneath it.
+    const todayDateStr = todayEastern();
+    let b2bChanged = false;
+    b2bRouteIds.forEach((id) => {
+      if (state.b2bLastResetDate[id] !== todayDateStr) {
+        delete state.assignments[id];
+        delete state.stopStatus[id];
+        delete state.routeMeta[id];
+        state.b2bLastResetDate[id] = todayDateStr;
+        b2bChanged = true;
+      }
+    });
+    if (b2bChanged) saveState(state);
 
     return state;
   } catch (e) {
@@ -564,7 +597,7 @@ async function fetchTodaysStopOrders() {
     if (!edges.length) break;
   }
 
-  const byStopName = {};
+  const localByStopName = {};
   orders.forEach((order) => {
     const tags = (order.customer?.tags || []).map((t) => t.trim());
     tags.forEach((tag) => {
@@ -573,10 +606,10 @@ async function fetchTodaysStopOrders() {
       // routes — ignore any other tag on the customer (marketing tags,
       // campaign names, unrelated labels, etc.)
       const stopMeta = VALID_STOP_NAMES.get(key);
-      if (!stopMeta) return;
+      if (!stopMeta || stopMeta.isB2B) return; // B2B stops are handled separately below
       // First matching order per stop name wins (most recent order stays if duplicates)
-      if (!byStopName[key]) {
-        byStopName[key] = {
+      if (!localByStopName[key]) {
+        localByStopName[key] = {
           orderId: order.id,
           orderName: order.name,
           createdAt: order.createdAt,
@@ -590,14 +623,111 @@ async function fetchTodaysStopOrders() {
               sku: node.sku,
             };
           }),
-          isB2B: stopMeta.isB2B,
+          isB2B: false,
         };
       }
     });
   });
 
+  const byStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
   ordersCache = { fetchedAt: now, byStopName, windowStart, windowEnd };
   return ordersCache;
+}
+
+// B2B customers order on their own schedule — sometimes days ahead of an
+// actual delivery, sometimes with more than one separate order for the
+// same upcoming stop. Local's narrow same-day window and "first order
+// wins" logic would silently miss or drop real orders for these stops,
+// so B2B gets its own fetch: pull anything still unfulfilled within a
+// generous lookback, and combine every matching order for a stop into
+// one merged pick list instead of keeping only the first.
+const B2B_LOOKBACK_DAYS = 21;
+async function fetchB2BStopOrders() {
+  const lookbackStart = new Date(Date.now() - B2B_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  let orders = [];
+  let cursor = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const query = `
+      query($cursor: String, $queryString: String!) {
+        orders(first: 50, after: $cursor, query: $queryString) {
+          edges {
+            cursor
+            node {
+              id
+              name
+              createdAt
+              customer { tags }
+              lineItems(first: 50) {
+                edges { node { title quantity sku variantTitle } }
+              }
+            }
+          }
+          pageInfo { hasNextPage }
+        }
+      }
+    `;
+    const data = await shopifyGraphQL(query, {
+      cursor,
+      queryString: `created_at:>='${lookbackStart}' fulfillment_status:unfulfilled status:any`,
+    });
+    const edges = data.orders.edges;
+    orders = orders.concat(edges.map((e) => e.node));
+    hasNextPage = data.orders.pageInfo.hasNextPage;
+    cursor = edges.length ? edges[edges.length - 1].cursor : null;
+    if (!edges.length) break;
+  }
+
+  // Group every matching order per stop, then merge them into one
+  // combined pick list — summing quantities for the same item across
+  // orders rather than keeping separate lines, since a picker needs
+  // "how many total," not an order-by-order breakdown.
+  const groupedByStop = {};
+  orders.forEach((order) => {
+    const tags = (order.customer?.tags || []).map((t) => t.trim());
+    tags.forEach((tag) => {
+      const key = tag.toLowerCase();
+      const stopMeta = VALID_STOP_NAMES.get(key);
+      if (!stopMeta || !stopMeta.isB2B) return;
+      if (!groupedByStop[key]) groupedByStop[key] = [];
+      groupedByStop[key].push(order);
+    });
+  });
+
+  const byStopName = {};
+  Object.keys(groupedByStop).forEach((key) => {
+    const stopOrders = groupedByStop[key];
+    const mergedItemsByKey = {}; // "title::sku" -> combined item
+    stopOrders.forEach((order) => {
+      order.lineItems.edges.forEach((e) => {
+        const node = e.node;
+        const hasRealVariant =
+          node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
+        const title = hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title;
+        const itemKey = title + "::" + (node.sku || "");
+        if (mergedItemsByKey[itemKey]) {
+          mergedItemsByKey[itemKey].quantity += node.quantity;
+        } else {
+          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku };
+        }
+      });
+    });
+    // A stable id that only changes when the actual SET of orders for
+    // this stop changes — adding a new order correctly resets/expands
+    // the picking record, but re-syncing the same set of orders never
+    // wipes progress already made.
+    const sortedIds = stopOrders.map((o) => o.id).sort();
+    byStopName[key] = {
+      orderId: sortedIds.join(","),
+      orderName: stopOrders.map((o) => o.name).join(", "),
+      orderCount: stopOrders.length,
+      createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
+      lineItems: Object.values(mergedItemsByKey),
+      isB2B: true,
+    };
+  });
+  return byStopName;
 }
 
 app.get("/api/today-orders", async (req, res) => {
