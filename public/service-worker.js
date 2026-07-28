@@ -12,8 +12,8 @@ self.addEventListener("push", function (event) {
   const title = data.title || "Hummus Fit";
   const options = {
     body: data.body || "",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: data.icon || "/icon-192.png",
+    badge: data.icon || "/icon-192.png",
     data: { url: data.url || "/" },
   };
 

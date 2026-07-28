@@ -2160,11 +2160,12 @@ async function checkForNewOrdersAndNotify() {
         const order = cache.byStopName[key];
         const stopName = STOP_DISPLAY_NAME.get(key) || key;
         await sendPushToAll({
-          title: "New order — " + stopName,
+          title: (order.isB2B ? "🟢 Out of State — " : "🟠 Store Route — ") + stopName,
           body: order.isB2B
             ? "Out-of-state order just came in for " + stopName
             : "Ready to pick — order just came in for " + stopName,
           url: "/picking?stop=" + encodeURIComponent(stopName),
+          icon: order.isB2B ? "/icon-192-oos.png" : "/icon-192.png",
         });
       }
     }

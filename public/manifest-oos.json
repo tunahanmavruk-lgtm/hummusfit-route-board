@@ -1,0 +1,20 @@
+{
+  "name": "Hummus Fit — Out of State",
+  "short_name": "Out of State",
+  "start_url": "/out-of-state",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6FA83C",
+  "icons": [
+    {
+      "src": "/icon-192-oos.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512-oos.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

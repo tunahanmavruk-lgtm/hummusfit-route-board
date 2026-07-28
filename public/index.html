@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hummus Fit — Route Board</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#141311">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -784,7 +787,11 @@
         var routeId = sel.dataset.route;
         stateData.assignments[routeId] = stateData.assignments[routeId] || {};
         stateData.assignments[routeId].van = sel.value;
-        render();
+        // Deferred on purpose: rebuilding the whole DOM (including this
+        // very <select>) synchronously inside its own change event is a
+        // known iOS Safari crash — the page goes blank white. Letting the
+        // browser finish settling this interaction first fixes it.
+        setTimeout(render, 0);
         fetch('/api/assign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -798,7 +805,7 @@
         var routeId = sel.dataset.route;
         stateData.assignments[routeId] = stateData.assignments[routeId] || {};
         stateData.assignments[routeId].driver = sel.value;
-        render();
+        setTimeout(render, 0);
         fetch('/api/assign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
