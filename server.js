@@ -107,6 +107,12 @@ const B2B_ROUTES = [
     stops: [
       { id: "b2b-mon-v1-1", name: "Harrison", address: "229 Harrison Ave, Harrison, NY 10528" },
       { id: "b2b-mon-v1-2", name: "Brookfield", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
+      // Fishkill isn't a separate physical drop — same owner as
+      // Brookfield, dropped at the same address, and relayed onward by
+      // the Brookfield owner himself. Same address on purpose (no real
+      // extra driving happens), but its own stop entry so its orders
+      // get matched, picked, and labeled completely separately.
+      { id: "b2b-mon-v1-2b", name: "Fishkill", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
       { id: "b2b-mon-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
       { id: "b2b-mon-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
       { id: "b2b-mon-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
@@ -165,9 +171,7 @@ const B2B_ROUTES = [
     stops: [
       { id: "b2b-wed-v1-1", name: "New Castle", address: "71 Industrial Blvd, New Castle, DE 19720" },
       { id: "b2b-wed-v1-2", name: "Ares Sewell", address: "508 Hurffville - Cross Keys Rd, Sewell, NJ 08080" },
-      // NEEDS REAL ADDRESS — flagged, not guessed. Placeholder blank so
-      // this is obviously incomplete rather than silently wrong.
-      { id: "b2b-wed-v1-3", name: "King of Gains", address: "" },
+      { id: "b2b-wed-v1-3", name: "King of Gains", address: "2501 US-130 Ste 4, Cinnaminson, NJ 08077" },
       { id: "b2b-wed-v1-4", name: "Ares Mt Laurel", address: "4309 Dearborn Cir, Mt Laurel Township, NJ 08054" },
     ],
   },
@@ -181,6 +185,7 @@ const B2B_ROUTES = [
     stops: [
       { id: "b2b-thu-v1-1", name: "Harrison", address: "229 Harrison Ave, Harrison, NY 10528" },
       { id: "b2b-thu-v1-2", name: "Brookfield", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
+      { id: "b2b-thu-v1-2b", name: "Fishkill", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
       { id: "b2b-thu-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
       { id: "b2b-thu-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
     ],
@@ -575,6 +580,7 @@ async function fetchTodaysStopOrders() {
               id
               name
               createdAt
+              tags
               customer { tags }
               lineItems(first: 50) {
                 edges { node { title quantity sku variantTitle } }
@@ -599,7 +605,13 @@ async function fetchTodaysStopOrders() {
 
   const localByStopName = {};
   orders.forEach((order) => {
-    const tags = (order.customer?.tags || []).map((t) => t.trim());
+    // Check BOTH the order's own tags and the customer's account-level
+    // tags — a shared customer account (like PWRBLD, which places
+    // orders for 3 different locations from one account) can still be
+    // routed correctly by tagging the individual ORDER with the real
+    // location, even when the customer-level tag alone can't tell the
+    // locations apart.
+    const tags = (order.tags || []).concat(order.customer?.tags || []).map((t) => t.trim());
     tags.forEach((tag) => {
       const key = tag.toLowerCase();
       // Only ever match a tag that's an actual real stop name from our
@@ -658,6 +670,7 @@ async function fetchB2BStopOrders() {
               id
               name
               createdAt
+              tags
               customer { tags }
               lineItems(first: 50) {
                 edges { node { title quantity sku variantTitle } }
@@ -685,7 +698,11 @@ async function fetchB2BStopOrders() {
   // "how many total," not an order-by-order breakdown.
   const groupedByStop = {};
   orders.forEach((order) => {
-    const tags = (order.customer?.tags || []).map((t) => t.trim());
+    // Same as local: check the order's own tags too, not just the
+    // customer's — this is what lets PWRBLD's one shared account place
+    // orders for 3 different locations and still have each order route
+    // to the correct one, by tagging the individual order.
+    const tags = (order.tags || []).concat(order.customer?.tags || []).map((t) => t.trim());
     tags.forEach((tag) => {
       const key = tag.toLowerCase();
       const stopMeta = VALID_STOP_NAMES.get(key);
