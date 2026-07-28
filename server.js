@@ -696,6 +696,22 @@ async function fetchTodaysStopOrders() {
 // so B2B gets its own fetch: pull anything still unfulfilled within a
 // generous lookback, and combine every matching order for a stop into
 // one merged pick list instead of keeping only the first.
+// A shared customer account (like PWRBLD or Ares, which order for
+// several different physical locations from one account) can't be told
+// apart by customer-level tags alone — but the order's own shipping
+// address already has to be correct for the package to actually reach
+// the right place. So build a zip-code lookup from every known B2B
+// stop's address, and use it to auto-identify which location an
+// untagged shared-account order is actually for, removing the need to
+// manually tag every single order by hand.
+const B2B_ZIP_TO_STOP = new Map();
+B2B_ROUTES.forEach((route) => {
+  route.stops.forEach((s) => {
+    const zipMatch = (s.address || "").match(/\b(\d{5})\b(?!.*\d{5})/);
+    if (zipMatch) B2B_ZIP_TO_STOP.set(zipMatch[1], s.name.toLowerCase());
+  });
+});
+
 const B2B_LOOKBACK_DAYS = 21;
 async function fetchB2BStopOrders() {
   const lookbackStart = new Date(Date.now() - B2B_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -715,6 +731,7 @@ async function fetchB2BStopOrders() {
               createdAt
               tags
               customer { tags }
+              shippingAddress { zip }
               lineItems(first: 50) {
                 edges { node { title quantity sku variantTitle } }
               }
@@ -746,13 +763,29 @@ async function fetchB2BStopOrders() {
     // orders for 3 different locations and still have each order route
     // to the correct one, by tagging the individual order.
     const tags = (order.tags || []).concat(order.customer?.tags || []).map((t) => t.trim());
+    let matchedAny = false;
     tags.forEach((tag) => {
       const key = tag.toLowerCase();
       const stopMeta = VALID_STOP_NAMES.get(key);
       if (!stopMeta || !stopMeta.isB2B) return;
+      matchedAny = true;
       if (!groupedByStop[key]) groupedByStop[key] = [];
       groupedByStop[key].push(order);
     });
+    // No tag identified a real stop — this is exactly the shared-account
+    // situation (PWRBLD, Ares) where the order wasn't individually
+    // tagged. Rather than lose the order entirely, fall back to the
+    // real shipping address already on it: the package has to go to
+    // the right place regardless, so that address is a reliable way to
+    // auto-identify which known stop this order is actually for.
+    if (!matchedAny) {
+      const zip = order.shippingAddress?.zip;
+      const fallbackKey = zip ? B2B_ZIP_TO_STOP.get(zip) : null;
+      if (fallbackKey) {
+        if (!groupedByStop[fallbackKey]) groupedByStop[fallbackKey] = [];
+        groupedByStop[fallbackKey].push(order);
+      }
+    }
   });
 
   const byStopName = {};
