@@ -90,6 +90,131 @@ const ROUTES = [
   },
 ];
 
+// Out-of-state / B2B routes — same exact structure as local ROUTES
+// above, plus a `day` field (0=Sun..6=Sat, matching JS Date.getDay())
+// since these run weekly on specific days rather than every day. The
+// stop order here is Tony's own already-finalized sequence — Create
+// Route for these builds the Google Maps link using THIS order rather
+// than letting Google re-optimize it, since the planning is already done.
+const B2B_ROUTES = [
+  {
+    id: "b2b-mon-v1",
+    day: 1,
+    name: "Monday — Van 1",
+    van: "Van 1",
+    miles: 241,
+    baseShiftHours: 7.2,
+    stops: [
+      { id: "b2b-mon-v1-1", name: "Harrison", address: "229 Harrison Ave, Harrison, NY 10528" },
+      { id: "b2b-mon-v1-2", name: "Brookfield", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
+      { id: "b2b-mon-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
+      { id: "b2b-mon-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
+      { id: "b2b-mon-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
+    ],
+  },
+  {
+    id: "b2b-mon-v2",
+    day: 1,
+    name: "Monday — Van 2",
+    van: "Van 2",
+    miles: 393,
+    baseShiftHours: 9.9,
+    stops: [
+      { id: "b2b-mon-v2-1", name: "Rochelle", address: "5 W Passaic St #1b, Rochelle Park, NJ 07662" },
+      { id: "b2b-mon-v2-2", name: "PWRBLD Philadelphia", address: "1 S Broad St, Philadelphia, PA 19107" },
+      { id: "b2b-mon-v2-3", name: "Ares Philadelphia", address: "3354 Grant Ave, Philadelphia, PA 19114" },
+      { id: "b2b-mon-v2-4", name: "Ares Hamilton", address: "1061 White Horse Ave, Hamilton Township, NJ 08610" },
+    ],
+  },
+  {
+    id: "b2b-tue-v1",
+    day: 2,
+    name: "Tuesday — Van 1",
+    van: "Van 1",
+    miles: 440,
+    baseShiftHours: 9.4,
+    stops: [
+      { id: "b2b-tue-v1-1", name: "Wyomissing", address: "92 Commerce Dr, Wyomissing, PA 19610" },
+      { id: "b2b-tue-v1-2", name: "Bethlehem", address: "2134 W Union Blvd, Bethlehem, PA 18018" },
+    ],
+  },
+  {
+    id: "b2b-tue-v2",
+    day: 2,
+    name: "Tuesday — Van 2",
+    van: "Van 2",
+    miles: 268,
+    baseShiftHours: 7.3,
+    stops: [
+      { id: "b2b-tue-v2-1", name: "Meriden", address: "477 S Broad St Ste 8, Meriden, CT 06451" },
+      { id: "b2b-tue-v2-2", name: "Orange", address: "297 Boston Post Rd #14, Orange, CT 06477" },
+      { id: "b2b-tue-v2-3", name: "Shelton", address: "890 Bridgeport Ave Ste 14, Shelton, CT 06484" },
+      // NOTE: Fairfield's zip code was not provided — address works for
+      // Google Maps as-is, but worth adding the zip if you have it handy.
+      { id: "b2b-tue-v2-4", name: "Fairfield", address: "2465 Black Rock Tpke Unit D, Fairfield, CT" },
+      { id: "b2b-tue-v2-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
+    ],
+  },
+  {
+    id: "b2b-wed-v1",
+    day: 3,
+    name: "Wednesday — Van 1",
+    van: "Van 1",
+    miles: 450,
+    baseShiftHours: 10.7,
+    stops: [
+      { id: "b2b-wed-v1-1", name: "New Castle", address: "71 Industrial Blvd, New Castle, DE 19720" },
+      { id: "b2b-wed-v1-2", name: "Ares Sewell", address: "508 Hurffville - Cross Keys Rd, Sewell, NJ 08080" },
+      // NEEDS REAL ADDRESS — flagged, not guessed. Placeholder blank so
+      // this is obviously incomplete rather than silently wrong.
+      { id: "b2b-wed-v1-3", name: "King of Gains", address: "" },
+      { id: "b2b-wed-v1-4", name: "Ares Mt Laurel", address: "4309 Dearborn Cir, Mt Laurel Township, NJ 08054" },
+    ],
+  },
+  {
+    id: "b2b-thu-v1",
+    day: 4,
+    name: "Thursday — Van 1",
+    van: "Van 1",
+    miles: 235,
+    baseShiftHours: 6.6,
+    stops: [
+      { id: "b2b-thu-v1-1", name: "Harrison", address: "229 Harrison Ave, Harrison, NY 10528" },
+      { id: "b2b-thu-v1-2", name: "Brookfield", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
+      { id: "b2b-thu-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
+      { id: "b2b-thu-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
+    ],
+  },
+  {
+    id: "b2b-fri-v1",
+    day: 5,
+    name: "Friday — Van 1",
+    van: "Van 1",
+    miles: 268,
+    baseShiftHours: 7.3,
+    stops: [
+      { id: "b2b-fri-v1-1", name: "Meriden", address: "477 S Broad St Ste 8, Meriden, CT 06451" },
+      { id: "b2b-fri-v1-2", name: "Orange", address: "297 Boston Post Rd #14, Orange, CT 06477" },
+      { id: "b2b-fri-v1-3", name: "Shelton", address: "890 Bridgeport Ave Ste 14, Shelton, CT 06484" },
+      { id: "b2b-fri-v1-4", name: "Fairfield", address: "2465 Black Rock Tpke Unit D, Fairfield, CT" },
+      { id: "b2b-fri-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
+    ],
+  },
+  {
+    id: "b2b-fri-v2",
+    day: 5,
+    name: "Friday — Van 2",
+    van: "Van 2",
+    miles: 409,
+    baseShiftHours: 9.6,
+    stops: [
+      { id: "b2b-fri-v2-1", name: "Rochelle", address: "5 W Passaic St #1b, Rochelle Park, NJ 07662" },
+      { id: "b2b-fri-v2-2", name: "PWRBLD KOP", address: "167 Town Center Rd, King of Prussia, PA 19406" },
+      { id: "b2b-fri-v2-3", name: "PWRBLD Warrington", address: "1661 Easton Rd Unit C-1, Warrington, PA 18976" },
+    ],
+  },
+];
+
 // The only tags that should ever be treated as a delivery stop are ones
 // that match a real stop name from the routes above. Without this check,
 // ANY customer tag (marketing tags, campaign names, dates, whatever else
@@ -256,7 +381,14 @@ function getOrderWindowEastern(now = new Date()) {
 }
 
 function defaultState() {
-  return { day: todayEastern(), assignments: {}, stopStatus: {}, routeMeta: {}, picking: {} };
+  return {
+    day: todayEastern(),
+    assignments: {},
+    stopStatus: {},
+    routeMeta: {},
+    picking: {},
+    deliveryWindowStart: getOrderWindowEastern(new Date()).windowStart.toISOString(),
+  };
 }
 
 function loadState() {
@@ -267,6 +399,25 @@ function loadState() {
     }
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     if (!state.picking) state.picking = {}; // migrate older saved state
+
+    // Delivery-side state (which van/driver is assigned, whether a route
+    // has been started, live ETAs) only makes sense for whichever order
+    // window is currently active. Without this, a route started at
+    // 7:32am for this morning's deliveries would still show as "Live"
+    // hours later even after the order window flips at noon and a
+    // completely different set of orders/routes is being prepped —
+    // exactly the stale-state bug this fixes. Picking records aren't
+    // touched here since they already self-heal per-order via the
+    // orderId check in getPickingRecord.
+    const currentWindowStart = getOrderWindowEastern(new Date()).windowStart.toISOString();
+    if (state.deliveryWindowStart !== currentWindowStart) {
+      state.assignments = {};
+      state.stopStatus = {};
+      state.routeMeta = {};
+      state.deliveryWindowStart = currentWindowStart;
+      saveState(state);
+    }
+
     return state;
   } catch (e) {
     return defaultState();
@@ -658,6 +809,7 @@ function getPickingRecord(state, stopName, order) {
       itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing' | 'partial'
       itemNotes: {}, // index -> free text reason
       itemPickedQty: {}, // index -> actual quantity picked (only meaningful for 'partial')
+      itemScannedCount: {}, // index -> how many individual units have actually been scanned so far
       itemCrateNumber: {}, // index -> which crate this item was physically packed into
       currentCrateNumber: 1, // crate currently being filled; increments via "New Crate"
       closedCrates: [], // list of crate numbers already closed out (label already printed)
@@ -668,6 +820,7 @@ function getPickingRecord(state, stopName, order) {
     };
   }
   if (!state.picking[key].itemPickedQty) state.picking[key].itemPickedQty = {}; // migrate older records
+  if (!state.picking[key].itemScannedCount) state.picking[key].itemScannedCount = {};
   if (!state.picking[key].itemCrateNumber) state.picking[key].itemCrateNumber = {};
   if (!state.picking[key].currentCrateNumber) state.picking[key].currentCrateNumber = 1;
   if (!state.picking[key].closedCrates) state.picking[key].closedCrates = [];
@@ -862,6 +1015,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
       itemPickedQty: record.itemPickedQty,
+      itemScannedCount: record.itemScannedCount,
       itemCrateNumber: record.itemCrateNumber,
       currentCrateNumber: record.currentCrateNumber,
       closedCrates: record.closedCrates,
@@ -903,9 +1057,20 @@ app.post("/api/picking-item", async (req, res) => {
         return res.status(400).json({ error: "pickedQty required when status is partial" });
       }
       record.itemPickedQty[itemIndex] = pickedQty;
+      record.itemScannedCount[itemIndex] = pickedQty;
     } else {
       // Clear any stale partial-quantity value once the item is no longer partial
       delete record.itemPickedQty[itemIndex];
+      if (status === "picked") {
+        // Manually tapped fully picked (not via scanning) — treat as
+        // fully accounted for so a later scan doesn't re-open it.
+        const itemQty = order.lineItems[itemIndex] ? order.lineItems[itemIndex].quantity : 0;
+        record.itemScannedCount[itemIndex] = itemQty;
+      } else if (status === "not_picked") {
+        // Cycled back to the start — clear scan progress so a fresh
+        // scan-count cycle can begin cleanly.
+        delete record.itemScannedCount[itemIndex];
+      }
     }
     if (status === "picked" || status === "partial") {
       // Physically going into a box right now — tag it with whichever
@@ -921,6 +1086,82 @@ app.post("/api/picking-item", async (req, res) => {
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
       itemPickedQty: record.itemPickedQty,
+      itemScannedCount: record.itemScannedCount,
+      itemCrateNumber: record.itemCrateNumber,
+      currentCrateNumber: record.currentCrateNumber,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// A single barcode scan represents ONE physical unit — not the whole
+// line item. This increments a per-item running count and only marks
+// the item fully "picked" once the scanned count reaches the actual
+// ordered quantity. This is what makes scanning genuinely verify a
+// count, not just verify "yes, this is the right product."
+app.post("/api/picking-scan", async (req, res) => {
+  try {
+    const { stopName, scannedCode } = req.body;
+    if (!stopName || !scannedCode) {
+      return res.status(400).json({ error: "stopName and scannedCode required" });
+    }
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    if (!record.startedAt) {
+      record.startedAt = new Date().toISOString();
+    }
+
+    const code = scannedCode.trim();
+    let matchIdx = -1;
+    for (let i = 0; i < order.lineItems.length; i++) {
+      const item = order.lineItems[i];
+      const sku = (item.sku || "").trim();
+      const currentStatus = record.itemStatus[i] || "not_picked";
+      const scannedSoFar = record.itemScannedCount[i] || 0;
+      const alreadyResolved = currentStatus === "picked" || currentStatus === "missing" || currentStatus === "partial";
+      if (sku && sku === code && !alreadyResolved && scannedSoFar < item.quantity) {
+        matchIdx = i;
+        break;
+      }
+    }
+
+    if (matchIdx === -1) {
+      const alreadyResolvedMatch = order.lineItems.some((item, i) => {
+        const sku = (item.sku || "").trim();
+        const s = record.itemStatus[i] || "not_picked";
+        return sku === code && (s === "picked" || s === "missing" || s === "partial");
+      });
+      saveState(state);
+      return res.json({ ok: true, matched: false, alreadyResolved: alreadyResolvedMatch });
+    }
+
+    const item = order.lineItems[matchIdx];
+    record.itemScannedCount[matchIdx] = (record.itemScannedCount[matchIdx] || 0) + 1;
+    const scannedNow = record.itemScannedCount[matchIdx];
+    let newStatus = "not_picked";
+    if (scannedNow >= item.quantity) {
+      newStatus = "picked";
+      record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
+    }
+    record.itemStatus[matchIdx] = newStatus;
+    saveState(state);
+
+    res.json({
+      ok: true,
+      matched: true,
+      itemIndex: matchIdx,
+      itemTitle: item.title,
+      scannedCount: scannedNow,
+      totalQty: item.quantity,
+      status: newStatus,
+      itemStatus: record.itemStatus,
+      itemScannedCount: record.itemScannedCount,
       itemCrateNumber: record.itemCrateNumber,
       currentCrateNumber: record.currentCrateNumber,
     });
