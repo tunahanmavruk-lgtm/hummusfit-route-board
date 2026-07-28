@@ -2,6 +2,52 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
+const webpush = require("web-push");
+
+// Real VAPID keypair for push notifications — the public one gets handed
+// to the browser when it subscribes, the private one signs outgoing
+// notifications server-side. These need to stay stable (don't
+// regenerate them) or every existing subscriber's subscription breaks.
+const VAPID_PUBLIC_KEY =
+  "BPOP3h7QFDviLTCcd8OLIMK0vyXYTa_icDUddsj7CzkZ9ohVOugqQ35QSebi9YsmVMeWeU93WNs-bOEFOl9kou4";
+const VAPID_PRIVATE_KEY = "MtFdE8HQmopjtFzUIEZ69D_ll-wr-yWWXWph92L_nd8";
+webpush.setVapidDetails(
+  "mailto:ops@hummusfitmeals.com",
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+);
+
+const SUBSCRIPTIONS_FILE = path.join(__dirname, "push-subscriptions.json");
+function loadSubscriptions() {
+  try {
+    return JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, "utf8"));
+  } catch (e) {
+    return [];
+  }
+}
+function saveSubscriptions(subs) {
+  fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subs, null, 2));
+}
+
+// Sends one push notification to every subscribed device. If a specific
+// subscription is no longer valid (uninstalled, permissions revoked),
+// Web Push returns a 410/404 — clean those out automatically instead of
+// letting the list quietly fill up with dead subscriptions.
+async function sendPushToAll(payload) {
+  const subs = loadSubscriptions();
+  const stillValid = [];
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+      stillValid.push(sub);
+    } catch (err) {
+      if (err.statusCode !== 410 && err.statusCode !== 404) {
+        stillValid.push(sub); // keep it — might be a transient error, not a dead subscription
+      }
+    }
+  }
+  if (stillValid.length !== subs.length) saveSubscriptions(stillValid);
+}
 
 // Finds the largest font size (within a min/max range) that still fits
 // the given text on a single line at the specified width — used so a
@@ -237,6 +283,13 @@ const VALID_STOP_NAMES = new Map(
       { isB2B: Boolean(s.isB2B) || Boolean(route.day !== undefined), deliveryDays: s.deliveryDays || null },
     ])
   )
+);
+
+// order objects only carry the Shopify order name (like "#123"), not the
+// stop's real display name — this maps the lowercase key used internally
+// back to how it should actually be shown (e.g. "harrison" -> "Harrison").
+const STOP_DISPLAY_NAME = new Map(
+  ROUTES.concat(B2B_ROUTES).flatMap((route) => route.stops.map((s) => [s.name.toLowerCase(), s.name]))
 );
 
 function isStopScheduledToday(stopMeta, now = new Date()) {
@@ -482,6 +535,29 @@ function loadState() {
 function saveState(state) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
 }
+
+app.get("/api/push-vapid-key", (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+app.post("/api/push-subscribe", (req, res) => {
+  const subscription = req.body;
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ error: "Invalid subscription" });
+  }
+  const subs = loadSubscriptions();
+  // Same device subscribing again (browser can rotate the endpoint) —
+  // replace rather than duplicate.
+  const deduped = subs.filter((s) => s.endpoint !== subscription.endpoint);
+  deduped.push(subscription);
+  saveSubscriptions(deduped);
+  res.json({ ok: true });
+});
+app.post("/api/push-unsubscribe", (req, res) => {
+  const { endpoint } = req.body;
+  const subs = loadSubscriptions().filter((s) => s.endpoint !== endpoint);
+  saveSubscriptions(subs);
+  res.json({ ok: true });
+});
 
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
@@ -2064,6 +2140,41 @@ app.get("/out-of-state", (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, "public")));
+
+// Runs independently of anyone having the app open — checks for orders
+// on stops that didn't have one moments ago, and pushes a notification
+// the instant one shows up, so pickers actually get notified in real
+// time rather than only finding out next time they check the app.
+let previousOrderStopKeys = new Set();
+async function checkForNewOrdersAndNotify() {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const currentKeys = new Set(Object.keys(cache.byStopName));
+    const newlyAppeared = [...currentKeys].filter((k) => !previousOrderStopKeys.has(k));
+
+    // Skip the very first run after a fresh server start — everything
+    // would look "new" then, which would fire a flood of notifications
+    // for orders that have actually been sitting there for a while.
+    if (previousOrderStopKeys.size > 0) {
+      for (const key of newlyAppeared) {
+        const order = cache.byStopName[key];
+        const stopName = STOP_DISPLAY_NAME.get(key) || key;
+        await sendPushToAll({
+          title: "New order — " + stopName,
+          body: order.isB2B
+            ? "Out-of-state order just came in for " + stopName
+            : "Ready to pick — order just came in for " + stopName,
+          url: "/picking?stop=" + encodeURIComponent(stopName),
+        });
+      }
+    }
+    previousOrderStopKeys = currentKeys;
+  } catch (err) {
+    console.error("checkForNewOrdersAndNotify failed:", err.message);
+  }
+}
+setInterval(checkForNewOrdersAndNotify, 60 * 1000);
+checkForNewOrdersAndNotify();
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Route board running on port ${PORT}`);

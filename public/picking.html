@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>Hummus Fit — Picking</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#141311">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -213,6 +216,23 @@
     font-size: 13px;
     line-height:1.8;
   }
+
+  .notif-banner{
+    display:block;
+    width:100%;
+    background: var(--teal-tint-strong);
+    border: 1.5px solid var(--teal-border);
+    color: var(--ink);
+    font-family:'Inter', sans-serif;
+    font-weight:700;
+    font-size: 13.5px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+    cursor:pointer;
+    text-align:left;
+  }
+  .notif-banner:active{ opacity:0.8; }
 
   /* ---------- ORDER DETAIL VIEW ---------- */
   .order-header{
@@ -763,6 +783,63 @@
   var orderDetail = null;
   var scanningForIdx = null;
   var html5QrCode = null;
+  var pushSubscribedFlag = false;
+
+  function pushSupported(){
+    return 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+  }
+
+  function urlBase64ToUint8Array(base64String){
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for(var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  }
+
+  function subscribeToPush(){
+    if(!pushSupported()) return Promise.resolve();
+    return navigator.serviceWorker.register('/service-worker.js')
+      .then(function(reg){ return reg.pushManager.getSubscription().then(function(existing){ return { reg: reg, existing: existing }; }); })
+      .then(function(r){
+        if(r.existing) { pushSubscribedFlag = true; return r.existing; }
+        return fetch('/api/push-vapid-key').then(function(res){ return res.json(); }).then(function(data){
+          return r.reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+          });
+        });
+      })
+      .then(function(sub){
+        if(!sub) return;
+        pushSubscribedFlag = true;
+        return fetch('/api/push-subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub)
+        });
+      })
+      .catch(function(err){ console.error('Push subscribe failed:', err); });
+  }
+
+  function wireNotifBanner(){
+    var btn = document.getElementById('enableNotifsBtn');
+    if(!btn) return;
+    btn.addEventListener('click', function(){
+      if(Notification.permission === 'denied'){
+        alert('Notifications were previously blocked for this app. To turn them back on, check this device\'s notification settings for the Route Board home screen icon.');
+        return;
+      }
+      Notification.requestPermission().then(function(permission){
+        if(permission === 'granted'){
+          subscribeToPush().then(function(){ renderList(); });
+        } else {
+          renderList();
+        }
+      });
+    });
+  }
 
   function ringSvg(picked, missing, total){
     var done = picked + missing;
@@ -785,12 +862,23 @@
     updateCrateFab();
     var main = document.getElementById('mainContent');
 
+    var notifBanner = '';
+    if(pushSupported() && Notification.permission !== 'granted'){
+      notifBanner = '<button id="enableNotifsBtn" class="notif-banner">🔔 Get notified the moment a new order comes in — tap to turn on</button>';
+    } else if(pushSupported() && Notification.permission === 'granted' && !pushSubscribedFlag){
+      // Permission was granted (maybe in a previous session) but this
+      // device isn't actually subscribed yet — finish silently rather
+      // than asking again, since permission's already been given.
+      subscribeToPush();
+    }
+
     if(pickingList.length === 0){
-      main.innerHTML = '<div class="empty-state">No orders in the current picking window yet.<br>Check back once today\'s orders start coming in.</div>';
+      main.innerHTML = notifBanner + '<div class="empty-state">No orders in the current picking window yet.<br>Check back once today\'s orders start coming in.</div>';
+      wireNotifBanner();
       return;
     }
 
-    var html = '';
+    var html = notifBanner;
     pickingList.forEach(function(stop){
       var done = stop.pickedCount + stop.missingCount;
       var cardClass = 'stop-card' + (stop.isComplete ? ' complete' : '') + (stop.isB2B ? ' b2b' : '');
@@ -808,6 +896,7 @@
         '</div>';
     });
     main.innerHTML = html;
+    wireNotifBanner();
 
     document.querySelectorAll('.stop-card').forEach(function(card){
       card.addEventListener('click', function(){
