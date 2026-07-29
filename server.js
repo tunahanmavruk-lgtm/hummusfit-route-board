@@ -558,8 +558,18 @@ app.post("/api/push-unsubscribe", (req, res) => {
   saveSubscriptions(subs);
   res.json({ ok: true });
 });
+// Only Tony should be able to broadcast an announcement to every
+// subscribed device. This is a small internal tool with no login
+// system at all, so a shared PIN is the practical middle ground —
+// but it's checked here, server-side, not just hidden in the UI,
+// so it can't be bypassed by anyone calling the endpoint directly.
+const ANNOUNCEMENT_ADMIN_PIN = "9310";
+
 app.post("/api/push-send-manual", async (req, res) => {
-  const { title, body } = req.body;
+  const { title, body, pin } = req.body;
+  if (pin !== ANNOUNCEMENT_ADMIN_PIN) {
+    return res.status(403).json({ error: "Incorrect PIN" });
+  }
   if (!title || !body) {
     return res.status(400).json({ error: "title and body are both required" });
   }
