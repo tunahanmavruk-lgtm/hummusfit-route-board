@@ -78,6 +78,47 @@
   }
   .reset-btn:hover{ border-color: var(--red); color: var(--red); }
 
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(20,19,17,0.55);
+    display:flex; align-items:center; justify-content:center;
+    z-index:100; padding:20px;
+  }
+  .modal{
+    background: var(--card); border-radius: var(--radius, 16px);
+    padding: 24px; max-width: 420px; width:100%;
+  }
+  .modal h3{
+    font-family:'Bebas Neue', sans-serif; font-size: 26px; letter-spacing:0.02em;
+    margin-bottom: 6px;
+  }
+  .modal-hint{
+    font-family:'Inter', sans-serif; font-size: 13px; color: var(--dim);
+    margin-bottom: 18px; line-height:1.5;
+  }
+  .modal-label{
+    display:block; font-family:'JetBrains Mono', monospace; font-size: 10.5px;
+    font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+    color: var(--dim); margin-bottom:6px; margin-top:14px;
+  }
+  .modal input[type="text"], .modal textarea{
+    width:100%; background: var(--bg); border: 1.5px solid var(--line);
+    color: var(--ink); font-family:'Inter', sans-serif; font-size: 14px;
+    padding: 10px 12px; border-radius: 10px; outline:none; resize:vertical;
+  }
+  .modal input[type="text"]:focus, .modal textarea:focus{ border-color: var(--orange); }
+  .modal-actions{ display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .modal-btn-secondary{
+    font-family:'JetBrains Mono', monospace; font-size: 11px; font-weight:700;
+    text-transform:uppercase; color: var(--dim); background: var(--card);
+    border: 1.5px solid var(--line); padding: 10px 18px; border-radius: 999px; cursor:pointer;
+  }
+  .modal-btn-primary{
+    font-family:'JetBrains Mono', monospace; font-size: 11px; font-weight:700;
+    text-transform:uppercase; color:#fff; background: var(--orange);
+    border: none; padding: 10px 18px; border-radius: 999px; cursor:pointer;
+  }
+  .modal-btn-primary:disabled{ opacity:0.5; cursor:default; }
+
   main{
     max-width: 1100px;
     margin: 0 auto;
@@ -490,8 +531,24 @@
     <div class="live-clock" id="liveClock">--:--:-- --</div>
     <div class="window-badge closed" id="windowBadge"><span class="dot"></span><span id="windowBadgeText">Checking order window…</span></div>
     <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+    <button class="reset-btn" id="announceBtn" style="margin-left:8px;">📣 Send Announcement</button>
   </div>
 </header>
+
+<div class="modal-overlay" id="announceModal" style="display:none;">
+  <div class="modal">
+    <h3>Send Announcement</h3>
+    <p class="modal-hint">Goes out as a push notification to everyone currently subscribed — local and out-of-state, on any page.</p>
+    <label class="modal-label">Title</label>
+    <input type="text" id="announceTitle" maxlength="60" placeholder="e.g. Early close today">
+    <label class="modal-label">Message</label>
+    <textarea id="announceBody" maxlength="180" rows="3" placeholder="e.g. Warehouse closing at 6pm, please finish picking by 5:30"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" id="announceCancel">Cancel</button>
+      <button class="modal-btn-primary" id="announceSend">Send</button>
+    </div>
+  </div>
+</div>
 
 <main id="routesContainer">
   <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
@@ -955,6 +1012,55 @@
   document.getElementById('resetBtn').addEventListener('click', function(){
     if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
     fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
+  });
+
+  var announceModal = document.getElementById('announceModal');
+  var announceTitleInput = document.getElementById('announceTitle');
+  var announceBodyInput = document.getElementById('announceBody');
+  var announceSendBtn = document.getElementById('announceSend');
+
+  document.getElementById('announceBtn').addEventListener('click', function(){
+    announceTitleInput.value = '';
+    announceBodyInput.value = '';
+    announceModal.style.display = 'flex';
+    announceTitleInput.focus();
+  });
+  document.getElementById('announceCancel').addEventListener('click', function(){
+    announceModal.style.display = 'none';
+  });
+  announceModal.addEventListener('click', function(e){
+    if(e.target === announceModal) announceModal.style.display = 'none';
+  });
+  announceSendBtn.addEventListener('click', function(){
+    var title = announceTitleInput.value.trim();
+    var body = announceBodyInput.value.trim();
+    if(!title || !body){
+      alert('Both a title and a message are needed before sending.');
+      return;
+    }
+    announceSendBtn.disabled = true;
+    announceSendBtn.textContent = 'Sending…';
+    fetch('/api/push-send-manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, body: body })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        announceModal.style.display = 'none';
+        if(data.sentTo === 0){
+          alert('Sent — but no one is currently subscribed to notifications yet, so no one actually received it.');
+        } else {
+          alert('Sent to ' + data.sentTo + ' subscribed device' + (data.sentTo === 1 ? '' : 's') + '.');
+        }
+      })
+      .catch(function(){
+        alert('Something went wrong sending that — try again.');
+      })
+      .finally(function(){
+        announceSendBtn.disabled = false;
+        announceSendBtn.textContent = 'Send';
+      });
   });
 
   loadInitial();

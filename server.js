@@ -558,6 +558,15 @@ app.post("/api/push-unsubscribe", (req, res) => {
   saveSubscriptions(subs);
   res.json({ ok: true });
 });
+app.post("/api/push-send-manual", async (req, res) => {
+  const { title, body } = req.body;
+  if (!title || !body) {
+    return res.status(400).json({ error: "title and body are both required" });
+  }
+  const subscriberCount = loadSubscriptions().length;
+  await sendPushToAll({ title: title.trim(), body: body.trim(), icon: "/icon-192.png", url: "/" });
+  res.json({ ok: true, sentTo: subscriberCount });
+});
 
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
