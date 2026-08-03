@@ -668,7 +668,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
         status === "picked" ? item.quantity :
         status === "partial" ? (record.itemPickedQty[idx] || 0) :
         0; // missing or not_picked
-      return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status };
+      return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status, imageUrl: item.imageUrl || null };
     });
 
     res.json({
@@ -827,7 +827,15 @@ async function fetchTodaysStopOrders() {
               tags
               customer { tags }
               lineItems(first: 50) {
-                edges { node { title quantity sku variantTitle } }
+                edges {
+                  node {
+                    title
+                    quantity
+                    sku
+                    variantTitle
+                    variant { image { url } product { featuredImage { url } } }
+                  }
+                }
               }
             }
           }
@@ -884,10 +892,11 @@ async function fetchTodaysStopOrders() {
           node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
         const title = hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title;
         const itemKey = title + "::" + (node.sku || "");
+        const imageUrl = (node.variant && (node.variant.image?.url || node.variant.product?.featuredImage?.url)) || null;
         if (mergedItemsByKey[itemKey]) {
           mergedItemsByKey[itemKey].quantity += node.quantity;
         } else {
-          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku };
+          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku, imageUrl };
         }
       });
     });
@@ -955,7 +964,15 @@ async function fetchB2BStopOrders() {
               customer { tags }
               shippingAddress { zip }
               lineItems(first: 50) {
-                edges { node { title quantity sku variantTitle } }
+                edges {
+                  node {
+                    title
+                    quantity
+                    sku
+                    variantTitle
+                    variant { image { url } product { featuredImage { url } } }
+                  }
+                }
               }
             }
           }
@@ -1021,10 +1038,11 @@ async function fetchB2BStopOrders() {
           node.variantTitle && node.variantTitle.toLowerCase() !== "default title";
         const title = hasRealVariant ? `${node.title} — ${node.variantTitle}` : node.title;
         const itemKey = title + "::" + (node.sku || "");
+        const imageUrl = (node.variant && (node.variant.image?.url || node.variant.product?.featuredImage?.url)) || null;
         if (mergedItemsByKey[itemKey]) {
           mergedItemsByKey[itemKey].quantity += node.quantity;
         } else {
-          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku };
+          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku, imageUrl };
         }
       });
     });
