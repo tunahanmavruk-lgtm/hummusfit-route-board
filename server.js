@@ -69,6 +69,36 @@ const app = express();
 const PORT = 3000;
 const DATA_FILE = path.join(__dirname, "data.json");
 
+// state.picking gets wiped every day at midnight so today's board
+// starts clean — correct for day-to-day picking, but wrong for
+// receiving checks, which legitimately might not happen until after
+// midnight for a delivery that was picked the evening before. This
+// separate file is NEVER touched by the daily reset, so a completed
+// order's real picked data stays findable regardless of what day it
+// currently is when someone actually checks it in.
+const ARCHIVE_FILE = path.join(__dirname, "completed-orders-archive.json");
+function loadArchive() {
+  try {
+    return JSON.parse(fs.readFileSync(ARCHIVE_FILE, "utf8"));
+  } catch (e) {
+    return {};
+  }
+}
+function saveArchive(archive) {
+  fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive, null, 2));
+}
+function archiveCompletedOrder(stopKey, record, order) {
+  const archive = loadArchive();
+  archive[stopKey] = {
+    ...record,
+    archivedAt: new Date().toISOString(),
+    orderName: order.orderName,
+    isB2B: Boolean(order.isB2B),
+    lineItems: order.lineItems,
+  };
+  saveArchive(archive);
+}
+
 app.use(express.json());
 
 // ================= ROUTE DEFINITIONS =================
@@ -651,18 +681,37 @@ app.get("/api/sku-coverage", async (req, res) => {
 // just exposes data that already exists here.
 app.get("/api/picked-summary/:stopName", async (req, res) => {
   try {
-    const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
+    const cache = await fetchTodaysStopOrders();
     const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
-
     const state = loadState();
-    const record = state.picking[key];
-    if (!record || record.orderId !== order.orderId) {
-      return res.status(404).json({ error: "No picking record found for this stop yet." });
+    const liveRecord = order ? state.picking[key] : null;
+
+    let record, orderName, isB2B, lineItems;
+    if (liveRecord && order && liveRecord.orderId === order.orderId) {
+      // Today's live data has it — the normal, same-day case.
+      record = liveRecord;
+      orderName = order.orderName;
+      isB2B = Boolean(order.isB2B);
+      lineItems = order.lineItems;
+    } else {
+      // Not in today's live data — either the calendar has moved past
+      // midnight since this was picked, or the order fell out of
+      // today's fetch window. Fall back to the permanent archive,
+      // which was written the moment this order was actually finished
+      // and never gets touched by the daily reset.
+      const archive = loadArchive();
+      const archived = archive[key];
+      if (!archived) {
+        return res.status(404).json({ error: "No completed order found for this stop yet." });
+      }
+      record = archived;
+      orderName = archived.orderName;
+      isB2B = archived.isB2B;
+      lineItems = archived.lineItems;
     }
 
-    const items = order.lineItems.map((item, idx) => {
+    const items = lineItems.map((item, idx) => {
       const status = record.itemStatus[idx] || "not_picked";
       const pickedQty =
         status === "picked" ? item.quantity :
@@ -671,12 +720,22 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status, imageUrl: item.imageUrl || null };
     });
 
+    // Same crate-count logic used everywhere else in the app — closed
+    // crates plus the currently-active one, if it actually has
+    // anything in it. This is what tells receiving how many physical
+    // boxes to expect for this delivery.
+    const closedSet = new Set(record.closedCrates || []);
+    const currentHasItems = Object.values(record.itemCrateNumber || {}).includes(record.currentCrateNumber);
+    if (currentHasItems) closedSet.add(record.currentCrateNumber);
+    const crateCount = closedSet.size;
+
     res.json({
       stopName: req.params.stopName,
-      orderName: order.orderName,
+      orderName: orderName,
       pickedBy: record.completedBy || record.pickedBy,
       completedAt: record.completedAt,
-      isB2B: Boolean(order.isB2B),
+      isB2B: isB2B,
+      crateCount,
       items,
     });
   } catch (err) {
@@ -1746,6 +1805,7 @@ app.post("/api/picking-finish", async (req, res) => {
     record.completedAt = new Date().toISOString();
     record.completedBy = record.pickedBy;
     saveState(state);
+    archiveCompletedOrder(key, record, order);
     res.json({
       ok: true,
       completedAt: record.completedAt,
@@ -1770,6 +1830,27 @@ app.post("/api/picking-reopen", async (req, res) => {
     if (!order) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
+    const liveRecord = state.picking[key];
+    const alreadyHasRealData = liveRecord && liveRecord.orderId === order.orderId && liveRecord.completedAt;
+
+    if (!alreadyHasRealData) {
+      // Today's live record doesn't actually have this order's real
+      // completed work — most likely the day changed since it was
+      // finished, and the daily reset already wiped it. Without this
+      // check, "reopening" here would silently create a brand new
+      // blank record instead of recovering what was really picked,
+      // which is exactly what happened before this fix.
+      const archive = loadArchive();
+      const archived = archive[key];
+      if (archived && archived.orderId === order.orderId) {
+        state.picking[key] = { ...archived, completedAt: null, completedBy: null };
+        saveState(state);
+        return res.json({ ok: true, restoredFromArchive: true });
+      }
+      // No archive match either — genuinely nothing to reopen, so seed
+      // a fresh record rather than pretending old data exists.
+    }
+
     const record = getPickingRecord(state, key, order);
     record.completedAt = null;
     record.completedBy = null;
