@@ -786,8 +786,20 @@ async function shopifyGraphQL(query, variables) {
     body: JSON.stringify({ query, variables }),
   });
   const data = await res.json();
-  if (!res.ok || data.errors) {
+  if (!res.ok) {
     throw new Error(`Shopify API error: ${JSON.stringify(data.errors || data)}`);
+  }
+  if (data.errors && !data.data) {
+    // No usable data at all — a genuine hard failure.
+    throw new Error(`Shopify API error: ${JSON.stringify(data.errors)}`);
+  }
+  if (data.errors) {
+    // Partial failure — GraphQL's normal behavior when one nested field
+    // fails (like a missing permission on product images) while
+    // everything else in the same request succeeds. Log it so it's
+    // visible, but don't let one optional field break real order data
+    // that came through fine.
+    console.error("Shopify GraphQL partial error (continuing with partial data):", JSON.stringify(data.errors).slice(0, 300));
   }
   return data.data;
 }
