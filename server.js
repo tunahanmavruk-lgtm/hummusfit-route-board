@@ -644,6 +644,46 @@ app.get("/api/sku-coverage", async (req, res) => {
   }
 });
 
+// Read-only export for the separate Receiving Check app — exposes what
+// was ACTUALLY picked (not just what was ordered) for a given stop's
+// most recent completed order, so receiving can compare against real
+// ground truth. Purely additive: doesn't change any existing behavior,
+// just exposes data that already exists here.
+app.get("/api/picked-summary/:stopName", async (req, res) => {
+  try {
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = state.picking[key];
+    if (!record || record.orderId !== order.orderId) {
+      return res.status(404).json({ error: "No picking record found for this stop yet." });
+    }
+
+    const items = order.lineItems.map((item, idx) => {
+      const status = record.itemStatus[idx] || "not_picked";
+      const pickedQty =
+        status === "picked" ? item.quantity :
+        status === "partial" ? (record.itemPickedQty[idx] || 0) :
+        0; // missing or not_picked
+      return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status };
+    });
+
+    res.json({
+      stopName: req.params.stopName,
+      orderName: order.orderName,
+      pickedBy: record.completedBy || record.pickedBy,
+      completedAt: record.completedAt,
+      isB2B: Boolean(order.isB2B),
+      items,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
