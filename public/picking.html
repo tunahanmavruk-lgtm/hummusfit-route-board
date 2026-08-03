@@ -976,10 +976,24 @@
       closeScanner();
       return;
     }
-    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode = new Html5Qrcode("reader", {
+      // Explicit, not relying on the library's default — products are
+      // scanned via their real retail barcode (UPC/EAN), not a QR code,
+      // so every common 1D format needs to actually be turned on.
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ]
+    });
     html5QrCode.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 260, height: 160 } },
+      { fps: 10, qrbox: { width: 280, height: 140 } },
       function(decodedText){
         handleScanResult(decodedText);
       },
