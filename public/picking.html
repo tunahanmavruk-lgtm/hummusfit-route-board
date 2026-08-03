@@ -581,6 +581,15 @@
     padding: 4px 10px;
   }
   #reader{ flex:1; }
+  .scan-progress-label{
+    padding: 16px 20px max(16px, env(safe-area-inset-bottom));
+    color:#fff;
+    font-family:'Inter', sans-serif;
+    font-weight:700;
+    font-size: 15px;
+    text-align:center;
+    background: rgba(0,0,0,0.5);
+  }
 
   .item-card{
     background: var(--card);
@@ -739,6 +748,7 @@
   <div class="eyebrow"><span class="dot"></span>Hummus Fit / Warehouse</div>
   <h1 id="pageTitle">PICK <span>LIST</span></h1>
   <a class="back-link" id="backLink" href="#" style="display:none;">&larr; All Orders</a>
+  <a href="/sku-coverage" style="position:absolute; top:20px; right:20px; font-family:'JetBrains Mono', monospace; font-size:10.5px; font-weight:700; text-transform:uppercase; color:var(--dim); text-decoration:none;">Barcode Coverage →</a>
 </header>
 
 <main id="mainContent">
@@ -752,6 +762,7 @@
     <span class="scanner-close" id="scannerCloseBtn">✕</span>
   </div>
   <div id="reader"></div>
+  <div id="scanProgressLabel" class="scan-progress-label"></div>
 </div>
 
 <!-- Invisible input that captures real Bluetooth scanner "keyboard"
@@ -970,7 +981,17 @@
   // ---- Barcode scanning ----
   function openScanner(idx){
     scanningForIdx = idx;
+    lastScanTime = 0;
+    lastScanCode = null;
     document.getElementById('scannerOverlay').style.display = 'flex';
+    var item = orderDetail.lineItems[idx];
+    var scannedSoFar = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx]) || 0;
+    var progressEl = document.getElementById('scanProgressLabel');
+    if(progressEl){
+      progressEl.textContent = scannedSoFar > 0
+        ? ('Scanned ' + scannedSoFar + ' of ' + item.quantity + ' — keep scanning')
+        : ('Scan ' + item.title + ' — ' + item.quantity + ' needed');
+    }
     if(typeof Html5Qrcode === 'undefined'){
       alert('Barcode scanner failed to load. Check your connection and try again.');
       closeScanner();
@@ -1015,6 +1036,8 @@
     scanningForIdx = null;
   }
 
+  var lastScanTime = 0;
+  var lastScanCode = null;
   function handleScanResult(scannedCode){
     if(scanningForIdx === null) return;
     var idx = scanningForIdx;
@@ -1022,19 +1045,30 @@
     var expectedSku = (item.sku || '').trim();
     var scanned = (scannedCode || '').trim();
 
-    closeScanner();
-
     if(!expectedSku){
-      // No SKU on file for this item — can't verify, but let the picker
-      // proceed manually rather than blocking them on missing catalog data.
+      closeScanner();
       alert('No barcode on file for this item yet — mark it picked manually.');
       return;
     }
 
+    // The camera fires this callback up to 10x/second — without a
+    // cooldown, holding ONE physical item in view for even half a
+    // second would register as several scans instead of one, silently
+    // over-counting toward the total needed. 1.5s is enough time for a
+    // picker to set one unit aside and bring the next one into frame.
+    var now = Date.now();
+    if(scanned === lastScanCode && (now - lastScanTime) < 1500) return;
+
     if(scanned !== expectedSku){
+      // Wrong item — this is worth interrupting for, so close and alert
+      // rather than silently ignoring a real mismatch.
+      closeScanner();
       alert('That barcode doesn\'t match "' + item.title + '". Double-check you grabbed the right item.');
       return;
     }
+
+    lastScanTime = now;
+    lastScanCode = scanned;
 
     // Route through the same server-authoritative counting logic as the
     // hardware scanner — one scan = one physical unit, not the whole
@@ -1045,6 +1079,7 @@
       body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scanned })
     }).then(function(r){ return r.json(); }).then(function(result){
       if(!result.matched){
+        closeScanner();
         alert(result.alreadyResolved ? 'That item is already fully accounted for.' : 'Could not match that scan — try again.');
         return;
       }
@@ -1052,8 +1087,23 @@
       orderDetail.itemScannedCount = result.itemScannedCount;
       orderDetail.itemCrateNumber = result.itemCrateNumber;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
-      renderOrder();
+      var nowFullyPicked = result.itemStatus[idx] === 'picked';
+      if(nowFullyPicked){
+        // Fully accounted for — nothing left to scan for this item, so
+        // now it makes sense to close and return to the order.
+        closeScanner();
+        renderOrder();
+      } else {
+        // Still more to go — keep the camera running and just update
+        // the live count on screen, so the picker can immediately bring
+        // the next physical unit into view without reopening anything.
+        var progressEl = document.getElementById('scanProgressLabel');
+        if(progressEl){
+          progressEl.textContent = 'Scanned ' + result.itemScannedCount[idx] + ' of ' + item.quantity + ' — keep scanning';
+        }
+      }
     }).catch(function(err){
+      closeScanner();
       alert('Could not reach the server: ' + err.message);
     });
   }

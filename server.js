@@ -578,6 +578,72 @@ app.post("/api/push-send-manual", async (req, res) => {
   res.json({ ok: true, sentTo: subscriberCount });
 });
 
+// Walks the whole product catalog and flags every variant with a
+// blank SKU — since scanning depends entirely on that field matching
+// the real barcode, this is the exact list of products that would
+// hit the "no barcode on file" fallback and need to be picked
+// manually instead of scanned.
+let skuCoverageCache = { fetchedAt: 0, missing: [], totalVariants: 0 };
+async function fetchSkuCoverage() {
+  const now = Date.now();
+  if (now - skuCoverageCache.fetchedAt < 5 * 60 * 1000) return skuCoverageCache;
+
+  let missing = [];
+  let totalVariants = 0;
+  let cursor = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const query = `
+      query($cursor: String) {
+        products(first: 50, after: $cursor) {
+          edges {
+            cursor
+            node {
+              title
+              status
+              variants(first: 20) {
+                edges { node { title sku } }
+              }
+            }
+          }
+          pageInfo { hasNextPage }
+        }
+      }
+    `;
+    const data = await shopifyGraphQL(query, { cursor });
+    const edges = data.products.edges;
+    edges.forEach((e) => {
+      const product = e.node;
+      if (product.status !== "ACTIVE") return; // skip archived/draft products — not relevant to today's picking
+      product.variants.edges.forEach((ve) => {
+        totalVariants++;
+        const variant = ve.node;
+        const hasRealVariant = variant.title && variant.title.toLowerCase() !== "default title";
+        if (!variant.sku || !variant.sku.trim()) {
+          missing.push({
+            title: hasRealVariant ? `${product.title} — ${variant.title}` : product.title,
+          });
+        }
+      });
+    });
+    hasNextPage = data.products.pageInfo.hasNextPage;
+    cursor = edges.length ? edges[edges.length - 1].cursor : null;
+    if (!edges.length) break;
+  }
+
+  skuCoverageCache = { fetchedAt: now, missing, totalVariants };
+  return skuCoverageCache;
+}
+app.get("/api/sku-coverage", async (req, res) => {
+  try {
+    const result = await fetchSkuCoverage();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
@@ -2177,6 +2243,9 @@ app.get("/picking", (req, res) => {
 });
 app.get("/out-of-state", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "out-of-state.html"));
+});
+app.get("/sku-coverage", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "sku-coverage.html"));
 });
 
 app.use(express.static(path.join(__dirname, "public")));
