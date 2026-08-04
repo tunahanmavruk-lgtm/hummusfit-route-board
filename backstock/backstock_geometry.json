@@ -1,0 +1,62 @@
+{
+  "_confirmed_by_tony": [
+    "Room length (Wall D end to far wall): 51'-4 1/16\" = 616.06in -- matches the CAD snippet exactly.",
+    "Our usable zone (Wall A + Center + Wall D) only runs ~26-28ft of that 51'-4in length -- the remaining ~24ft belongs to another department, not us.",
+    "Center is double-deep pallet racking. Its back face IS Row B -- loaded by the kitchen from their own aisle on the far side. Not a separate rack.",
+    "Center: 6 bays, ~26-28ft total run length.",
+    "Wall A: 3 bays, same total run length as Center (~27ft). 4 beam levels (confirmed visually from photo).",
+    "Wall D: 3 beam levels (confirmed visually from photo -- fewer than Wall A's 4). Caps the aisle at the door end. Exact bay count/width NOT yet confirmed.",
+    "Wall-A-back-wall to Center gap (includes Wall A's own depth): ~27ft = 324in.",
+    "Frame depth 42in for pallet-style racks, confirmed generally."
+  ],
+  "_still_assumed_or_open": [
+    "Exact bay width within the ~27ft run for Wall A and Center (currently split evenly: Wall A 108in/bay, Center 54in/bay -- NOT measured).",
+    "Wall D's exact bay count and width -- estimated at 3 bays here, matching your 'long bays' comment, but not confirmed like Wall A/Center.",
+    "Individual beam level heights off the floor for all three walls.",
+    "Exact aisle width vs Wall A's own depth within that ~27ft gap (currently assumed 42in Wall A depth + ~282in aisle -- the aisle portion is not independently confirmed).",
+    "Whether Wall D sits flush at the very start of the zone (y=0) or slightly inset."
+  ],
+  "zone_length_in": 324,
+  "zone_width_in": 384,
+  "room_total_length_in": 616.06,
+  "other_dept_length_in": 292.05999999999995,
+  "wall_a_bays": 3,
+  "wall_a_levels": 4,
+  "wall_a_depth_in": 42,
+  "center_bays": 7,
+  "center_double_deep": true,
+  "wall_d_bays": 3,
+  "wall_d_levels": 3,
+  "wall_d_depth_in": 42,
+  "_relabel_v5_confirmed": [
+    "Wall A (relabeled) = the rack that used to be drawn as 'Wall D' -- 3 levels (confirmed via photo), extended from 3 bays to 4 bays (added one bay to the right of where D3 was). A1 sits nearest the door. Physical position/orientation unchanged: still spans the width axis, capping the space near the door.",
+    "Wall D (relabeled) = the rack that used to be drawn as 'Wall A' -- 4 levels (confirmed via photo), only 2 of its 3 bays count as ours now (D1, D2 at the old A1/A2 spots). Physical position unchanged: still runs along the length axis, on the side.",
+    "Center rotates 90 degrees in the drawing to correctly face the new Wall A -- this was a drawing error on my part, not a physical change to the rack."
+  ],
+  "_relabel_v5_open": [
+    "The aisle distance between the NEW Wall A and Center is NOT the same confirmed '~27ft' number -- that number was measured between the OLD Wall A and Center, a different pair of racks. I do not have a real measurement for the new Wall A-to-Center aisle, so I'm placeholder-using 11ft (132in) again -- flag if this needs correcting.",
+    "Center's beam level count is still unconfirmed (placeholder 4).",
+    "Wall D's remaining, uncounted 3rd bay (old A3 spot) -- confirm this space is simply not part of our plan, not that it's being used for something else.",
+    "Wall D's position relative to Wall A/Center is drawn as a separate offset strip since I don't actually know how it connects spatially -- confirm where it really sits (extension off Wall A's end? Around a corner? Elsewhere entirely?)."
+  ],
+  "wall_a_bay_width_in": 96,
+  "wall_d_bay_width_in": 96,
+  "wall_a_total_span_in": 384,
+  "wall_d_total_span_all3_in": 288,
+  "center_double_deep_confirmed": true,
+  "center_total_run_in": 378,
+  "_relabel_v5_confirmed_round2": [
+    "Wall A: 4 bays x 8ft (96in) each = 32ft total span -- CONFIRMED, this is now the authoritative width axis.",
+    "Wall D: bays also 8ft (96in) each, same as Wall A. 3 physical bays = 24ft total, only 2 count as ours = 16ft.",
+    "Center does NOT stretch to match Wall A's 32ft -- it keeps its own separately-confirmed ~27ft total run (6 bays). It's shorter than Wall A, facing only part of it. Exact alignment (which end of Wall A it lines up with) is NOT confirmed -- assumed flush with A1/door end for now.",
+    "Center confirmed double-deep pallet rack (open beam levels, no wire deck -- different style than Wall A/D's wire-deck shelving).",
+    "Center actually has 7 bays (C01-C07), not 6 -- corrected. Total run extended proportionally from 324in to 378in (31.5ft) to add the 7th bay at the same per-bay width, since exact C07 width wasn't separately given."
+  ],
+  "_stack_heights_confirmed_by_tony": {
+    "muffin": 6,
+    "meal": 5,
+    "oats_and_snacks": 4,
+    "note": "Crates stacked high per storage position (pallet position on Center, or per shelf level on Wall A/D -- interpretation not yet confirmed, see _stack_height_open_question)."
+  },
+  "_stack_height_open_question": "Does this stack height apply per Center pallet position only, or also as an additional stack-within-a-level on Wall A/D's wire-deck shelves? Assumed Center-only for now since Wall A/D's levels were confirmed as discrete decks from photos (one crate layer per deck), not open stacking room."
+}

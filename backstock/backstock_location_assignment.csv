@@ -1,0 +1,119 @@
+Category,Product,Backstock label (= walk-in row code),Crates needed (3.5-day),Physical bay (Center/Wall),Crates unassigned,Status
+meal,Broritto Burrito,"M1-12, M1-13",62,C01-L1(20); C01-L2(20); C01-L3(20); C01-L4(2),0,FITS
+meal,BBQ Chicken Garlic Parm Potatoes,"M1-05, M1-06",54,C01-L4(18); C02-L1(20); C02-L2(16),0,FITS
+meal,Closed on Sunday Crispy Chicken Bowl,M1-23,46,C02-L2(4); C02-L3(20); C02-L4(20); C03-L1(2),0,FITS
+meal,Crispy Baked Chicken Wrap,"M2-08, M2-09",42,C03-L1(18); C03-L2(20); C03-L3(4),0,FITS
+meal,Baja Chicken Tacos,M1-03,38,C03-L3(16); C03-L4(20); C04-L1(2),0,FITS
+meal,Zeus Bowl,M3-26,35,C04-L1(18); C04-L2(17),0,FITS
+meal,Herb Butter Steak Tips Bowl,M2-18,34,C04-L2(3); C04-L3(20); C04-L4(11),0,FITS
+meal,Spicy Buffalo Wrap,M3-10,33,C04-L4(9); C05-L1(20); C05-L2(4),0,FITS
+meal,Thai Chili Chicken,M3-18,29,C05-L2(16); C05-L3(13),0,FITS
+meal,Brookfield Chicken Bowl,M1-11,28,C05-L3(7); C05-L4(20); C06-L1(1),0,FITS
+meal,Buffalo Crispy Chicken Wrap,M1-16,28,C06-L1(19); C06-L2(9),0,FITS
+meal,Southwest Chicken Bowl,M3-08,28,C06-L2(11); C06-L3(17),0,FITS
+meal,Stacked and Jacked,M3-11,28,C06-L3(3),25,PARTIAL
+meal,Taco Build Quesadilla,M3-14,28,--,28,NOT ASSIGNED - no room
+meal,Arnold 2022 Bowl,M1-02,27,--,27,NOT ASSIGNED - no room
+meal,Chicken Taco Bowl,M1-20,27,--,27,NOT ASSIGNED - no room
+meal,Grilled Chicken Parmesan Wrap,M2-16,27,--,27,NOT ASSIGNED - no room
+meal,TexMex Potato Hash,M3-17,27,--,27,NOT ASSIGNED - no room
+meal,Buffalo Chicken Meatballs,M1-14,26,--,26,NOT ASSIGNED - no room
+meal,GLORIOUS GAINS Steak Bites & Cilantro Lime Rice,M2-14,26,--,26,NOT ASSIGNED - no room
+meal,Hey Arnold! Burrito,M2-19,26,--,26,NOT ASSIGNED - no room
+meal,HFit Signature Fold,M2-20,26,--,26,NOT ASSIGNED - no room
+meal,Lo Mein Teriyaki Steak,M2-24,26,--,26,NOT ASSIGNED - no room
+meal,Meatball Parmesan Wrap,M2-26,26,--,26,NOT ASSIGNED - no room
+meal,Rigatoni & Meatballs,M3-06,26,--,26,NOT ASSIGNED - no room
+meal,BBQ Chicken Mac Bowl,M1-07,25,--,25,NOT ASSIGNED - no room
+meal,BBQ Meltdown,M1-08,25,--,25,NOT ASSIGNED - no room
+meal,Farfalle & Chicken Alfredo,M2-11,25,--,25,NOT ASSIGNED - no room
+meal,Grilled Chicken Pesto Wrap,M2-17,25,--,25,NOT ASSIGNED - no room
+meal,Teriyaki Flank Bowl,M3-15,25,--,25,NOT ASSIGNED - no room
+meal,Buffalo Chicken Quesadilla,M1-15,24,--,24,NOT ASSIGNED - no room
+meal,Strongsville Chicken Ranch Fold,M3-13,24,--,24,NOT ASSIGNED - no room
+meal,Low Carb Keto Cheeseburger Bowl,M2-25,23,--,23,NOT ASSIGNED - no room
+meal,MsWendy Buff Nuggets,M2-27,23,--,23,NOT ASSIGNED - no room
+meal,Club Wrap,M1-24,22,--,22,NOT ASSIGNED - no room
+meal,Competition Approved Grilled Chicken (1lb),M2-01,22,--,22,NOT ASSIGNED - no room
+meal,Fit-Fil-A,M2-13,22,--,22,NOT ASSIGNED - no room
+meal,Breakfast Burrito,M1-10,21,--,21,NOT ASSIGNED - no room
+meal,Chicken Stir Fry,M1-19,21,--,21,NOT ASSIGNED - no room
+meal,Chipotle Chicken (1lb Competition Approved),M1-21,21,--,21,NOT ASSIGNED - no room
+meal,Fit Ala Vodka With Chicken,M2-12,21,--,21,NOT ASSIGNED - no room
+meal,Hot Honey Steak & Mac,M2-22,21,--,21,NOT ASSIGNED - no room
+meal,Keto Ricotta Meatballs,M2-23,21,--,21,NOT ASSIGNED - no room
+meal,Soho Steak Bowl,M3-07,21,--,21,NOT ASSIGNED - no room
+meal,Southwest Chicken Quesadilla,M3-09,21,--,21,NOT ASSIGNED - no room
+meal,The Clean Bulk Pasta Bowl,M3-20,21,--,21,NOT ASSIGNED - no room
+meal,Zeus Bowl V2,M3-27,21,--,21,NOT ASSIGNED - no room
+meal,Buffalo Mac N Chicken,M1-17,20,--,20,NOT ASSIGNED - no room
+meal,6-Guys Patty Melt,M1-01,20,--,20,NOT ASSIGNED - no room
+meal,Gluten Free Carbonara Chicken,M2-15,19,--,19,NOT ASSIGNED - no room
+meal,Texas Queso Steak Bowl,M3-16,19,--,19,NOT ASSIGNED - no room
+meal,Nacho Average Bowl,M3-01,17,--,17,NOT ASSIGNED - no room
+meal,The Arches Mac Daddy Wrap,M3-19,17,--,17,NOT ASSIGNED - no room
+meal,Peanut Butter & Jelly Sandwich,M3-03,16,--,16,NOT ASSIGNED - no room
+meal,Cinnamon Roll Pancakes,M1-22,15,--,15,NOT ASSIGNED - no room
+meal,Pineapple Teriyaki Meatballs,M3-05,14,--,14,NOT ASSIGNED - no room
+meal,Strawberry Protein French Toast,M3-12,14,--,14,NOT ASSIGNED - no room
+meal,Blueberry French Toast,M1-09,13,--,13,NOT ASSIGNED - no room
+meal,Chicken Mushroom Pot Stickers,M1-18,13,--,13,NOT ASSIGNED - no room
+meal,Competition Approved Grilled Chicken W/ Smokin Poppie Sauce (1lb),M2-02,13,--,13,NOT ASSIGNED - no room
+meal,Competition Approved Baked Sweet Potato Fries (1lb),M1-26,10,--,10,NOT ASSIGNED - no room
+meal,Competition Approved Chicken Kebab (1lb),M1-27,10,--,10,NOT ASSIGNED - no room
+meal,Competition Approved Grilled Flank Steak (1lb),M2-03,10,--,10,NOT ASSIGNED - no room
+meal,Competition Approved Sticky Rice (1lb),M2-06,8,--,8,NOT ASSIGNED - no room
+meal,Turkey Bacon Cheddar Egg Muffins,M3-21,8,--,8,NOT ASSIGNED - no room
+meal,Competition Approved 90/10 Lean Ground Beef (1lb),M1-25,7,--,7,NOT ASSIGNED - no room
+meal,Philly Cheesesteak Quesadilla,M3-04,7,--,7,NOT ASSIGNED - no room
+meal,Competition Approved White Basmati Rice (1lb),M2-07,6,--,6,NOT ASSIGNED - no room
+meal,Competition Approved Lemon Pepper Salmon (1lb),M2-04,5,--,5,NOT ASSIGNED - no room
+meal,Competition Approved Oven Baked Cod (1lb),M2-05,4,--,4,NOT ASSIGNED - no room
+meal,Baked Herbed Tilapia (1lb Competition Approved),M1-04,3,--,3,NOT ASSIGNED - no room
+meal,Nacho Average Vegan Bowl,M3-02,3,--,3,NOT ASSIGNED - no room
+meal,Vegan Cheeseburger Bowl,M3-23,3,--,3,NOT ASSIGNED - no room
+meal,Vegan Chorizo Quesadilla,M3-24,3,--,3,NOT ASSIGNED - no room
+meal,Crispy Vegan Wrap,M2-10,2,--,2,NOT ASSIGNED - no room
+meal,Vegan Breakfast Sandwich,M3-22,2,--,2,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Banana Cream Protein Dream,"K1-06, K1-07",64,C06-L4(20); C07-L1(20); C07-L2(20); C07-L3(4),0,FITS
+muffin,Buffin Muffin - Apple Pie-Ceps,"K1-01, K1-02, K1-03",60,C07-L3(16); C07-L4(20); D01-L1(8); D01-L2(8); D01-L3(8),0,FITS
+muffin,Buffin Muffin - Buff Roll,"K1-12, K1-13, K1-14",60,D01-L4(8); D02-L1(8); D02-L2(8); D02-L3(8); D02-L4(8); A01-L1(8); A01-L2(8); A01-L3(4),0,FITS
+muffin,Buffin Muffin - Strawberry Buff Blast,"K1-32, K1-33",55,A01-L3(4); A02-L1(8); A02-L2(8); A02-L3(8); A03-L1(8); A03-L2(8),11,PARTIAL
+muffin,Buffin Muffin - TwistBar,"K1-35, K2-01",53,--,53,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Double Chocolate Brownie,"K1-25, K1-26",50,--,50,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Strawberry Crunch Milkshake,K1-34,48,--,48,NOT ASSIGNED - no room
+muffin,Buffin Muffin - ChocoLIT,"K1-18, K1-19",44,--,44,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Cinna Blast,"K1-20, K1-21",42,--,42,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Cookie Butter Tres Leches,"K1-22, K1-23",41,--,41,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Boston Chocolate Creme,"K1-10, K1-11",39,--,39,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Buffcoff,"K1-16, K1-17",39,--,39,NOT ASSIGNED - no room
+muffin,Buffin Muffin - German Chocolate Cake,"K1-27, K1-28",35,--,35,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Banana Choc. Chip,"K1-04, K1-05",35,--,35,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Gluten Free Cookies and Milk,"K1-30, K1-31",34,--,34,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Blueberry,"K1-08, K1-09",29,--,29,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Buff Served,K1-15,29,--,29,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Welcome to the Sno,K2-02,23,--,23,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Gluten Free Confetti Pop,K1-29,12,--,12,NOT ASSIGNED - no room
+muffin,Buffin Muffin - Cookies and Cream Crunch,K1-24,11,--,11,NOT ASSIGNED - no room
+oats,Overnight Oats - Dubai Chocolate,K2-17,10,A03-L3(8); A04-L1(2),0,FITS
+oats,Overnight Oats - Blueberry Muffin,K2-05,10,A04-L1(6); A04-L2(4),0,FITS
+oats,Overnight Oats - Graham Fetti,K2-20,9,A04-L2(4); A04-L3(5),0,FITS
+oats,Overnight Oats - Chocolate Peanut Butter,K2-08,9,A04-L3(3),6,PARTIAL
+oats,Overnight Oats - Peanut Butter Brownie,K2-23,9,--,9,NOT ASSIGNED - no room
+oats,Overnight Oats - Cookie Creme,K2-10,9,--,9,NOT ASSIGNED - no room
+oats,Overnight Oats - Fitella,K2-18,8,--,8,NOT ASSIGNED - no room
+oats,Overnight Oats - Banana Chocolate Chip,K2-04,8,--,8,NOT ASSIGNED - no room
+oats,Overnight Oats - Cookie Dough,K2-11,8,--,8,NOT ASSIGNED - no room
+oats,Overnight Oats - Peanut Butter & Jelly,K2-22,7,--,7,NOT ASSIGNED - no room
+oats,Overnight Oats - Cookies n Cream,K2-16,7,--,7,NOT ASSIGNED - no room
+oats,Overnight Oats - Toast n' Crunch,K2-28,6,--,6,NOT ASSIGNED - no room
+oats,Overnight Oats - Cannoli,K2-06,6,--,6,NOT ASSIGNED - no room
+snack,Peanut Butter Chocolate Gree-Yo,K2-24,21,--,21,NOT ASSIGNED - no room
+snack,Peanut Butter Energy Bites,K2-25,18,--,18,NOT ASSIGNED - no room
+snack,3 Banana Chocolate Protein Poppers,K2-03,17,--,17,NOT ASSIGNED - no room
+snack,Protein Chocolate Pudding,K2-26,15,--,15,NOT ASSIGNED - no room
+snack,S'Mores Gree-Yo,K2-27,11,--,11,NOT ASSIGNED - no room
+snack,Buff Crisp Bar - Cinna Crunch,K2-09,9,--,9,NOT ASSIGNED - no room
+snack,Buff Crisp Bar - Original Recipe,K2-21,7,--,7,NOT ASSIGNED - no room
+snack,Buff Crisp Bar - Fruity Cereal,K2-19,5,--,5,NOT ASSIGNED - no room
+snack,Buff Crisp Bar - Chocolate,K2-07,2,--,2,NOT ASSIGNED - no room

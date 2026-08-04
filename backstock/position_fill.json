@@ -1,0 +1,807 @@
+{
+  "C01-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 1,
+    "level": 1,
+    "products": [
+      {
+        "name": "Broritto Burrito",
+        "crates": 20,
+        "lane": "M1-12"
+      }
+    ]
+  },
+  "C01-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 1,
+    "level": 2,
+    "products": [
+      {
+        "name": "Broritto Burrito",
+        "crates": 20,
+        "lane": "M1-12"
+      }
+    ]
+  },
+  "C01-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 1,
+    "level": 3,
+    "products": [
+      {
+        "name": "Broritto Burrito",
+        "crates": 20,
+        "lane": "M1-12"
+      }
+    ]
+  },
+  "C01-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 1,
+    "level": 4,
+    "products": [
+      {
+        "name": "Broritto Burrito",
+        "crates": 2,
+        "lane": "M1-12"
+      },
+      {
+        "name": "BBQ Chicken Garlic Parm Potatoes",
+        "crates": 18,
+        "lane": "M1-05"
+      }
+    ]
+  },
+  "C02-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 2,
+    "level": 1,
+    "products": [
+      {
+        "name": "BBQ Chicken Garlic Parm Potatoes",
+        "crates": 20,
+        "lane": "M1-05"
+      }
+    ]
+  },
+  "C02-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 2,
+    "level": 2,
+    "products": [
+      {
+        "name": "BBQ Chicken Garlic Parm Potatoes",
+        "crates": 16,
+        "lane": "M1-05"
+      },
+      {
+        "name": "Closed on Sunday Crispy Chicken Bowl",
+        "crates": 4,
+        "lane": "M1-23"
+      }
+    ]
+  },
+  "C02-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 2,
+    "level": 3,
+    "products": [
+      {
+        "name": "Closed on Sunday Crispy Chicken Bowl",
+        "crates": 20,
+        "lane": "M1-23"
+      }
+    ]
+  },
+  "C02-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 2,
+    "level": 4,
+    "products": [
+      {
+        "name": "Closed on Sunday Crispy Chicken Bowl",
+        "crates": 20,
+        "lane": "M1-23"
+      }
+    ]
+  },
+  "C03-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 3,
+    "level": 1,
+    "products": [
+      {
+        "name": "Closed on Sunday Crispy Chicken Bowl",
+        "crates": 2,
+        "lane": "M1-23"
+      },
+      {
+        "name": "Crispy Baked Chicken Wrap",
+        "crates": 18,
+        "lane": "M2-08"
+      }
+    ]
+  },
+  "C03-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 3,
+    "level": 2,
+    "products": [
+      {
+        "name": "Crispy Baked Chicken Wrap",
+        "crates": 20,
+        "lane": "M2-08"
+      }
+    ]
+  },
+  "C03-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 3,
+    "level": 3,
+    "products": [
+      {
+        "name": "Crispy Baked Chicken Wrap",
+        "crates": 4,
+        "lane": "M2-08"
+      },
+      {
+        "name": "Baja Chicken Tacos",
+        "crates": 16,
+        "lane": "M1-03"
+      }
+    ]
+  },
+  "C03-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 3,
+    "level": 4,
+    "products": [
+      {
+        "name": "Baja Chicken Tacos",
+        "crates": 20,
+        "lane": "M1-03"
+      }
+    ]
+  },
+  "C04-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 4,
+    "level": 1,
+    "products": [
+      {
+        "name": "Baja Chicken Tacos",
+        "crates": 2,
+        "lane": "M1-03"
+      },
+      {
+        "name": "Zeus Bowl",
+        "crates": 18,
+        "lane": "M3-26"
+      }
+    ]
+  },
+  "C04-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 4,
+    "level": 2,
+    "products": [
+      {
+        "name": "Zeus Bowl",
+        "crates": 17,
+        "lane": "M3-26"
+      },
+      {
+        "name": "Herb Butter Steak Tips Bowl",
+        "crates": 3,
+        "lane": "M2-18"
+      }
+    ]
+  },
+  "C04-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 4,
+    "level": 3,
+    "products": [
+      {
+        "name": "Herb Butter Steak Tips Bowl",
+        "crates": 20,
+        "lane": "M2-18"
+      }
+    ]
+  },
+  "C04-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 4,
+    "level": 4,
+    "products": [
+      {
+        "name": "Herb Butter Steak Tips Bowl",
+        "crates": 11,
+        "lane": "M2-18"
+      },
+      {
+        "name": "Spicy Buffalo Wrap",
+        "crates": 9,
+        "lane": "M3-10"
+      }
+    ]
+  },
+  "C05-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 5,
+    "level": 1,
+    "products": [
+      {
+        "name": "Spicy Buffalo Wrap",
+        "crates": 20,
+        "lane": "M3-10"
+      }
+    ]
+  },
+  "C05-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 5,
+    "level": 2,
+    "products": [
+      {
+        "name": "Spicy Buffalo Wrap",
+        "crates": 4,
+        "lane": "M3-10"
+      },
+      {
+        "name": "Thai Chili Chicken",
+        "crates": 16,
+        "lane": "M3-18"
+      }
+    ]
+  },
+  "C05-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 5,
+    "level": 3,
+    "products": [
+      {
+        "name": "Thai Chili Chicken",
+        "crates": 13,
+        "lane": "M3-18"
+      },
+      {
+        "name": "Brookfield Chicken Bowl",
+        "crates": 7,
+        "lane": "M1-11"
+      }
+    ]
+  },
+  "C05-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 5,
+    "level": 4,
+    "products": [
+      {
+        "name": "Brookfield Chicken Bowl",
+        "crates": 20,
+        "lane": "M1-11"
+      }
+    ]
+  },
+  "C06-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 6,
+    "level": 1,
+    "products": [
+      {
+        "name": "Brookfield Chicken Bowl",
+        "crates": 1,
+        "lane": "M1-11"
+      },
+      {
+        "name": "Buffalo Crispy Chicken Wrap",
+        "crates": 19,
+        "lane": "M1-16"
+      }
+    ]
+  },
+  "C06-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 6,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffalo Crispy Chicken Wrap",
+        "crates": 9,
+        "lane": "M1-16"
+      },
+      {
+        "name": "Southwest Chicken Bowl",
+        "crates": 11,
+        "lane": "M3-08"
+      }
+    ]
+  },
+  "C06-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "meal",
+    "zone": "center",
+    "bay": 6,
+    "level": 3,
+    "products": [
+      {
+        "name": "Southwest Chicken Bowl",
+        "crates": 17,
+        "lane": "M3-08"
+      },
+      {
+        "name": "Stacked and Jacked",
+        "crates": 3,
+        "lane": "M3-11"
+      }
+    ]
+  },
+  "C06-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "muffin",
+    "zone": "center",
+    "bay": 6,
+    "level": 4,
+    "products": [
+      {
+        "name": "Buffin Muffin - Banana Cream Protein Dream",
+        "crates": 20,
+        "lane": "K1-06"
+      }
+    ]
+  },
+  "C07-L1": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "muffin",
+    "zone": "center",
+    "bay": 7,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Banana Cream Protein Dream",
+        "crates": 20,
+        "lane": "K1-06"
+      }
+    ]
+  },
+  "C07-L2": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "muffin",
+    "zone": "center",
+    "bay": 7,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Banana Cream Protein Dream",
+        "crates": 20,
+        "lane": "K1-06"
+      }
+    ]
+  },
+  "C07-L3": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "muffin",
+    "zone": "center",
+    "bay": 7,
+    "level": 3,
+    "products": [
+      {
+        "name": "Buffin Muffin - Banana Cream Protein Dream",
+        "crates": 4,
+        "lane": "K1-06"
+      },
+      {
+        "name": "Buffin Muffin - Apple Pie-Ceps",
+        "crates": 16,
+        "lane": "K1-01"
+      }
+    ]
+  },
+  "C07-L4": {
+    "cap": 20,
+    "filled": 20,
+    "cat": "muffin",
+    "zone": "center",
+    "bay": 7,
+    "level": 4,
+    "products": [
+      {
+        "name": "Buffin Muffin - Apple Pie-Ceps",
+        "crates": 20,
+        "lane": "K1-01"
+      }
+    ]
+  },
+  "D01-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 1,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Apple Pie-Ceps",
+        "crates": 8,
+        "lane": "K1-01"
+      }
+    ]
+  },
+  "D01-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 1,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Apple Pie-Ceps",
+        "crates": 8,
+        "lane": "K1-01"
+      }
+    ]
+  },
+  "D01-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 1,
+    "level": 3,
+    "products": [
+      {
+        "name": "Buffin Muffin - Apple Pie-Ceps",
+        "crates": 8,
+        "lane": "K1-01"
+      }
+    ]
+  },
+  "D01-L4": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 1,
+    "level": 4,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "D02-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 2,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "D02-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 2,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "D02-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 2,
+    "level": 3,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "D02-L4": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walld",
+    "bay": 2,
+    "level": 4,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "A01-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 1,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "A01-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 1,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 8,
+        "lane": "K1-12"
+      }
+    ]
+  },
+  "A01-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 1,
+    "level": 3,
+    "products": [
+      {
+        "name": "Buffin Muffin - Buff Roll",
+        "crates": 4,
+        "lane": "K1-12"
+      },
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 4,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A02-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 2,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 8,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A02-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 2,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 8,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A02-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 2,
+    "level": 3,
+    "products": [
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 8,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A03-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 3,
+    "level": 1,
+    "products": [
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 8,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A03-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "muffin",
+    "zone": "walla",
+    "bay": 3,
+    "level": 2,
+    "products": [
+      {
+        "name": "Buffin Muffin - Strawberry Buff Blast",
+        "crates": 8,
+        "lane": "K1-32"
+      }
+    ]
+  },
+  "A03-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "oats",
+    "zone": "walla",
+    "bay": 3,
+    "level": 3,
+    "products": [
+      {
+        "name": "Overnight Oats - Dubai Chocolate",
+        "crates": 8,
+        "lane": "K2-17"
+      }
+    ]
+  },
+  "A04-L1": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "oats",
+    "zone": "walla",
+    "bay": 4,
+    "level": 1,
+    "products": [
+      {
+        "name": "Overnight Oats - Dubai Chocolate",
+        "crates": 2,
+        "lane": "K2-17"
+      },
+      {
+        "name": "Overnight Oats - Blueberry Muffin",
+        "crates": 6,
+        "lane": "K2-05"
+      }
+    ]
+  },
+  "A04-L2": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "oats",
+    "zone": "walla",
+    "bay": 4,
+    "level": 2,
+    "products": [
+      {
+        "name": "Overnight Oats - Blueberry Muffin",
+        "crates": 4,
+        "lane": "K2-05"
+      },
+      {
+        "name": "Overnight Oats - Graham Fetti",
+        "crates": 4,
+        "lane": "K2-20"
+      }
+    ]
+  },
+  "A04-L3": {
+    "cap": 8,
+    "filled": 8,
+    "cat": "oats",
+    "zone": "walla",
+    "bay": 4,
+    "level": 3,
+    "products": [
+      {
+        "name": "Overnight Oats - Graham Fetti",
+        "crates": 5,
+        "lane": "K2-20"
+      },
+      {
+        "name": "Overnight Oats - Chocolate Peanut Butter",
+        "crates": 3,
+        "lane": "K2-08"
+      }
+    ]
+  }
+}

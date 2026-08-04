@@ -1,0 +1,978 @@
+[
+  {
+    "name": "Arnold 2022 Bowl",
+    "cat": "meal",
+    "u30": 5465,
+    "daily_avg": 182.16666666666666,
+    "cap": 24,
+    "crates": 27
+  },
+  {
+    "name": "Baja Chicken Tacos",
+    "cat": "meal",
+    "u30": 7651,
+    "daily_avg": 255.03333333333333,
+    "cap": 24,
+    "crates": 38
+  },
+  {
+    "name": "Baked Herbed Tilapia (1lb Competition Approved)",
+    "cat": "meal",
+    "u30": 439,
+    "daily_avg": 14.633333333333333,
+    "cap": 24,
+    "crates": 3
+  },
+  {
+    "name": "BBQ Chicken Garlic Parm Potatoes",
+    "cat": "meal",
+    "u30": 10987,
+    "daily_avg": 366.23333333333335,
+    "cap": 24,
+    "crates": 54
+  },
+  {
+    "name": "BBQ Chicken Mac Bowl",
+    "cat": "meal",
+    "u30": 5094,
+    "daily_avg": 169.8,
+    "cap": 24,
+    "crates": 25
+  },
+  {
+    "name": "BBQ Meltdown",
+    "cat": "meal",
+    "u30": 5099,
+    "daily_avg": 169.96666666666667,
+    "cap": 24,
+    "crates": 25
+  },
+  {
+    "name": "Blueberry French Toast",
+    "cat": "meal",
+    "u30": 2642,
+    "daily_avg": 88.06666666666666,
+    "cap": 24,
+    "crates": 13
+  },
+  {
+    "name": "Breakfast Burrito",
+    "cat": "meal",
+    "u30": 4146,
+    "daily_avg": 138.2,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Brookfield Chicken Bowl",
+    "cat": "meal",
+    "u30": 5642,
+    "daily_avg": 188.06666666666666,
+    "cap": 24,
+    "crates": 28
+  },
+  {
+    "name": "Broritto Burrito",
+    "cat": "meal",
+    "u30": 12644,
+    "daily_avg": 421.46666666666664,
+    "cap": 24,
+    "crates": 62
+  },
+  {
+    "name": "Buffalo Chicken Meatballs",
+    "cat": "meal",
+    "u30": 5281,
+    "daily_avg": 176.03333333333333,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "Buffalo Chicken Quesadilla",
+    "cat": "meal",
+    "u30": 4921,
+    "daily_avg": 164.03333333333333,
+    "cap": 24,
+    "crates": 24
+  },
+  {
+    "name": "Buffalo Crispy Chicken Wrap",
+    "cat": "meal",
+    "u30": 5620,
+    "daily_avg": 187.33333333333334,
+    "cap": 24,
+    "crates": 28
+  },
+  {
+    "name": "Buffalo Mac N Chicken",
+    "cat": "meal",
+    "u30": 4078,
+    "daily_avg": 135.93333333333334,
+    "cap": 24,
+    "crates": 20
+  },
+  {
+    "name": "Chicken Mushroom Pot Stickers",
+    "cat": "meal",
+    "u30": 2529,
+    "daily_avg": 84.3,
+    "cap": 24,
+    "crates": 13
+  },
+  {
+    "name": "Chicken Stir Fry",
+    "cat": "meal",
+    "u30": 4181,
+    "daily_avg": 139.36666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Chicken Taco Bowl",
+    "cat": "meal",
+    "u30": 5512,
+    "daily_avg": 183.73333333333332,
+    "cap": 24,
+    "crates": 27
+  },
+  {
+    "name": "Chipotle Chicken (1lb Competition Approved)",
+    "cat": "meal",
+    "u30": 4208,
+    "daily_avg": 140.26666666666668,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Cinnamon Roll Pancakes",
+    "cat": "meal",
+    "u30": 2946,
+    "daily_avg": 98.2,
+    "cap": 24,
+    "crates": 15
+  },
+  {
+    "name": "Closed on Sunday Crispy Chicken Bowl",
+    "cat": "meal",
+    "u30": 9339,
+    "daily_avg": 311.3,
+    "cap": 24,
+    "crates": 46
+  },
+  {
+    "name": "Club Wrap",
+    "cat": "meal",
+    "u30": 4455,
+    "daily_avg": 148.5,
+    "cap": 24,
+    "crates": 22
+  },
+  {
+    "name": "Competition Approved 90/10 Lean Ground Beef (1lb)",
+    "cat": "meal",
+    "u30": 1256,
+    "daily_avg": 41.86666666666667,
+    "cap": 24,
+    "crates": 7
+  },
+  {
+    "name": "Competition Approved Baked Sweet Potato Fries (1lb)",
+    "cat": "meal",
+    "u30": 1939,
+    "daily_avg": 64.63333333333334,
+    "cap": 24,
+    "crates": 10
+  },
+  {
+    "name": "Competition Approved Chicken Kebab (1lb)",
+    "cat": "meal",
+    "u30": 1857,
+    "daily_avg": 61.9,
+    "cap": 24,
+    "crates": 10
+  },
+  {
+    "name": "Competition Approved Grilled Chicken (1lb)",
+    "cat": "meal",
+    "u30": 4489,
+    "daily_avg": 149.63333333333333,
+    "cap": 24,
+    "crates": 22
+  },
+  {
+    "name": "Competition Approved Grilled Chicken W/ Smokin Poppie Sauce (1lb)",
+    "cat": "meal",
+    "u30": 2486,
+    "daily_avg": 82.86666666666666,
+    "cap": 24,
+    "crates": 13
+  },
+  {
+    "name": "Competition Approved Grilled Flank Steak (1lb)",
+    "cat": "meal",
+    "u30": 1951,
+    "daily_avg": 65.03333333333333,
+    "cap": 24,
+    "crates": 10
+  },
+  {
+    "name": "Competition Approved Lemon Pepper Salmon (1lb)",
+    "cat": "meal",
+    "u30": 924,
+    "daily_avg": 30.8,
+    "cap": 24,
+    "crates": 5
+  },
+  {
+    "name": "Competition Approved Oven Baked Cod (1lb)",
+    "cat": "meal",
+    "u30": 794,
+    "daily_avg": 26.466666666666665,
+    "cap": 24,
+    "crates": 4
+  },
+  {
+    "name": "Competition Approved Sticky Rice (1lb)",
+    "cat": "meal",
+    "u30": 1552,
+    "daily_avg": 51.733333333333334,
+    "cap": 24,
+    "crates": 8
+  },
+  {
+    "name": "Competition Approved White Basmati Rice (1lb)",
+    "cat": "meal",
+    "u30": 1071,
+    "daily_avg": 35.7,
+    "cap": 24,
+    "crates": 6
+  },
+  {
+    "name": "Crispy Baked Chicken Wrap",
+    "cat": "meal",
+    "u30": 8564,
+    "daily_avg": 285.46666666666664,
+    "cap": 24,
+    "crates": 42
+  },
+  {
+    "name": "Crispy Vegan Wrap",
+    "cat": "meal",
+    "u30": 403,
+    "daily_avg": 13.433333333333334,
+    "cap": 24,
+    "crates": 2
+  },
+  {
+    "name": "Farfalle & Chicken Alfredo",
+    "cat": "meal",
+    "u30": 5052,
+    "daily_avg": 168.4,
+    "cap": 24,
+    "crates": 25
+  },
+  {
+    "name": "Fit Ala Vodka With Chicken",
+    "cat": "meal",
+    "u30": 4147,
+    "daily_avg": 138.23333333333332,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Fit-Fil-A",
+    "cat": "meal",
+    "u30": 4472,
+    "daily_avg": 149.06666666666666,
+    "cap": 24,
+    "crates": 22
+  },
+  {
+    "name": "6-Guys Patty Melt",
+    "cat": "meal",
+    "u30": 4026,
+    "daily_avg": 134.2,
+    "cap": 24,
+    "crates": 20
+  },
+  {
+    "name": "GLORIOUS GAINS Steak Bites & Cilantro Lime Rice",
+    "cat": "meal",
+    "u30": 5246,
+    "daily_avg": 174.86666666666667,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "Gluten Free Carbonara Chicken",
+    "cat": "meal",
+    "u30": 3704,
+    "daily_avg": 123.46666666666667,
+    "cap": 24,
+    "crates": 19
+  },
+  {
+    "name": "Grilled Chicken Parmesan Wrap",
+    "cat": "meal",
+    "u30": 5506,
+    "daily_avg": 183.53333333333333,
+    "cap": 24,
+    "crates": 27
+  },
+  {
+    "name": "Grilled Chicken Pesto Wrap",
+    "cat": "meal",
+    "u30": 4964,
+    "daily_avg": 165.46666666666667,
+    "cap": 24,
+    "crates": 25
+  },
+  {
+    "name": "Herb Butter Steak Tips Bowl",
+    "cat": "meal",
+    "u30": 6924,
+    "daily_avg": 230.8,
+    "cap": 24,
+    "crates": 34
+  },
+  {
+    "name": "Hey Arnold! Burrito",
+    "cat": "meal",
+    "u30": 5275,
+    "daily_avg": 175.83333333333334,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "HFit Signature Fold",
+    "cat": "meal",
+    "u30": 5163,
+    "daily_avg": 172.1,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "Honey Garlic Crispy Chicken Tacos",
+    "cat": "meal",
+    "u30": 0,
+    "daily_avg": 0.0,
+    "cap": 24,
+    "crates": 0
+  },
+  {
+    "name": "Hot Honey Steak & Mac",
+    "cat": "meal",
+    "u30": 4124,
+    "daily_avg": 137.46666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Keto Ricotta Meatballs",
+    "cat": "meal",
+    "u30": 4223,
+    "daily_avg": 140.76666666666668,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Lo Mein Teriyaki Steak",
+    "cat": "meal",
+    "u30": 5300,
+    "daily_avg": 176.66666666666666,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "Low Carb Keto Cheeseburger Bowl",
+    "cat": "meal",
+    "u30": 4531,
+    "daily_avg": 151.03333333333333,
+    "cap": 24,
+    "crates": 23
+  },
+  {
+    "name": "Meatball Parmesan Wrap",
+    "cat": "meal",
+    "u30": 5255,
+    "daily_avg": 175.16666666666666,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "MsWendy Buff Nuggets",
+    "cat": "meal",
+    "u30": 4601,
+    "daily_avg": 153.36666666666667,
+    "cap": 24,
+    "crates": 23
+  },
+  {
+    "name": "Nacho Average Bowl",
+    "cat": "meal",
+    "u30": 3334,
+    "daily_avg": 111.13333333333334,
+    "cap": 24,
+    "crates": 17
+  },
+  {
+    "name": "Nacho Average Vegan Bowl",
+    "cat": "meal",
+    "u30": 557,
+    "daily_avg": 18.566666666666666,
+    "cap": 24,
+    "crates": 3
+  },
+  {
+    "name": "Philly Cheesesteak Quesadilla",
+    "cat": "meal",
+    "u30": 1385,
+    "daily_avg": 46.166666666666664,
+    "cap": 24,
+    "crates": 7
+  },
+  {
+    "name": "Pineapple Teriyaki Meatballs",
+    "cat": "meal",
+    "u30": 2708,
+    "daily_avg": 90.26666666666667,
+    "cap": 24,
+    "crates": 14
+  },
+  {
+    "name": "Rigatoni & Meatballs",
+    "cat": "meal",
+    "u30": 5197,
+    "daily_avg": 173.23333333333332,
+    "cap": 24,
+    "crates": 26
+  },
+  {
+    "name": "Soho Steak Bowl",
+    "cat": "meal",
+    "u30": 4319,
+    "daily_avg": 143.96666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Southwest Chicken Bowl",
+    "cat": "meal",
+    "u30": 5639,
+    "daily_avg": 187.96666666666667,
+    "cap": 24,
+    "crates": 28
+  },
+  {
+    "name": "Southwest Chicken Quesadilla",
+    "cat": "meal",
+    "u30": 4151,
+    "daily_avg": 138.36666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Spicy Buffalo Wrap",
+    "cat": "meal",
+    "u30": 6720,
+    "daily_avg": 224.0,
+    "cap": 24,
+    "crates": 33
+  },
+  {
+    "name": "Stacked and Jacked",
+    "cat": "meal",
+    "u30": 5628,
+    "daily_avg": 187.6,
+    "cap": 24,
+    "crates": 28
+  },
+  {
+    "name": "Strawberry Protein French Toast",
+    "cat": "meal",
+    "u30": 2771,
+    "daily_avg": 92.36666666666666,
+    "cap": 24,
+    "crates": 14
+  },
+  {
+    "name": "Strongsville Chicken Ranch Fold",
+    "cat": "meal",
+    "u30": 4892,
+    "daily_avg": 163.06666666666666,
+    "cap": 24,
+    "crates": 24
+  },
+  {
+    "name": "Taco Build Quesadilla",
+    "cat": "meal",
+    "u30": 5599,
+    "daily_avg": 186.63333333333333,
+    "cap": 24,
+    "crates": 28
+  },
+  {
+    "name": "Teriyaki Flank Bowl",
+    "cat": "meal",
+    "u30": 5105,
+    "daily_avg": 170.16666666666666,
+    "cap": 24,
+    "crates": 25
+  },
+  {
+    "name": "TexMex Potato Hash",
+    "cat": "meal",
+    "u30": 5468,
+    "daily_avg": 182.26666666666668,
+    "cap": 24,
+    "crates": 27
+  },
+  {
+    "name": "Thai Chili Chicken",
+    "cat": "meal",
+    "u30": 5894,
+    "daily_avg": 196.46666666666667,
+    "cap": 24,
+    "crates": 29
+  },
+  {
+    "name": "The Arches Mac Daddy Wrap",
+    "cat": "meal",
+    "u30": 3367,
+    "daily_avg": 112.23333333333333,
+    "cap": 24,
+    "crates": 17
+  },
+  {
+    "name": "The Clean Bulk Pasta Bowl",
+    "cat": "meal",
+    "u30": 4121,
+    "daily_avg": 137.36666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Texas Queso Steak Bowl",
+    "cat": "meal",
+    "u30": 3894,
+    "daily_avg": 129.8,
+    "cap": 24,
+    "crates": 19
+  },
+  {
+    "name": "Turkey Bacon Cheddar Egg Muffins",
+    "cat": "meal",
+    "u30": 1474,
+    "daily_avg": 49.13333333333333,
+    "cap": 24,
+    "crates": 8
+  },
+  {
+    "name": "Vegan Breakfast Sandwich",
+    "cat": "meal",
+    "u30": 402,
+    "daily_avg": 13.4,
+    "cap": 24,
+    "crates": 2
+  },
+  {
+    "name": "Vegan Cheeseburger Bowl",
+    "cat": "meal",
+    "u30": 592,
+    "daily_avg": 19.733333333333334,
+    "cap": 24,
+    "crates": 3
+  },
+  {
+    "name": "Vegan Chorizo Quesadilla",
+    "cat": "meal",
+    "u30": 449,
+    "daily_avg": 14.966666666666667,
+    "cap": 24,
+    "crates": 3
+  },
+  {
+    "name": "West Coast Secret Sauce Bowl",
+    "cat": "meal",
+    "u30": 0,
+    "daily_avg": 0.0,
+    "cap": 24,
+    "crates": 0
+  },
+  {
+    "name": "Zeus Bowl",
+    "cat": "meal",
+    "u30": 7155,
+    "daily_avg": 238.5,
+    "cap": 24,
+    "crates": 35
+  },
+  {
+    "name": "Zeus Bowl V2",
+    "cat": "meal",
+    "u30": 4154,
+    "daily_avg": 138.46666666666667,
+    "cap": 24,
+    "crates": 21
+  },
+  {
+    "name": "Peanut Butter & Jelly Sandwich",
+    "cat": "meal",
+    "u30": 3144,
+    "daily_avg": 104.8,
+    "cap": 24,
+    "crates": 16
+  },
+  {
+    "name": "Buffin Muffin - Apple Pie-Ceps",
+    "cat": "muffin",
+    "u30": 12179,
+    "daily_avg": 405.96666666666664,
+    "cap": 24,
+    "crates": 60
+  },
+  {
+    "name": "Buffin Muffin - Buff Roll",
+    "cat": "muffin",
+    "u30": 12141,
+    "daily_avg": 404.7,
+    "cap": 24,
+    "crates": 60
+  },
+  {
+    "name": "Buffin Muffin - Blueberry",
+    "cat": "muffin",
+    "u30": 5885,
+    "daily_avg": 196.16666666666666,
+    "cap": 24,
+    "crates": 29
+  },
+  {
+    "name": "Buffin Muffin - Strawberry Crunch Milkshake",
+    "cat": "muffin",
+    "u30": 9729,
+    "daily_avg": 324.3,
+    "cap": 24,
+    "crates": 48
+  },
+  {
+    "name": "Buffin Muffin - Double Chocolate Brownie",
+    "cat": "muffin",
+    "u30": 10258,
+    "daily_avg": 341.93333333333334,
+    "cap": 24,
+    "crates": 50
+  },
+  {
+    "name": "Buffin Muffin - Strawberry Buff Blast",
+    "cat": "muffin",
+    "u30": 11204,
+    "daily_avg": 373.46666666666664,
+    "cap": 24,
+    "crates": 55
+  },
+  {
+    "name": "Buffin Muffin - Cookie Butter Tres Leches",
+    "cat": "muffin",
+    "u30": 8391,
+    "daily_avg": 279.7,
+    "cap": 24,
+    "crates": 41
+  },
+  {
+    "name": "Buffin Muffin - German Chocolate Cake",
+    "cat": "muffin",
+    "u30": 7092,
+    "daily_avg": 236.4,
+    "cap": 24,
+    "crates": 35
+  },
+  {
+    "name": "Buffin Muffin - ChocoLIT",
+    "cat": "muffin",
+    "u30": 8885,
+    "daily_avg": 296.1666666666667,
+    "cap": 24,
+    "crates": 44
+  },
+  {
+    "name": "Buffin Muffin - TwistBar",
+    "cat": "muffin",
+    "u30": 10782,
+    "daily_avg": 359.4,
+    "cap": 24,
+    "crates": 53
+  },
+  {
+    "name": "Buffin Muffin - Cookies and Cream Crunch",
+    "cat": "muffin",
+    "u30": 2082,
+    "daily_avg": 69.4,
+    "cap": 24,
+    "crates": 11
+  },
+  {
+    "name": "Buffin Muffin - Gluten Free Confetti Pop",
+    "cat": "muffin",
+    "u30": 2276,
+    "daily_avg": 75.86666666666666,
+    "cap": 24,
+    "crates": 12
+  },
+  {
+    "name": "Buffin Muffin - Gluten Free Cookies and Milk",
+    "cat": "muffin",
+    "u30": 6790,
+    "daily_avg": 226.33333333333334,
+    "cap": 24,
+    "crates": 34
+  },
+  {
+    "name": "Buffin Muffin - Banana Choc. Chip",
+    "cat": "muffin",
+    "u30": 7011,
+    "daily_avg": 233.7,
+    "cap": 24,
+    "crates": 35
+  },
+  {
+    "name": "Buffin Muffin - Buff Served",
+    "cat": "muffin",
+    "u30": 5811,
+    "daily_avg": 193.7,
+    "cap": 24,
+    "crates": 29
+  },
+  {
+    "name": "Buffin Muffin - Boston Chocolate Creme",
+    "cat": "muffin",
+    "u30": 7969,
+    "daily_avg": 265.6333333333333,
+    "cap": 24,
+    "crates": 39
+  },
+  {
+    "name": "Buffin Muffin - Welcome to the Sno",
+    "cat": "muffin",
+    "u30": 4631,
+    "daily_avg": 154.36666666666667,
+    "cap": 24,
+    "crates": 23
+  },
+  {
+    "name": "Buffin Muffin - Cinna Blast",
+    "cat": "muffin",
+    "u30": 8551,
+    "daily_avg": 285.03333333333336,
+    "cap": 24,
+    "crates": 42
+  },
+  {
+    "name": "Buffin Muffin - Banana Cream Protein Dream",
+    "cat": "muffin",
+    "u30": 12997,
+    "daily_avg": 433.23333333333335,
+    "cap": 24,
+    "crates": 64
+  },
+  {
+    "name": "Buffin Muffin - Buffcoff",
+    "cat": "muffin",
+    "u30": 7922,
+    "daily_avg": 264.06666666666666,
+    "cap": 24,
+    "crates": 39
+  },
+  {
+    "name": "Overnight Oats - Dubai Chocolate",
+    "cat": "oats",
+    "u30": 2212,
+    "daily_avg": 73.73333333333333,
+    "cap": 28,
+    "crates": 10
+  },
+  {
+    "name": "Overnight Oats - Graham Fetti",
+    "cat": "oats",
+    "u30": 2101,
+    "daily_avg": 70.03333333333333,
+    "cap": 28,
+    "crates": 9
+  },
+  {
+    "name": "Overnight Oats - Toast n' Crunch",
+    "cat": "oats",
+    "u30": 1408,
+    "daily_avg": 46.93333333333333,
+    "cap": 28,
+    "crates": 6
+  },
+  {
+    "name": "Overnight Oats - Blueberry Muffin",
+    "cat": "oats",
+    "u30": 2183,
+    "daily_avg": 72.76666666666667,
+    "cap": 28,
+    "crates": 10
+  },
+  {
+    "name": "Overnight Oats - Fitella",
+    "cat": "oats",
+    "u30": 1856,
+    "daily_avg": 61.86666666666667,
+    "cap": 28,
+    "crates": 8
+  },
+  {
+    "name": "Overnight Oats - Banana Chocolate Chip",
+    "cat": "oats",
+    "u30": 1748,
+    "daily_avg": 58.266666666666666,
+    "cap": 28,
+    "crates": 8
+  },
+  {
+    "name": "Overnight Oats - Cannoli",
+    "cat": "oats",
+    "u30": 1245,
+    "daily_avg": 41.5,
+    "cap": 28,
+    "crates": 6
+  },
+  {
+    "name": "Overnight Oats - Chocolate Peanut Butter",
+    "cat": "oats",
+    "u30": 2032,
+    "daily_avg": 67.73333333333333,
+    "cap": 28,
+    "crates": 9
+  },
+  {
+    "name": "Overnight Oats - Peanut Butter Brownie",
+    "cat": "oats",
+    "u30": 2029,
+    "daily_avg": 67.63333333333334,
+    "cap": 28,
+    "crates": 9
+  },
+  {
+    "name": "Overnight Oats - Cookie Creme",
+    "cat": "oats",
+    "u30": 2075,
+    "daily_avg": 69.16666666666667,
+    "cap": 28,
+    "crates": 9
+  },
+  {
+    "name": "Overnight Oats - Peanut Butter & Jelly",
+    "cat": "oats",
+    "u30": 1658,
+    "daily_avg": 55.266666666666666,
+    "cap": 28,
+    "crates": 7
+  },
+  {
+    "name": "Overnight Oats - Cookie Dough",
+    "cat": "oats",
+    "u30": 1727,
+    "daily_avg": 57.56666666666667,
+    "cap": 28,
+    "crates": 8
+  },
+  {
+    "name": "Overnight Oats - Cookies n Cream",
+    "cat": "oats",
+    "u30": 1575,
+    "daily_avg": 52.5,
+    "cap": 28,
+    "crates": 7
+  },
+  {
+    "name": "Buff Crisp Bar - Cinna Crunch",
+    "cat": "snack",
+    "u30": 3611,
+    "daily_avg": 120.36666666666666,
+    "cap": 48,
+    "crates": 9
+  },
+  {
+    "name": "Buff Crisp Bar - Original Recipe",
+    "cat": "snack",
+    "u30": 2656,
+    "daily_avg": 88.53333333333333,
+    "cap": 48,
+    "crates": 7
+  },
+  {
+    "name": "Buff Crisp Bar - Fruity Cereal",
+    "cat": "snack",
+    "u30": 2038,
+    "daily_avg": 67.93333333333334,
+    "cap": 48,
+    "crates": 5
+  },
+  {
+    "name": "Buff Crisp Bar - Chocolate",
+    "cat": "snack",
+    "u30": 816,
+    "daily_avg": 27.2,
+    "cap": 48,
+    "crates": 2
+  },
+  {
+    "name": "Peanut Butter Chocolate Gree-Yo",
+    "cat": "snack",
+    "u30": 4836,
+    "daily_avg": 161.2,
+    "cap": 28,
+    "crates": 21
+  },
+  {
+    "name": "S'Mores Gree-Yo",
+    "cat": "snack",
+    "u30": 2542,
+    "daily_avg": 84.73333333333333,
+    "cap": 28,
+    "crates": 11
+  },
+  {
+    "name": "Protein Chocolate Pudding",
+    "cat": "snack",
+    "u30": 3459,
+    "daily_avg": 115.3,
+    "cap": 28,
+    "crates": 15
+  },
+  {
+    "name": "3 Banana Chocolate Protein Poppers",
+    "cat": "snack",
+    "u30": 3386,
+    "daily_avg": 112.86666666666666,
+    "cap": 24,
+    "crates": 17
+  },
+  {
+    "name": "Peanut Butter Energy Bites",
+    "cat": "snack",
+    "u30": 3590,
+    "daily_avg": 119.66666666666667,
+    "cap": 24,
+    "crates": 18
+  },
+  {
+    "name": "Cookies and Cream Crunch",
+    "cat": "snack",
+    "u30": 0,
+    "daily_avg": 0.0,
+    "cap": 24,
+    "crates": 0
+  },
+  {
+    "name": "Cookies and Cream Crunch - Exclusive- 20",
+    "cat": "snack",
+    "u30": 0,
+    "daily_avg": 0.0,
+    "cap": 24,
+    "crates": 0
+  }
+]
