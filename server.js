@@ -5,6 +5,43 @@ const PDFDocument = require("pdfkit");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const webpush = require("web-push");
 
+// Non-fridge supply items (paper goods, plastic goods, spoons, garbage
+// bags, etc.) live on the other side of the building from the fridge/
+// backstock area and will never appear in the blueprint lane feed — they
+// sort dead last, after food items that just haven't been wired into the
+// blueprint yet. This must run BEFORE an order's lineItems array is ever
+// stored, since /api/picking-order, /api/picking-item, the packing slip,
+// and the missing-items report all key picked/missing/note state purely
+// by array position — sorting has to happen once, upstream, so every
+// consumer sees the same stable index for the same item.
+const SUPPLY_KEYWORDS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|hoodie|apparel|gift card|crop hoodie)\b/i;
+async function sortItemsForPicking(items) {
+  const laneIndex = await loadLocationIndex();
+  const withMeta = items.map((item) => ({
+    item,
+    location: findLocation(laneIndex, item.title),
+    isSupply: SUPPLY_KEYWORDS.test(item.title),
+  }));
+  withMeta.sort((a, b) => {
+    const tierA = a.location ? 0 : a.isSupply ? 2 : 1;
+    const tierB = b.location ? 0 : b.isSupply ? 2 : 1;
+    if (tierA !== tierB) return tierA - tierB;
+    if (tierA === 0) {
+      const ka = a.location.sortKey;
+      const kb = b.location.sortKey;
+      for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+        const av = ka[i] === undefined ? 0 : ka[i];
+        const bv = kb[i] === undefined ? 0 : kb[i];
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+      }
+      return 0;
+    }
+    return a.item.title.localeCompare(b.item.title);
+  });
+  return withMeta.map((m) => m.item);
+}
+
 // Real VAPID keypair for push notifications — the public one gets handed
 // to the browser when it subscribes, the private one signs outgoing
 // notifications server-side. These need to stay stable (don't
@@ -954,7 +991,7 @@ async function fetchTodaysStopOrders() {
   // gets combined into one merged pick list instead of only keeping the
   // first one found, so nothing a picker needs is ever silently missed.
   const localByStopName = {};
-  Object.keys(localGroupedByStop).forEach((key) => {
+  for (const key of Object.keys(localGroupedByStop)) {
     const stopOrders = localGroupedByStop[key];
     const mergedItemsByKey = {};
     stopOrders.forEach((order) => {
@@ -982,10 +1019,10 @@ async function fetchTodaysStopOrders() {
       orderName: stopOrders.map((o) => o.name).join(", "),
       orderCount: stopOrders.length,
       createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
-      lineItems: Object.values(mergedItemsByKey),
+      lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: false,
     };
-  });
+  }
 
   const byStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
   ordersCache = { fetchedAt: now, byStopName, windowStart, windowEnd };
@@ -1100,7 +1137,7 @@ async function fetchB2BStopOrders() {
   });
 
   const byStopName = {};
-  Object.keys(groupedByStop).forEach((key) => {
+  for (const key of Object.keys(groupedByStop)) {
     const stopOrders = groupedByStop[key];
     const mergedItemsByKey = {}; // "title::sku" -> combined item
     stopOrders.forEach((order) => {
@@ -1128,10 +1165,10 @@ async function fetchB2BStopOrders() {
       orderName: stopOrders.map((o) => o.name).join(", "),
       orderCount: stopOrders.length,
       createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
-      lineItems: Object.values(mergedItemsByKey),
+      lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: true,
     };
-  });
+  }
   return byStopName;
 }
 
