@@ -1225,22 +1225,39 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const ZEBRA_TINT = "#F3F3F1";
 
     const laneIndex = await loadLocationIndex();
+    // Non-fridge supply items (paper goods, plastic goods, spoons, garbage
+    // bags, etc.) live on the other side of the building from the fridge/
+    // backstock area, and will never appear in the blueprint lane feed —
+    // they need to sort dead last, AFTER food items that just haven't been
+    // wired into the blueprint yet (like Overnight Oats/snacks, which are
+    // real fridge items the live lanes API doesn't track). Without this,
+    // both groups fell into the same "unmatched" bucket and got shuffled
+    // together at the bottom.
+    const SUPPLY_KEYWORDS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|hoodie|apparel|gift card|crop hoodie)\b/i;
     const itemsWithMeta = order.lineItems.map((item, originalIdx) => ({
       item,
       originalIdx,
       location: findLocation(laneIndex, item.title),
+      isSupply: SUPPLY_KEYWORDS.test(item.title),
     }));
     const UNMATCHED_SORT_KEY = [999, "ZZZ", 999, 999];
     itemsWithMeta.sort((a, b) => {
-      const ka = a.location ? a.location.sortKey : UNMATCHED_SORT_KEY;
-      const kb = b.location ? b.location.sortKey : UNMATCHED_SORT_KEY;
-      for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
-        const av = ka[i] === undefined ? 0 : ka[i];
-        const bv = kb[i] === undefined ? 0 : kb[i];
-        if (av < bv) return -1;
-        if (av > bv) return 1;
+      const tierA = a.location ? 0 : a.isSupply ? 2 : 1;
+      const tierB = b.location ? 0 : b.isSupply ? 2 : 1;
+      if (tierA !== tierB) return tierA - tierB;
+      if (tierA === 0) {
+        const ka = a.location.sortKey;
+        const kb = b.location.sortKey;
+        for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+          const av = ka[i] === undefined ? 0 : ka[i];
+          const bv = kb[i] === undefined ? 0 : kb[i];
+          if (av < bv) return -1;
+          if (av > bv) return 1;
+        }
+        return 0;
       }
-      return 0;
+      // Both unmatched-food or both supplies: alphabetical within the tier.
+      return a.item.title.localeCompare(b.item.title);
     });
     const unmatchedTitles = itemsWithMeta.filter((m) => !m.location).map((m) => m.item.title);
 
