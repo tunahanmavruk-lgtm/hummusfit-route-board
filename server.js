@@ -2465,6 +2465,24 @@ app.get("/api/route-eta/:routeId", (req, res) => {
   });
 });
 
+app.get("/api/debug-lanes", async (req, res) => {
+  try {
+    const index = await loadLocationIndex();
+    const title = req.query.title || "6-Guys Patty Melt";
+    const loc = findLocation(index, title);
+    res.json({
+      indexSize: index.size,
+      sampleKeys: Array.from(index.keys()).slice(0, 5),
+      testTitle: title,
+      normalizedTestTitle: require("./walkin-locations.js").normalize(title),
+      matchFound: Boolean(loc),
+      location: loc,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 app.get("/api/status", (req, res) => {
   const { windowStart, windowEnd, isOpen } = getOrderWindowEastern(new Date());
   res.json({
