@@ -1,6 +1,10 @@
 const LANES_URL = "https://ravishing-exploration-production-83e3.up.railway.app/api/lanes";
 const LANES_CACHE_MS = 60 * 1000;
-const ZONE_ORDER = ["bakery", "meals"];
+// Meals section is walked first on the real picking route (M1-01, e.g.
+// 6-Guys Patty Melt, is the first stop), bakery/muffin bays second — this
+// must match Tony's actual physical path through the fridge, not
+// alphabetical or arbitrary order.
+const ZONE_ORDER = ["meals", "bakery"];
 
 function normalize(str) {
   return (str || "")
