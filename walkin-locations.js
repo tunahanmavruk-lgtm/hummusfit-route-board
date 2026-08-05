@@ -65,6 +65,17 @@ async function loadLocationIndex() {
   }
 }
 
+// Confirmed against Tony's actual walk (8/5/2026): the pick path zigzags
+// row by row within a zone instead of restarting at position 1 every row —
+// M1 walked 1->27, M2 walked 27->1, M3 walked 1->27, then a fresh entry
+// into the bakery zone resets to ascending: K1 1->35, K2 28->1. So within
+// each zone, odd-numbered rows (1st, 3rd...) are walked ascending and
+// even-numbered rows (2nd, 4th...) are walked descending, and the toggle
+// restarts at row 1 for each new zone (M and K don't share the alternation).
+function zigzagPosition(rowNum, posNum) {
+  return rowNum % 2 === 0 ? -posNum : posNum;
+}
+
 function findLocation(index, title) {
   const key = normalize(title);
   const entry = index.get(key);
@@ -75,7 +86,12 @@ function findLocation(index, title) {
     zone: entry.zone,
     lanes: entry.lanes,
     laneLabel: entry.lanes.join(", "),
-    sortKey: [zoneRank === -1 ? 999 : zoneRank, laneKey[0], laneKey[1], laneKey[2]],
+    sortKey: [
+      zoneRank === -1 ? 999 : zoneRank,
+      laneKey[0],
+      laneKey[1],
+      zigzagPosition(laneKey[1], laneKey[2]),
+    ],
   };
 }
 
