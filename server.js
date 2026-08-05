@@ -917,7 +917,7 @@ async function fetchTodaysStopOrders() {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${isoStart}' created_at:<='${isoEnd}' status:any`,
+      queryString: `created_at:>='${isoStart}' created_at:<='${isoEnd}' status:any -status:cancelled`,
     });
 
     const edges = data.orders.edges;
@@ -1054,7 +1054,7 @@ async function fetchB2BStopOrders() {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${lookbackStart}' fulfillment_status:unfulfilled status:any`,
+      queryString: `created_at:>='${lookbackStart}' fulfillment_status:unfulfilled status:any -status:cancelled`,
     });
     const edges = data.orders.edges;
     orders = orders.concat(edges.map((e) => e.node));
