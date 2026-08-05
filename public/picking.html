@@ -1036,6 +1036,34 @@
     scanningForIdx = null;
   }
 
+  // Fires on every successful scan match — hardware scanner or camera —
+  // so the picker gets an immediate physical + audible "got it" without
+  // having to look at the screen. Synthesized register-bell chime (two
+  // quick bright tones) rather than a hosted audio file, so there's
+  // nothing to fail to load on a bad warehouse wifi connection.
+  var scanAudioCtx = null;
+  function playScanFeedback(){
+    if(navigator.vibrate){ navigator.vibrate(60); }
+    try{
+      if(!scanAudioCtx){ scanAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      var ctx = scanAudioCtx;
+      var now = ctx.currentTime;
+      [[1568, now, 0.09], [1976, now + 0.07, 0.16]].forEach(function(t){
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = t[0];
+        gain.gain.setValueAtTime(0.0001, t[1]);
+        gain.gain.exponentialRampToValueAtTime(0.3, t[1] + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t[1] + t[2]);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t[1]);
+        osc.stop(t[1] + t[2] + 0.02);
+      });
+    } catch(e){ /* audio unavailable — never block scanning over this */ }
+  }
+
   var lastScanTime = 0;
   var lastScanCode = null;
   function handleScanResult(scannedCode){
@@ -1083,6 +1111,7 @@
         alert(result.alreadyResolved ? 'That item is already fully accounted for.' : 'Could not match that scan — try again.');
         return;
       }
+      playScanFeedback();
       orderDetail.itemStatus = result.itemStatus;
       orderDetail.itemScannedCount = result.itemScannedCount;
       orderDetail.itemCrateNumber = result.itemCrateNumber;
@@ -1262,6 +1291,7 @@
         focusHwScanInput();
         return;
       }
+      playScanFeedback();
       orderDetail.itemStatus = result.itemStatus;
       orderDetail.itemScannedCount = result.itemScannedCount;
       orderDetail.itemCrateNumber = result.itemCrateNumber;

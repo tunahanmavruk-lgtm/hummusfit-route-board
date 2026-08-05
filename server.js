@@ -904,13 +904,42 @@ async function shopifyGraphQL(query, variables) {
 // In-memory cache, refreshed on demand (not every request)
 let ordersCache = { fetchedAt: 0, byStopName: {}, windowStart: null, windowEnd: null };
 const ORDERS_CACHE_MS = 60 * 1000; // 1 minute
+let ordersRefreshInFlight = null;
 
+// Stale-while-revalidate: a full refresh (Shopify local + B2B pulls, plus
+// the blueprint lane fetch inside sortItemsForPicking) can take 5-10+
+// seconds. Blocking a request on that is fine for the very first-ever
+// load, but is exactly what was freezing the picker mid-crate-close —
+// their click happened to land right as the 60s cache expired, so it sat
+// waiting on a full cold refetch before the crate label could even start
+// rendering. After the first successful fetch, always return the
+// (possibly slightly stale) cache immediately and refresh in the
+// background for the next request instead.
 async function fetchTodaysStopOrders() {
   const now = Date.now();
-  if (now - ordersCache.fetchedAt < ORDERS_CACHE_MS) {
+  const isStale = now - ordersCache.fetchedAt >= ORDERS_CACHE_MS;
+  const hasData = ordersCache.fetchedAt > 0;
+
+  if (!isStale) {
     return ordersCache;
   }
+  if (!hasData) {
+    return refreshOrdersCache();
+  }
+  if (!ordersRefreshInFlight) {
+    ordersRefreshInFlight = refreshOrdersCache()
+      .catch((err) => {
+        console.log(`Background orders refresh failed (serving stale data): ${err.message}`);
+      })
+      .finally(() => {
+        ordersRefreshInFlight = null;
+      });
+  }
+  return ordersCache;
+}
 
+async function refreshOrdersCache() {
+  const now = Date.now();
   const { windowStart, windowEnd } = getOrderWindowEastern(new Date());
   const isoStart = windowStart.toISOString();
   // Cap the end bound at "now" if the window is still in progress today,
