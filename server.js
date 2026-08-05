@@ -2483,6 +2483,33 @@ app.get("/api/debug-lanes", async (req, res) => {
   }
 });
 
+app.get("/api/debug-order-lanes", async (req, res) => {
+  try {
+    const stopName = req.query.stop;
+    const cache = await fetchTodaysStopOrders();
+    const key = Object.keys(cache.byStopName).find(
+      (k) => k.toLowerCase() === String(stopName || "").toLowerCase()
+    );
+    if (!key) {
+      return res.json({ error: "stop not found", availableKeys: Object.keys(cache.byStopName) });
+    }
+    const order = cache.byStopName[key];
+    const index = await loadLocationIndex();
+    const rows = order.lineItems.map((item, displayIdx) => {
+      const loc = findLocation(index, item.title);
+      return {
+        displayIdx,
+        title: item.title,
+        matchFound: Boolean(loc),
+        sortKey: loc ? loc.sortKey : null,
+      };
+    });
+    res.json({ indexSize: index.size, itemCount: rows.length, rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 app.get("/api/status", (req, res) => {
   const { windowStart, windowEnd, isOpen } = getOrderWindowEastern(new Date());
   res.json({
