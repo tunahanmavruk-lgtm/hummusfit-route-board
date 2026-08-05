@@ -621,6 +621,27 @@
   .item-card.missing .item-qty{ color: var(--red); }
   .item-card.partial .item-qty{ color: #B8860B; }
 
+  .item-thumb{
+    flex-shrink:0;
+    width: 52px; height: 52px;
+    border-radius: 10px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    object-fit: cover;
+  }
+  .item-thumb-placeholder{
+    flex-shrink:0;
+    width: 52px; height: 52px;
+    border-radius: 10px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 18px;
+    color: var(--dim);
+  }
+
   .item-info{ flex:1; min-width:0; }
   .item-title{ font-size: 15.5px; font-weight:600; line-height:1.3; color: var(--ink); }
   .item-status-label{
@@ -979,7 +1000,16 @@
   }
 
   // ---- Barcode scanning ----
+  function requirePickerSelected(){
+    if(orderDetail && orderDetail.pickedBy){ return true; }
+    alert("Select who's picking this order first — tap the name dropdown at the top of the screen.");
+    var pickerEl = document.getElementById('pickerSelect');
+    if(pickerEl){ pickerEl.focus(); }
+    return false;
+  }
+
   function openScanner(idx){
+    if(!requirePickerSelected()) return;
     scanningForIdx = idx;
     lastScanTime = 0;
     lastScanCode = null;
@@ -1108,7 +1138,7 @@
     }).then(function(r){ return r.json(); }).then(function(result){
       if(!result.matched){
         closeScanner();
-        alert(result.alreadyResolved ? 'That item is already fully accounted for.' : 'Could not match that scan — try again.');
+        alert(result.needsPicker ? "Select who's picking this order first." : (result.alreadyResolved ? 'That item is already fully accounted for.' : 'Could not match that scan — try again.'));
         return;
       }
       playScanFeedback();
@@ -1277,13 +1307,16 @@
 
   function handleHardwareScan(scannedCode){
     if(!orderDetail) return;
+    if(!requirePickerSelected()) return;
     fetch('/api/picking-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scannedCode })
     }).then(function(r){ return r.json(); }).then(function(result){
       if(!result.matched){
-        if(result.alreadyResolved){
+        if(result.needsPicker){
+          alert("Select who's picking this order first.");
+        } else if(result.alreadyResolved){
           alert('That item is already fully accounted for.');
         } else {
           alert('Scanned code doesn\'t match any item still needed in this order. Double-check you grabbed the right product.');
@@ -1396,6 +1429,9 @@
       html +=
         '<div class="item-card ' + status + (isScanInProgress ? ' scan-progress' : '') + '" data-idx="' + idx + '" style="' + (isLocked ? 'opacity:0.7;' : '') + '">' +
           '<div class="item-qty">' + qtyDisplay + '</div>' +
+          (item.imageUrl
+            ? '<img class="item-thumb" src="' + item.imageUrl + '" alt="" loading="lazy">'
+            : '<div class="item-thumb-placeholder">—</div>') +
           '<div class="item-info">' +
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
@@ -1495,6 +1531,7 @@
 
     document.querySelectorAll('[data-partial-idx]').forEach(function(el){
       el.addEventListener('click', function(){
+        if(!requirePickerSelected()) return;
         var idx = parseInt(el.dataset.partialIdx, 10);
         var item = orderDetail.lineItems[idx];
         var scannedSoFar = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx] !== undefined) ? orderDetail.itemScannedCount[idx] : 0;
@@ -1548,6 +1585,7 @@
       el.addEventListener('click', function(){
         var idx = this.dataset.idx;
         if(idx === undefined) return;
+        if(!requirePickerSelected()) return;
         var current = orderDetail.itemStatus[idx] || 'not_picked';
         var next = nextItemStatus(current);
         orderDetail.itemStatus[idx] = next;

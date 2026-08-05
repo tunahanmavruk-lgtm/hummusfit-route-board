@@ -1773,6 +1773,13 @@ app.post("/api/picking-scan", async (req, res) => {
 
     const state = loadState();
     const record = getPickingRecord(state, key, order);
+    // A scan with nobody assigned means it either happened before the
+    // picker chose their name, or the client's local state is stale — in
+    // both cases the scan should not silently count, and the picker
+    // needs a clear signal (not just nothing visibly happening).
+    if (!record.pickedBy) {
+      return res.json({ ok: true, matched: false, needsPicker: true });
+    }
     if (!record.startedAt) {
       record.startedAt = new Date().toISOString();
     }
