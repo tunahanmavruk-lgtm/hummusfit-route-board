@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
+const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const webpush = require("web-push");
 
 // Real VAPID keypair for push notifications — the public one gets handed
@@ -897,7 +898,7 @@ async function fetchTodaysStopOrders() {
               createdAt
               tags
               customer { tags }
-              lineItems(first: 50) {
+              lineItems(first: 250) {
                 edges {
                   node {
                     title
@@ -1034,7 +1035,7 @@ async function fetchB2BStopOrders() {
               tags
               customer { tags }
               shippingAddress { zip }
-              lineItems(first: 50) {
+              lineItems(first: 250) {
                 edges {
                   node {
                     title
@@ -1203,8 +1204,6 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     if (!order) {
       return res.status(404).send("No order found for this stop in the current order window.");
     }
-    // Load picking progress so partially-fulfilled items can show the
-    // real picked/short quantity instead of just the original order qty.
     const pickingState = loadState();
     const pickingRecord = pickingState.picking[key];
 
@@ -1215,25 +1214,43 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     doc.pipe(res);
 
     const checkboxX = 50;
-    const qtyX = 105;
-    const itemX = 150;
-    const itemWidth = 375;
+    const qtyX = 95;
+    const itemX = 130;
+    const itemWidth = 250;
+    const locationX = 388;
+    const locationWidth = 155;
     const boxSize = 14;
     const BRAND_ORANGE = "#E8612C";
     const INK_DARK = "#222222";
     const ZEBRA_TINT = "#F3F3F1";
 
-    // Reliable, fixed-height column header — draws all three labels at
-    // the exact same y-coordinate (never relies on doc.y auto-advancing
-    // inconsistently between calls), then explicitly sets doc.y for the
-    // divider line so it always sits cleanly below the text with no
-    // chance of the line crossing through the letters.
+    const laneIndex = await loadLocationIndex();
+    const itemsWithMeta = order.lineItems.map((item, originalIdx) => ({
+      item,
+      originalIdx,
+      location: findLocation(laneIndex, item.title),
+    }));
+    const UNMATCHED_SORT_KEY = [999, "ZZZ", 999, 999];
+    itemsWithMeta.sort((a, b) => {
+      const ka = a.location ? a.location.sortKey : UNMATCHED_SORT_KEY;
+      const kb = b.location ? b.location.sortKey : UNMATCHED_SORT_KEY;
+      for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+        const av = ka[i] === undefined ? 0 : ka[i];
+        const bv = kb[i] === undefined ? 0 : kb[i];
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+      }
+      return 0;
+    });
+    const unmatchedTitles = itemsWithMeta.filter((m) => !m.location).map((m) => m.item.title);
+
     function drawColumnHeaders() {
       const headerY = doc.y;
       doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580");
-      doc.text("PICKED", checkboxX, headerY, { width: 50, lineBreak: false });
-      doc.text("QTY", qtyX, headerY, { width: 35, lineBreak: false });
+      doc.text("PICKED", checkboxX, headerY, { width: 40, lineBreak: false });
+      doc.text("QTY", qtyX, headerY, { width: 30, lineBreak: false });
       doc.text("ITEM", itemX, headerY, { lineBreak: false });
+      doc.text("WALK-IN LOCATION", locationX, headerY, { width: locationWidth, lineBreak: false });
       doc.y = headerY + 16;
       doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor(INK_DARK).lineWidth(1).stroke();
       doc.y += 10;
@@ -1242,8 +1259,6 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const pageUsableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const stopNameUpper = req.params.stopName.toUpperCase();
 
-    // Full-bleed brand-orange header band — this is what makes the slip
-    // feel like Hummus Fit instead of a generic warehouse form.
     const BAND_HEIGHT = 150;
     doc.rect(0, 0, doc.page.width, BAND_HEIGHT).fill(BRAND_ORANGE);
     doc.font("Helvetica-Bold").fontSize(18).fillColor("#FFFFFF")
@@ -1266,19 +1281,20 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
 
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
-    order.lineItems.forEach((item, idx) => {
-      const itemStatus = pickingRecord && pickingRecord.itemStatus ? pickingRecord.itemStatus[idx] : undefined;
+    itemsWithMeta.forEach(({ item, originalIdx, location }, idx) => {
+      const itemStatus = pickingRecord && pickingRecord.itemStatus ? pickingRecord.itemStatus[originalIdx] : undefined;
       const isPartial = itemStatus === "partial";
-      const pickedQty = isPartial && pickingRecord.itemPickedQty ? pickingRecord.itemPickedQty[idx] : undefined;
+      const pickedQty = isPartial && pickingRecord.itemPickedQty ? pickingRecord.itemPickedQty[originalIdx] : undefined;
       const qtyLabel = isPartial && pickedQty !== undefined ? `${pickedQty}/${item.quantity}` : String(item.quantity);
       const displayTitle = isPartial ? `${item.title} (SHORT)` : item.title;
+      const locationLabel = location ? location.laneLabel : "\u2014 NOT ON FILE \u2014";
 
-      const textHeight = doc.heightOfString(displayTitle, { width: itemWidth, fontSize: 11 });
+      const textHeight = Math.max(
+        doc.heightOfString(displayTitle, { width: itemWidth, fontSize: 11 }),
+        doc.heightOfString(locationLabel, { width: locationWidth, fontSize: 10 })
+      );
       const estimatedRowHeight = Math.max(boxSize + 8, textHeight + 8);
 
-      // If this row won't fit before the bottom margin, start a fresh page
-      // and repeat the column headers so the sheet stays readable no
-      // matter how long the order is.
       if (doc.y + estimatedRowHeight > pageBottom) {
         doc.addPage();
         doc.y = 50;
@@ -1287,13 +1303,10 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
 
       const rowY = doc.y;
 
-      // Alternate a light gray band behind every other row for easier
-      // scanning while picking
       if (idx % 2 === 1) {
         doc.rect(46, rowY - 3, 503, estimatedRowHeight).fill(ZEBRA_TINT);
       }
 
-      // Draw an actual empty checkbox square to physically check off by hand
       doc
         .rect(checkboxX, rowY, boxSize, boxSize)
         .lineWidth(1.4)
@@ -1301,17 +1314,36 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
         .stroke();
 
       doc.fontSize(11).fillColor("#111111");
-      doc.text(qtyLabel, qtyX, rowY + 1, { width: 35 });
+      doc.text(qtyLabel, qtyX, rowY + 1, { width: 30 });
       doc.text(displayTitle, itemX, rowY + 1, { width: itemWidth });
 
-      // Advance past the taller of (checkbox height, wrapped text height)
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(location ? BRAND_ORANGE : "#B23A2E");
+      doc.text(locationLabel, locationX, rowY + 1, { width: locationWidth });
+      doc.font("Helvetica").fillColor("#111111");
+
       const afterTextY = doc.y;
-      const rowHeight = Math.max(boxSize + 6, afterTextY - rowY + 6);
+      const rowHeight = Math.max(boxSize + 6, afterTextY - rowY + 6, estimatedRowHeight);
       doc.y = rowY + rowHeight;
     });
 
-    // Make sure the footer line itself doesn't get cut off at the bottom
-    if (doc.y + 40 > pageBottom) {
+    // Reserve real room for the divider, total-items line, and the
+    // unmatched-location warning (if any) before drawing them — measured
+    // with heightOfString instead of a flat guess, so this footer can
+    // never silently run off the bottom of the page the way the original
+    // 50-item cutoff bug did. Previously this warning line could get cut
+    // off with no page break, silently dropping items from the list.
+    const totalItems = order.lineItems.reduce((sum, i) => sum + i.quantity, 0);
+    const totalItemsText = `Total items: ${totalItems}`;
+    const unmatchedText = unmatchedTitles.length
+      ? `No walk-in location on file for: ${unmatchedTitles.join(", ")}`
+      : null;
+
+    let footerHeight = 10 + doc.heightOfString(totalItemsText, { width: pageUsableWidth, fontSize: 10 }) + 10;
+    if (unmatchedText) {
+      footerHeight += 6 + doc.heightOfString(unmatchedText, { width: pageUsableWidth, fontSize: 9 });
+    }
+
+    if (doc.y + footerHeight > pageBottom) {
       doc.addPage();
       doc.y = 50;
     }
@@ -1320,8 +1352,14 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#dddddd").stroke();
     doc.moveDown(0.5);
 
-    const totalItems = order.lineItems.reduce((sum, i) => sum + i.quantity, 0);
-    doc.fontSize(10).fillColor("#666666").text(`Total items: ${totalItems}`);
+    doc.fontSize(10).fillColor("#666666").text(totalItemsText, 50, doc.y, { width: pageUsableWidth });
+
+    if (unmatchedText) {
+      doc.moveDown(0.4);
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#B23A2E")
+        .text(unmatchedText, 50, doc.y, { width: pageUsableWidth });
+      doc.font("Helvetica");
+    }
 
     doc.end();
   } catch (err) {
