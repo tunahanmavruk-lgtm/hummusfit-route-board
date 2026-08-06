@@ -2,8 +2,24 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
+const QRCode = require("qrcode");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const webpush = require("web-push");
+
+// The crate label printer is black-ink-only (thermal) — no brand colors
+// on the physical label, so "professional" has to come from real
+// typography/layout/logo instead of color. This is the black-silhouette
+// version of the logo (transparent PNG, solid black fill) made just for
+// that — the color version lives at public/assets/logo.png for on-screen
+// use, this one is print-safe.
+const LOGO_BLACK_PATH = path.join(__dirname, "public", "assets", "logo-black.png");
+
+// Same store-facing receiving-check app the ETA banner and van tracking
+// point at — the crate label's QR code sends whoever receives the
+// delivery straight to that store's receiving check, no need to already
+// have it bookmarked.
+const RECEIVING_APP_URL =
+  process.env.RECEIVING_APP_URL || "https://hummusfit-receiving-production.up.railway.app";
 
 // Non-fridge supply items (paper goods, plastic goods, spoons, garbage
 // bags, etc.) live on the other side of the building from the fridge/
@@ -2052,71 +2068,169 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
     );
 
     // Standard 4x6" shipping label size (288 x 432 points)
-    const doc = new PDFDocument({ size: [288, 432], margin: 16 });
+    const doc = new PDFDocument({ size: [288, 432], margin: 0 });
     doc.pipe(res);
 
-    const usableWidth = 288 - 32;
+    const M = 16; // inner margin
+    const usableWidth = 288 - M * 2;
 
-    // Pattern band across the top — a quick visual "fingerprint" per
-    // store, secondary to the store name itself now (kept thin so it
-    // doesn't compete for space).
-    drawPattern(doc, identity.pattern, 0, 0, 288, 16);
-    doc.moveTo(0, 16).lineTo(288, 16).strokeColor("#111111").lineWidth(1).stroke();
+    // A real printed border frame — the single biggest reason the old
+    // label read as "empty": edge-to-edge whitespace with no structure.
+    // A thermal printer can't do color, but it can absolutely do a
+    // clean rule, and a bordered card is what makes this look like an
+    // intentional, designed label instead of a debug printout.
+    doc.rect(6, 6, 288 - 12, 432 - 12).lineWidth(1.25).strokeColor("#111111").stroke();
 
-    // Small monogram badge + route, top corner — secondary identifiers,
-    // not the primary legibility element anymore.
-    const badgeCenterX = 16 + 15;
-    const badgeCenterY = 16 + 12 + 15;
-    doc.circle(badgeCenterX, badgeCenterY, 15).fill("#111111");
-    const monogramSize = identity.monogram.length > 1 ? 11 : 14;
+    // Pattern band — the quick visual "fingerprint" per store that lets
+    // someone recognize their store's label from across a van without
+    // reading it. Kept exactly as-is; it already earned its place.
+    drawPattern(doc, identity.pattern, 6, 6, 288 - 12, 13);
+    doc.moveTo(6, 19).lineTo(288 - 6, 19).strokeColor("#111111").lineWidth(1).stroke();
+
+    // Header row: monogram + route on the left (fast store ID at a
+    // glance), the real Hummus Fit logo on the right — this is the part
+    // that was missing entirely before. A black-ink silhouette version
+    // made specifically for thermal printing, not the color web logo.
+    const headerY = 19 + 10;
+    const badgeCenterX = M + 13;
+    const badgeCenterY = headerY + 13;
+    doc.circle(badgeCenterX, badgeCenterY, 13).fill("#111111");
+    const monogramSize = identity.monogram.length > 1 ? 10 : 13;
     doc.font("Helvetica-Bold").fontSize(monogramSize).fillColor("#FFFFFF");
     const monoWidth = doc.widthOfString(identity.monogram);
     doc.text(identity.monogram, badgeCenterX - monoWidth / 2, badgeCenterY - monogramSize / 2 + 1);
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#666666")
+      .text((routeName || "HUMMUS FIT").toUpperCase(), badgeCenterX + 20, badgeCenterY - 4, { width: 110 });
 
-    doc.font("Helvetica-Bold").fontSize(9).fillColor("#666666")
-      .text(routeName || "HUMMUS FIT", badgeCenterX + 24, badgeCenterY - 5, { width: 288 - 16 - (badgeCenterX + 24) });
+    // Logo aspect ratio is 370:100 — 66pt wide keeps it crisp without
+    // dominating the header row.
+    const logoWidth = 66;
+    const logoHeight = logoWidth * (100 / 370);
+    try {
+      doc.image(LOGO_BLACK_PATH, 288 - M - logoWidth, headerY, { width: logoWidth, height: logoHeight });
+    } catch (e) {
+      /* Missing logo file shouldn't ever block a label from printing */
+    }
 
-    // STORE NAME — now the single dominant, full-width element on the
-    // label. This is the actual fix for "legible from across a van":
-    // every real store name now renders between 34-44pt (up from a max
-    // of 22pt before), tested against all 16 real store names.
-    doc.y = 16 + 12 + 30 + 8;
+    // STORE NAME — the dominant, full-width element. Every real store
+    // name renders between 20-44pt depending on length, tested against
+    // all 16 real store names, so it's legible from across a van.
+    doc.y = headerY + 30 + 8;
     const stopFontSize = fitTextFontSize(doc, stopNameUpper, usableWidth, 44, 20);
-    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#111111").text(stopNameUpper, 16, doc.y, { width: usableWidth });
+    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#111111").text(stopNameUpper, M, doc.y, { width: usableWidth });
     doc.moveDown(0.3);
 
-    // CRATE number — significantly larger now, genuinely hard to miss
-    doc.font("Helvetica-Bold").fontSize(36).fillColor("#111111").text(`CRATE ${crateNumber}`, 16, doc.y, { width: usableWidth });
+    // CRATE number — significantly larger, genuinely hard to miss
+    doc.font("Helvetica-Bold").fontSize(36).fillColor("#111111").text(`CRATE ${crateNumber}`, M, doc.y, { width: usableWidth });
     const orderLineY = doc.y;
-    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`, 16, orderLineY, { width: usableWidth });
+    doc.font("Helvetica").fontSize(10).fillColor("#666666").text(`Order: ${order.orderName}`, M, orderLineY, { width: usableWidth });
 
     // Small, subtle "Picked by [name]" — right-aligned on the same line
     // as the order number, right above the divider. No badge, no photo,
     // just quiet text.
     if (record.pickedBy) {
       doc.font("Helvetica").fontSize(9).fillColor("#999999")
-        .text("Picked by " + firstNameOf(record.pickedBy), 16, orderLineY, { width: usableWidth, align: "right" });
+        .text("Picked by " + firstNameOf(record.pickedBy), M, orderLineY, { width: usableWidth, align: "right" });
     }
 
     doc.moveDown(0.8);
-    doc.moveTo(16, doc.y).lineTo(272, doc.y).strokeColor("#222222").lineWidth(1).stroke();
+    doc.moveTo(M, doc.y).lineTo(288 - M, doc.y).strokeColor("#222222").lineWidth(1).stroke();
     doc.moveDown(0.6);
 
     doc.font("Helvetica-Bold").fontSize(9).fillColor("#8A8580").text("CONTENTS", { align: "left" });
     doc.moveDown(0.4);
 
-    const qtyColX = 16;
-    const titleColX = 16 + 26;
-    const titleColWidth = 288 - 16 - titleColX;
+    const qtyColX = M;
+    const titleColX = M + 26;
+    const titleColWidth = 288 - M - titleColX;
 
-    crateItems.forEach((item) => {
+    // A label is one physical sticker — it can never legitimately spill
+    // onto a second PDF page (pdfkit will silently start one on
+    // overflow, and the QR/branding footer would print on a page
+    // nobody ever sticks on the crate — caught this in testing with an
+    // 8-item crate before it ever reached a real printer). Try row
+    // sizes from most-readable down to tightest, and use the first tier
+    // that actually fits every item — not just whichever tier the
+    // *average* per-row space happens to land in, which under-fit
+    // crates that would have fit cleanly one size down.
+    const FOOTER_RESERVE = 92; // rule + QR + caption + brand block, worst case
+    const availableForItems = (432 - 6) - doc.y - FOOTER_RESERVE;
+    const ROW_TIERS = [
+      { itemFontSize: 11, rowHeight: 19, rowGap: 5 },
+      { itemFontSize: 9.5, rowHeight: 15, rowGap: 3 },
+      { itemFontSize: 8.5, rowHeight: 12, rowGap: 2 },
+      { itemFontSize: 7.5, rowHeight: 10, rowGap: 1 },
+    ];
+    let tier = ROW_TIERS[ROW_TIERS.length - 1];
+    for (const candidate of ROW_TIERS) {
+      if (crateItems.length * (candidate.rowHeight + candidate.rowGap) <= availableForItems) {
+        tier = candidate;
+        break;
+      }
+    }
+    const { itemFontSize, rowHeight, rowGap } = tier;
+
+    // Last-resort safety net for a genuinely extreme item count: even
+    // the tightest legible row size won't fit everything, so truncate
+    // and say so rather than silently spilling onto a second label.
+    let displayItems = crateItems;
+    let truncatedCount = 0;
+    const maxRowsThatFit = Math.max(1, Math.floor(availableForItems / (rowHeight + rowGap)));
+    if (crateItems.length > maxRowsThatFit) {
+      truncatedCount = crateItems.length - (maxRowsThatFit - 1);
+      displayItems = crateItems.slice(0, maxRowsThatFit - 1);
+    }
+
+    displayItems.forEach((item, idx) => {
       const rowY = doc.y;
-      doc.font("Helvetica-Bold").fontSize(11).fillColor("#111111");
+      doc.font("Helvetica-Bold").fontSize(itemFontSize).fillColor("#111111");
       doc.text(String(item.quantity), qtyColX, rowY, { width: 22 });
       doc.text(item.title, titleColX, rowY, { width: titleColWidth });
       const afterY = doc.y;
-      doc.y = Math.max(afterY, rowY + 14) + 5;
+      doc.y = Math.max(afterY, rowY + rowHeight) + rowGap;
+      // A hairline between rows — the kind of quiet structure that
+      // reads as "designed," not just a list of text dumped on a page.
+      // Skip after the very last item; the footer rule below closes it.
+      if (idx < displayItems.length - 1 || truncatedCount > 0) {
+        doc.moveTo(M, doc.y - rowGap / 2).lineTo(288 - M, doc.y - rowGap / 2).strokeColor("#E5E3DF").lineWidth(0.5).stroke();
+      }
     });
+    if (truncatedCount > 0) {
+      doc.font("Helvetica-BoldOblique").fontSize(Math.max(itemFontSize - 1, 7)).fillColor("#8A8580")
+        .text(`+ ${truncatedCount} more item${truncatedCount === 1 ? "" : "s"} — see packing slip`, M, doc.y, { width: usableWidth });
+      doc.moveDown(0.2);
+    }
+
+    // Footer — floats right after the contents list instead of being
+    // pinned to the bottom of the label. That's the direct fix for
+    // "bland, empty looking": a 2-item crate no longer leaves 200pt of
+    // dead white space below it, the label just ends where the content
+    // does. QR code goes straight to this store's receiving check, so
+    // whoever receives the delivery doesn't need it already bookmarked.
+    doc.moveDown(0.7);
+    const footerRuleY = doc.y;
+    doc.moveTo(M, footerRuleY).lineTo(288 - M, footerRuleY).strokeColor("#111111").lineWidth(1).stroke();
+
+    const footerTop = footerRuleY + 10;
+    const qrSize = 56;
+    try {
+      const qrUrl = `${RECEIVING_APP_URL}/receiving/${encodeURIComponent(decodeURIComponent(req.params.stopName))}`;
+      const qrBuffer = await QRCode.toBuffer(qrUrl, { width: 220, margin: 1 });
+      doc.image(qrBuffer, M, footerTop, { width: qrSize, height: qrSize });
+      doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#8A8580")
+        .text("SCAN TO CONFIRM RECEIPT", M - 4, footerTop + qrSize + 3, { width: qrSize + 8, align: "center" });
+    } catch (e) {
+      /* A QR failure is never worth blocking the label from printing */
+    }
+
+    const footerTextX = M + qrSize + 14;
+    const footerTextWidth = 288 - M - footerTextX;
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#111111")
+      .text("Hummus Fit", footerTextX, footerTop + 4, { width: footerTextWidth });
+    doc.font("Helvetica").fontSize(8).fillColor("#8A8580")
+      .text("Eat Better. Live Better.", footerTextX, doc.y, { width: footerTextWidth });
+    doc.font("Helvetica").fontSize(7.5).fillColor("#8A8580")
+      .text("myhummusfit.com", footerTextX, doc.y + 3, { width: footerTextWidth });
 
     doc.end();
   } catch (err) {
