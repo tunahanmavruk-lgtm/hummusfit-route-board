@@ -2322,6 +2322,27 @@ function computeEtaForStop(state, stopName) {
   const found = findRouteAndStopByName(stopName);
   if (!found) return null;
   const { route, stop } = found;
+
+  // Ground truth beats the math: if the driver has already marked this
+  // stop delivered on the dispatch board, say so directly instead of
+  // falling through to an eta calc that would otherwise go blank/pending
+  // once the stop is behind the van in the optimized order (see the loop
+  // below — a passed stop simply stops matching, which used to render as
+  // nothing at all on the store-facing page).
+  const stopStatus = state.stopStatus[stop.id];
+  if (stopStatus && stopStatus.status === "delivered") {
+    return {
+      routeId: route.id,
+      routeName: route.name,
+      scheduledTime: route.time || null,
+      started: true,
+      delivered: true,
+      deliveredAt: stopStatus.deliveredAt || null,
+      eta: null,
+      stopsAway: null,
+    };
+  }
+
   const meta = state.routeMeta[route.id];
   if (!meta || !meta.startedAt || !meta.legDurationsSeconds || !meta.optimizedStopIds) {
     return {
@@ -2329,6 +2350,7 @@ function computeEtaForStop(state, stopName) {
       routeName: route.name,
       scheduledTime: route.time || null,
       started: false,
+      delivered: false,
       eta: null,
       stopsAway: null,
     };
@@ -2349,6 +2371,7 @@ function computeEtaForStop(state, stopName) {
         routeName: route.name,
         scheduledTime: route.time || null,
         started: true,
+        delivered: false,
         eta: new Date(startedAt + cumulativeMs).toISOString(),
         stopsAway: i,
         totalStopsOnRoute: meta.optimizedStopIds.length,
@@ -2363,6 +2386,7 @@ function computeEtaForStop(state, stopName) {
     routeName: route.name,
     scheduledTime: route.time || null,
     started: true,
+    delivered: false,
     eta: null,
     stopsAway: null,
   };
