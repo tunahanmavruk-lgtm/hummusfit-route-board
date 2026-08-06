@@ -2299,12 +2299,24 @@ app.get("/api/van-status", async (req, res) => {
     });
     const vehicles = await r.json();
     if (!r.ok) throw new Error(JSON.stringify(vehicles));
-    const simplified = vehicles.map((v) => ({
-      nickName: v.nickName || v.model || "",
-      speed: (v.stats && v.stats.speed) || 0,
-      isRunning: !!(v.stats && v.stats.isRunning),
-      address: (v.stats && v.stats.location && v.stats.location.address) || "",
-    }));
+    const simplified = vehicles.map((v) => {
+      // A couple of vans (the 2016 Ford Transit, the 2022 RAM Promaster)
+      // never got a nickName set in Bouncie. v.model is an object
+      // ({make, name, year}), not a string — falling straight through to
+      // it, as this used to, handed the dispatch board's frontend an
+      // object where it expects a string and it crashed calling
+      // .toLowerCase() on it, which took the whole route board down.
+      let nickName = v.nickName;
+      if (!nickName && v.model) {
+        nickName = [v.model.year, v.model.make, v.model.name].filter(Boolean).join(" ");
+      }
+      return {
+        nickName: nickName || "",
+        speed: (v.stats && v.stats.speed) || 0,
+        isRunning: !!(v.stats && v.stats.isRunning),
+        address: (v.stats && v.stats.location && v.stats.location.address) || "",
+      };
+    });
     vanStatusCache = { fetchedAt: now, vehicles: simplified };
     res.json({ vehicles: simplified, configured: true });
   } catch (err) {
