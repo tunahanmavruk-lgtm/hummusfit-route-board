@@ -6,9 +6,26 @@ const LANES_CACHE_MS = 60 * 1000;
 // alphabetical or arbitrary order.
 const ZONE_ORDER = ["meals", "bakery"];
 
+// A few product names get written differently between Shopify (the
+// customer-facing title, e.g. "Fit A La Vodka With Chicken") and the
+// blueprint feed (internal lane data, e.g. "Fit Ala Vodka With Chicken")
+// — same product, same words, just split differently. Because normalize()
+// treats each space-separated chunk as its own token, "a"+"la" (two
+// tokens) never matches "ala" (one token) even though they're the same
+// item — the product silently falls out of its blueprint slot and sorts
+// to the bottom of the pick list as "no location found" instead of
+// showing up at its real fridge row. Collapse known variants BEFORE
+// tokenizing so both sides land on the same key. Add to this list
+// whenever a real item goes missing from its blueprint spot for this
+// exact reason (confirmed 8/6/2026 for Fit A La Vodka With Chicken).
+const WORD_ALIASES = [[/\ba\s+la\b/g, "ala"]];
+
 function normalize(str) {
-  return (str || "")
-    .toLowerCase()
+  let s = (str || "").toLowerCase();
+  WORD_ALIASES.forEach(([pattern, replacement]) => {
+    s = s.replace(pattern, replacement);
+  });
+  return s
     .replace(/[^a-z0-9]+/g, " ")
     .split(" ")
     .filter(Boolean)

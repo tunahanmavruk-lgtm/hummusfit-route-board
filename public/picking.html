@@ -926,6 +926,19 @@
       '</svg>';
   }
 
+  function orderTimesLabel(stop){
+    var orders = stop.orders || [];
+    if(orders.length <= 1){
+      var iso = orders.length === 1 ? orders[0].createdAt : null;
+      return iso ? fmtTime(iso) : '';
+    }
+    // Multiple orders merged into this one picklist — show each order's
+    // name + time so it's clear this stop placed more than one order today.
+    return orders.map(function(o){
+      return (o.name ? escapeHtml(o.name) + ' ' : '') + fmtTime(o.createdAt);
+    }).join(' &nbsp;+&nbsp; ');
+  }
+
   function renderList(){
     view = 'list';
     document.body.classList.remove('b2b-mode');
@@ -959,6 +972,7 @@
           '<div class="stop-info">' +
             '<div class="stop-name">' + stop.stopName + '</div>' +
             '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + stop.totalItems + ' items</div>' +
+            '<div class="stop-order-time" style="font-size:11px; color:var(--dim); margin-top:2px;">' + orderTimesLabel(stop) + '</div>' +
             (stop.isB2B ? '<div class="b2b-tag">Out of State</div>' : '') +
             (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">Complete</div>' : '') +
           '</div>' +
@@ -1458,6 +1472,17 @@
         '</div>' +
       '</div>';
 
+    // A scoped, single-order reset — only wipes THIS stop's picking
+    // progress (status, scan counts, crates, who's picking). Everything
+    // else (every other stop, van/driver assignments, the rest of the
+    // day's board) stays untouched. This exists specifically so a bad
+    // scan session doesn't force "Reset Today's Board," which wipes
+    // literally everything for every stop and every driver.
+    html +=
+      '<div style="text-align:right; margin:-8px 0 14px;">' +
+        '<span class="reopen-link" id="restartOrderLink" style="cursor:pointer; text-decoration:underline; color:var(--dim); font-size:11px;">&#8635; Restart this order</span>' +
+      '</div>';
+
     if(orderDetail.pickedBy){
       var initials = orderDetail.pickedBy.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(w){ return w.charAt(0).toUpperCase(); }).join('');
       var avatarHtml = orderDetail.pickedByPhoto
@@ -1576,6 +1601,31 @@
           }
         });
       }
+    }
+
+    var restartEl = document.getElementById('restartOrderLink');
+    if(restartEl){
+      restartEl.addEventListener('click', function(){
+        var warning = 'Restart picking for ' + orderDetail.stopName + '?\n\n' +
+          'This clears every item\'s status, all scan progress, and all crates for THIS order only — everything else on the board (every other stop, van/driver assignments) is untouched.\n\n' +
+          'This cannot be undone.';
+        if(!confirm(warning)) return;
+        fetch('/api/picking-reset-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopName: orderDetail.stopName })
+        }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+          .then(function(result){
+            if(!result.ok || result.data.error){
+              alert(result.data.error || 'Could not restart this order.');
+              return;
+            }
+            openOrder(orderDetail.stopName);
+          })
+          .catch(function(err){
+            alert('Could not reach the server: ' + err.message);
+          });
+      });
     }
 
     var pickerEl = document.getElementById('pickerSelect');

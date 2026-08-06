@@ -378,7 +378,17 @@ const STOP_DISPLAY_NAME = new Map(
 
 function isStopScheduledToday(stopMeta, now = new Date()) {
   if (!stopMeta || !stopMeta.deliveryDays) return true; // no schedule set = every day
-  return stopMeta.deliveryDays.includes(getEasternWeekday(now));
+  // Visible on the actual delivery day (dispatch still needs to assign a
+  // van/driver and see it on the route that day) AND on the day BEFORE —
+  // picking happens a day ahead of delivery (order comes in, gets picked
+  // same day, goes out the next morning), so a stop needs to be reachable
+  // on its ORDER day too, not just its delivery day, or there's no way to
+  // get to its picking list until it's already too late to matter. Hidden
+  // the rest of the week, when nothing is actually happening for it.
+  const todayDow = getEasternWeekday(now);
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowDow = getEasternWeekday(tomorrow);
+  return stopMeta.deliveryDays.includes(todayDow) || stopMeta.deliveryDays.includes(tomorrowDow);
 }
 
 const FLEET = [
@@ -1085,6 +1095,12 @@ async function refreshOrdersCache() {
       orderName: stopOrders.map((o) => o.name).join(", "),
       orderCount: stopOrders.length,
       createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
+      // Per-order name + placed time — a store ordering twice in one day
+      // merges into a single pick list (see comment above), but the
+      // picking LIST screen still needs to show each individual order's
+      // own timestamp so it's obvious a second order came in later, not
+      // just a combined item count.
+      orders: stopOrders.map((o) => ({ name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: false,
     };
@@ -1231,6 +1247,7 @@ async function fetchB2BStopOrders() {
       orderName: stopOrders.map((o) => o.name).join(", "),
       orderCount: stopOrders.length,
       createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
+      orders: stopOrders.map((o) => ({ name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: true,
     };
@@ -1706,6 +1723,8 @@ app.get("/api/picking-list", async (req, res) => {
         stopName: key,
         orderName: order.orderName,
         orderId: order.orderId,
+        orderCount: order.orderCount || 1,
+        orders: order.orders || [{ name: order.orderName, createdAt: order.createdAt }],
         totalItems,
         pickedCount,
         missingCount,
@@ -1861,6 +1880,20 @@ app.post("/api/picking-scan", async (req, res) => {
     }
 
     const code = scannedCode.trim();
+    // A scanned barcode sometimes carries a leading "0" that the SKU
+    // stored in Shopify doesn't (EAN-13 padding on what's really a
+    // UPC-A code), or the reverse — same physical product, different
+    // digit count. Try the scanned code as-is first, then with a
+    // leading zero added/removed, so a barcode format mismatch doesn't
+    // block a correct scan. (Not what caused the 8/6/2026 Texas Queso
+    // Steak Bowl miss, in the end — that SKU was just wrong in Shopify
+    // and has since been corrected there. Keeping this tolerance anyway
+    // since a real leading-zero mismatch is a distinct, plausible future
+    // failure mode and this costs nothing to guard against.)
+    const codeVariants = new Set([code]);
+    if (/^0\d+$/.test(code)) codeVariants.add(code.replace(/^0/, ""));
+    if (/^\d+$/.test(code)) codeVariants.add("0" + code);
+
     let matchIdx = -1;
     for (let i = 0; i < order.lineItems.length; i++) {
       const item = order.lineItems[i];
@@ -1868,7 +1901,7 @@ app.post("/api/picking-scan", async (req, res) => {
       const currentStatus = record.itemStatus[i] || "not_picked";
       const scannedSoFar = record.itemScannedCount[i] || 0;
       const alreadyResolved = currentStatus === "picked" || currentStatus === "missing" || currentStatus === "partial";
-      if (sku && sku === code && !alreadyResolved && scannedSoFar < item.quantity) {
+      if (sku && codeVariants.has(sku) && !alreadyResolved && scannedSoFar < item.quantity) {
         matchIdx = i;
         break;
       }
@@ -1878,8 +1911,13 @@ app.post("/api/picking-scan", async (req, res) => {
       const alreadyResolvedMatch = order.lineItems.some((item, i) => {
         const sku = (item.sku || "").trim();
         const s = record.itemStatus[i] || "not_picked";
-        return sku === code && (s === "picked" || s === "missing" || s === "partial");
+        return codeVariants.has(sku) && (s === "picked" || s === "missing" || s === "partial");
       });
+      // Log every miss so a real "this barcode doesn't match anything on
+      // this order" case leaves a trace in the Railway logs instead of
+      // vanishing silently — nothing shown to the picker, just something
+      // we can look up after the fact if a scan keeps failing.
+      console.log(`[picking-scan MISS] stop=${key} code=${JSON.stringify(code)} alreadyResolved=${alreadyResolvedMatch}`);
       saveState(state);
       return res.json({ ok: true, matched: false, alreadyResolved: alreadyResolvedMatch });
     }
@@ -2074,6 +2112,32 @@ app.post("/api/picking-reopen", async (req, res) => {
     const record = getPickingRecord(state, key, order);
     record.completedAt = null;
     record.completedBy = null;
+    saveState(state);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Wipes ONLY one stop's picking progress — status, scan counts, crate
+// breakdown, who's picking, everything — back to a completely fresh
+// record. Scoped deliberately: "Reset Today's Board" (/api/reset-day)
+// wipes the ENTIRE day for every stop and every van/driver assignment,
+// which is a bad tool for recovering one order that got corrupted mid-
+// scan (a real incident — a bad wifi connection reordered scan
+// responses on screen, forcing a full-board reset just to fix one
+// stop). This exists so that never has to happen again.
+app.post("/api/picking-reset-order", async (req, res) => {
+  try {
+    const { stopName } = req.body;
+    if (!stopName) return res.status(400).json({ error: "stopName required" });
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    delete state.picking[key];
     saveState(state);
     res.json({ ok: true });
   } catch (err) {
