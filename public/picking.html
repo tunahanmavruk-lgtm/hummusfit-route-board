@@ -469,14 +469,49 @@
     cursor: default;
   }
   #crateFab .fab-icon{
-    font-size: 18px;
+    font-size: 16px;
     line-height:1;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
+  }
+  #crateFab .fab-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 8px;
+    font-weight:700;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    opacity:0.7;
+    line-height:1;
+    margin-bottom: 1px;
   }
   #crateFab .fab-count{
     font-family:'Bebas Neue', sans-serif;
-    font-size: 30px;
+    font-size: 26px;
     line-height:1;
+  }
+  /* Small corner badge — how many items are packed into the crate shown
+     on the button. Separated out from the big number on purpose: that
+     used to be the ONLY number on this button (no label, no context),
+     which made it easy to mistake for something else entirely, like a
+     specific product's quantity, if it happened to land near an item
+     row with a matching count. The big number is always the crate
+     you're actively filling; this badge is just the item tally in it. */
+  #crateFab .fab-badge{
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--orange);
+    color: #fff;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
   }
 
   .finish-hint{
@@ -799,8 +834,10 @@
      70-item order never needs scrolling to the bottom just to close
      out a crate. -->
 <button id="crateFab" style="display:none;">
+  <span class="fab-badge" id="crateFabItemCount">0</span>
   <span class="fab-icon">📦</span>
-  <span class="fab-count" id="crateFabCount">0</span>
+  <span class="fab-label">Crate</span>
+  <span class="fab-count" id="crateFabCount">1</span>
 </button>
 
 <script>
@@ -1175,6 +1212,7 @@
   // picker has scrolled.
   var crateFabEl = document.getElementById('crateFab');
   var crateFabCountEl = document.getElementById('crateFabCount');
+  var crateFabItemCountEl = document.getElementById('crateFabItemCount');
 
   function updateCrateFab(){
     if(view !== 'order' || !orderDetail || orderDetail.completedAt){
@@ -1186,7 +1224,13 @@
     }).length;
     crateFabEl.style.display = 'flex';
     crateFabEl.disabled = itemsInCurrentCrate === 0;
-    crateFabCountEl.textContent = itemsInCurrentCrate;
+    // Big number: which crate you're actively packing into right now —
+    // stays meaningful however far you've scrolled. Small corner badge:
+    // how many items are in it so far. Splitting these out (this button
+    // used to show only the item count, unlabeled) is what was getting
+    // misread as some product's quantity.
+    crateFabCountEl.textContent = orderDetail.currentCrateNumber;
+    crateFabItemCountEl.textContent = itemsInCurrentCrate;
   }
 
   crateFabEl.addEventListener('click', function(){
