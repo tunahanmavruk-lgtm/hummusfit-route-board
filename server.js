@@ -1848,10 +1848,20 @@ app.post("/api/picking-scan", async (req, res) => {
     const item = order.lineItems[matchIdx];
     record.itemScannedCount[matchIdx] = (record.itemScannedCount[matchIdx] || 0) + 1;
     const scannedNow = record.itemScannedCount[matchIdx];
+    // Tag this item with the active crate as soon as the FIRST unit is
+    // scanned, not just once the whole line item is fully accounted
+    // for. Physically, the item is already going into the box the
+    // moment it's scanned — a multi-unit item (e.g. 5 of 25 scanned so
+    // far) is genuinely sitting in the current crate right now, and the
+    // "New Crate" button's running unit count needs to see that. Only
+    // setting this on full completion was why scanning a large-quantity
+    // item never moved the crate badge until every last unit was done.
+    if (!record.itemCrateNumber[matchIdx]) {
+      record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
+    }
     let newStatus = "not_picked";
     if (scannedNow >= item.quantity) {
       newStatus = "picked";
-      record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
     }
     record.itemStatus[matchIdx] = newStatus;
     saveState(state);
@@ -2047,8 +2057,20 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
     const crateItems = order.lineItems
       .map((item, idx) => {
         if (record.itemCrateNumber[idx] !== crateNumber) return null;
-        const isPartial = record.itemStatus[idx] === "partial";
-        const qty = isPartial ? record.itemPickedQty[idx] : item.quantity;
+        const itemStatusNow = record.itemStatus[idx];
+        // itemCrateNumber now gets tagged on the FIRST scanned unit (see
+        // /api/picking-scan), not just once an item is fully picked — so
+        // a crate can legitimately close while one of its items is still
+        // mid-scan (e.g. 5 of 25 units). The label has to print what's
+        // actually physically in the box: the full ordered quantity for
+        // a completed item, the recorded short-count for an explicit
+        // partial, or the real running scanned count for anything still
+        // in progress — never the full quantity for an item that isn't
+        // actually all there yet.
+        const qty =
+          itemStatusNow === "partial" ? record.itemPickedQty[idx] :
+          itemStatusNow === "picked" ? item.quantity :
+          record.itemScannedCount[idx] || 0;
         return { title: item.title, quantity: qty };
       })
       .filter((item) => item !== null);

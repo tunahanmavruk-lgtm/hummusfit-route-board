@@ -1197,6 +1197,12 @@
         if(progressEl){
           progressEl.textContent = 'Scanned ' + result.itemScannedCount[idx] + ' of ' + item.quantity + ' — keep scanning';
         }
+        // The crate button sits behind this full-screen scanner overlay,
+        // but it needs to already reflect the units just scanned by the
+        // time the picker closes the scanner — otherwise it shows a
+        // stale pre-scan count until some unrelated re-render happens to
+        // fire. Cheap to just refresh it here on every unit scanned.
+        updateCrateFab();
       }
     }).catch(function(err){
       closeScanner();
@@ -1230,9 +1236,24 @@
     var unitsInCurrentCrate = 0;
     orderDetail.lineItems.forEach(function(item, idx){
       if(!orderDetail.itemCrateNumber || orderDetail.itemCrateNumber[idx] !== orderDetail.currentCrateNumber) return;
-      var qty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined)
-        ? orderDetail.itemPickedQty[idx]
-        : item.quantity;
+      // The server now tags an item with the active crate as soon as its
+      // FIRST unit is scanned, not just once it's fully picked — so this
+      // loop has to handle a still-in-progress multi-unit item (e.g. 5
+      // of 25 scanned) as well as a finished one. Falling back to the
+      // full ordered quantity for an in-progress item was the bug: a
+      // large-quantity item being scanned never moved this badge until
+      // every last unit was in, because it wasn't tagged into the crate
+      // at all until then. Use the real running scan count for anything
+      // not yet fully resolved.
+      var status = orderDetail.itemStatus ? orderDetail.itemStatus[idx] : undefined;
+      var qty;
+      if(status === 'partial' && orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined){
+        qty = orderDetail.itemPickedQty[idx];
+      } else if(status === 'picked'){
+        qty = item.quantity;
+      } else {
+        qty = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx]) || 0;
+      }
       unitsInCurrentCrate += qty;
     });
     crateFabEl.style.display = 'flex';
