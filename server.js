@@ -2329,6 +2329,13 @@ function computeEtaForStop(state, stopName) {
   // once the stop is behind the van in the optimized order (see the loop
   // below — a passed stop simply stops matching, which used to render as
   // nothing at all on the store-facing page).
+  // Whichever van is currently assigned to this route — already persisted
+  // by /api/assign and correctly scoped to the active delivery window (see
+  // loadState's reset logic above), so this is real ground truth, not a
+  // guess. Store employees use this to open the live van map for the exact
+  // van heading to them, not just a generic fleet view.
+  const van = (state.assignments[route.id] && state.assignments[route.id].van) || null;
+
   const stopStatus = state.stopStatus[stop.id];
   if (stopStatus && stopStatus.status === "delivered") {
     return {
@@ -2340,6 +2347,8 @@ function computeEtaForStop(state, stopName) {
       deliveredAt: stopStatus.deliveredAt || null,
       eta: null,
       stopsAway: null,
+      van,
+      fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
 
@@ -2353,6 +2362,8 @@ function computeEtaForStop(state, stopName) {
       delivered: false,
       eta: null,
       stopsAway: null,
+      van,
+      fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
   const startedAt = new Date(meta.startedAt).getTime();
@@ -2375,6 +2386,8 @@ function computeEtaForStop(state, stopName) {
         eta: new Date(startedAt + cumulativeMs).toISOString(),
         stopsAway: i,
         totalStopsOnRoute: meta.optimizedStopIds.length,
+        van,
+        fleetTrackerUrl: FLEET_TRACKER_URL,
       };
     }
     cumulativeMs += UNLOAD_MS;
@@ -2389,6 +2402,8 @@ function computeEtaForStop(state, stopName) {
     delivered: false,
     eta: null,
     stopsAway: null,
+    van,
+    fleetTrackerUrl: FLEET_TRACKER_URL,
   };
 }
 
