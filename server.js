@@ -1645,6 +1645,7 @@ app.get("/api/picking-list", async (req, res) => {
         isB2B: Boolean(order.isB2B),
         pickedBy: record.pickedBy,
         completedAt: record.completedAt,
+        eta: computeEtaForStop(state, key),
       };
     });
     saveState(state); // persist any freshly-seeded records
@@ -1685,6 +1686,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       completedAt: record.completedAt,
       completedBy: record.completedBy,
       pickers: PICKERS,
+      eta: computeEtaForStop(state, key),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2296,6 +2298,69 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 function getRouteById(routeId) {
   return ROUTES.find((r) => r.id === routeId) || B2B_ROUTES.find((r) => r.id === routeId);
+}
+
+// Same lookup a store employee's QR-code page needs: given the stop name
+// on their picklist, find which route/van they're on and their real
+// position in it (used below to compute a live ETA once that route has
+// actually been started for the day).
+function findRouteAndStopByName(stopName) {
+  const target = String(stopName || "").trim().toLowerCase();
+  for (const route of [...ROUTES, ...B2B_ROUTES]) {
+    const stop = route.stops.find((s) => s.name.toLowerCase() === target);
+    if (stop) return { route, stop };
+  }
+  return null;
+}
+
+// Live ETA for one store's delivery, shown on their picklist page (the
+// same page the QR code lands them on). Mirrors the math in
+// /api/route-eta/:routeId, just resolved down to a single stop by name
+// instead of the whole route. Returns null if this stop name doesn't
+// match a real route stop at all; returns started:false (with just the
+// scheduled time slot) if the route hasn't been started yet today, since
+// there's nothing live to show until a driver actually leaves HQ.
+function computeEtaForStop(state, stopName) {
+  const found = findRouteAndStopByName(stopName);
+  if (!found) return null;
+  const { route, stop } = found;
+  const meta = state.routeMeta[route.id];
+  if (!meta || !meta.startedAt || !meta.legDurationsSeconds || !meta.optimizedStopIds) {
+    return {
+      routeId: route.id,
+      routeName: route.name,
+      scheduledTime: route.time || null,
+      started: false,
+      eta: null,
+      stopsAway: null,
+    };
+  }
+  const startedAt = new Date(meta.startedAt).getTime();
+  let cumulativeMs = 0;
+  for (let i = 0; i < meta.optimizedStopIds.length; i++) {
+    cumulativeMs += (meta.legDurationsSeconds[i] || 0) * 1000;
+    if (meta.optimizedStopIds[i] === stop.id) {
+      return {
+        routeId: route.id,
+        routeName: route.name,
+        scheduledTime: route.time || null,
+        started: true,
+        eta: new Date(startedAt + cumulativeMs).toISOString(),
+        stopsAway: i,
+        totalStopsOnRoute: meta.optimizedStopIds.length,
+      };
+    }
+  }
+  // Route was started, but this stop isn't in the optimized order (e.g.
+  // it was added after "Create Route" already ran today) — no ETA yet.
+  return {
+    routeId: route.id,
+    routeName: route.name,
+    scheduledTime: route.time || null,
+    started: true,
+    eta: null,
+    stopsAway: null,
+  };
 }
 
 // Commercial vans can't legally use NY-area parkways (low bridge clearances,

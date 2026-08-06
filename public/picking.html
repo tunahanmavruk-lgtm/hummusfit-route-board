@@ -254,6 +254,42 @@
     color: var(--dim);
     margin-top:4px;
   }
+  .eta-banner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background: var(--teal-tint);
+    border: 1.5px solid var(--teal-border);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+  .eta-banner.not-started{
+    background: var(--card-2);
+    border-color: var(--line);
+  }
+  .eta-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color: var(--dim);
+  }
+  .eta-value{
+    font-family:'Bebas Neue', sans-serif;
+    font-size: 24px;
+    color: var(--teal);
+    line-height:1.1;
+    margin-top:2px;
+  }
+  .eta-banner.not-started .eta-value{ color: var(--ink); }
+  .eta-sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+    text-align:right;
+  }
   .order-total-progress{
     text-align:right;
     flex-shrink:0;
@@ -1380,6 +1416,34 @@
           '<div class="order-total-label">Reviewed</div>' +
         '</div>' +
       '</div>';
+
+    // ETA for the store's own delivery — this is what the QR code lands
+    // an employee on, alongside their picklist. Only meaningful once the
+    // van has actually left HQ (route "started"); before that we just
+    // show the scheduled route time slot instead of a live countdown.
+    if(orderDetail.eta){
+      var eta = orderDetail.eta;
+      if(eta.started && eta.eta){
+        var stopsAwayLabel = eta.stopsAway === 0 ? 'Next stop' : (eta.stopsAway + ' stop' + (eta.stopsAway === 1 ? '' : 's') + ' ahead of you');
+        html +=
+          '<div class="eta-banner">' +
+            '<div>' +
+              '<div class="eta-label">Estimated Arrival</div>' +
+              '<div class="eta-value">' + fmtTime(eta.eta) + '</div>' +
+            '</div>' +
+            '<div class="eta-sub">' + eta.routeName + '<br>' + stopsAwayLabel + '</div>' +
+          '</div>';
+      } else if(!eta.started){
+        html +=
+          '<div class="eta-banner not-started">' +
+            '<div>' +
+              '<div class="eta-label">Delivery Window</div>' +
+              '<div class="eta-value">' + (eta.scheduledTime || 'Scheduled') + '</div>' +
+            '</div>' +
+            '<div class="eta-sub">' + eta.routeName + '<br>Van hasn\'t left the warehouse yet</div>' +
+          '</div>';
+      }
+    }
 
     if(orderDetail.pickedBy){
       var initials = orderDetail.pickedBy.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(w){ return w.charAt(0).toUpperCase(); }).join('');
