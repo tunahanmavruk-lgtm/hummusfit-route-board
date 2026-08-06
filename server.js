@@ -378,6 +378,27 @@ const FLEET = [
   "Darian — Ford Transit",
 ];
 
+// Maps this app's van dropdown labels (what dispatchers actually pick,
+// stored verbatim in state.assignments[routeId].van) to that same
+// vehicle's Bouncie IMEI — the one identifier Bouncie guarantees is
+// stable. Bouncie's own nickName field is free-typed and already drifts
+// from these labels (typos, missing words, trailing spaces — "Buffin Tow
+// Truck" here vs "Buffinn Tow Truck" in Bouncie), so matching by name at
+// runtime would be fragile. Confirmed by hand against a live /api/vehicles
+// pull on 8/5/2026 — update this if a van is swapped or re-registered.
+const VAN_TO_BOUNCIE_IMEI = {
+  "2022 RAM Promaster 1500": "866392062048891",
+  "2016 FORD Transit": "866016061363304",
+  "Small Diesel 2 — Mercedes Sprinter": "352602116156370",
+  "Mercedes Big Muffin — Sprinter": "866392061981985",
+  "Mercedes Small 3 — Sprinter": "862255068841805",
+  "Buffin Tow Truck — Sprinter": "352602116154938",
+  "Transit 350 (1)": "865612072243575",
+  "Big White — Sprinter": "865612072353903",
+  "Ford Transit 3": "864486067680666",
+  "Darian — Ford Transit": "865612072360866",
+};
+
 const DRIVERS = [
   "Chavez, Richy C",
   "Flores Morales, Carlos E",
@@ -2335,6 +2356,7 @@ function computeEtaForStop(state, stopName) {
   // guess. Store employees use this to open the live van map for the exact
   // van heading to them, not just a generic fleet view.
   const van = (state.assignments[route.id] && state.assignments[route.id].van) || null;
+  const vanImei = van ? VAN_TO_BOUNCIE_IMEI[van] || null : null;
 
   const stopStatus = state.stopStatus[stop.id];
   if (stopStatus && stopStatus.status === "delivered") {
@@ -2348,6 +2370,7 @@ function computeEtaForStop(state, stopName) {
       eta: null,
       stopsAway: null,
       van,
+      vanImei,
       fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
@@ -2363,6 +2386,7 @@ function computeEtaForStop(state, stopName) {
       eta: null,
       stopsAway: null,
       van,
+      vanImei,
       fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
@@ -2387,6 +2411,7 @@ function computeEtaForStop(state, stopName) {
         stopsAway: i,
         totalStopsOnRoute: meta.optimizedStopIds.length,
         van,
+        vanImei,
         fleetTrackerUrl: FLEET_TRACKER_URL,
       };
     }
@@ -2403,6 +2428,7 @@ function computeEtaForStop(state, stopName) {
     eta: null,
     stopsAway: null,
     van,
+    vanImei,
     fleetTrackerUrl: FLEET_TRACKER_URL,
   };
 }
