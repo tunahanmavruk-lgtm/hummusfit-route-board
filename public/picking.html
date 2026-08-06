@@ -846,6 +846,9 @@
     if(!iso) return '';
     return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' });
   }
+  function escapeHtml(s){
+    return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+  }
 
   var view = 'list';
   var pickingList = [];
@@ -1701,14 +1704,35 @@
     updateCrateFab();
   }
 
+  // This is the deep-link entry point from the dashboard's order pill
+  // (/picking?stop=...), so a failure here can't just silently do
+  // nothing — that leaves whoever tapped the pill staring at a blank
+  // "Loading…" screen with zero explanation, looking exactly like the
+  // tap itself didn't register. Show what actually went wrong and give
+  // them a real way back to the full list either way.
+  function openOrderFailed(message){
+    document.getElementById('backLink').style.display = 'inline-flex';
+    document.getElementById('mainContent').innerHTML =
+      '<div class="empty-state">' + escapeHtml(message) +
+      '<br><br><span class="reopen-link" id="backToListLink" style="cursor:pointer; text-decoration:underline;">&larr; Back to full list</span></div>';
+    var backBtn = document.getElementById('backToListLink');
+    if(backBtn){ backBtn.addEventListener('click', loadList); }
+  }
+
   function openOrder(stopName){
     fetch('/api/picking-order/' + encodeURIComponent(stopName))
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        if(data.error){ return; }
-        orderDetail = data;
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(result){
+        if(!result.ok || result.data.error){
+          openOrderFailed(result.data.error || 'Could not open this order.');
+          return;
+        }
+        orderDetail = result.data;
         renderOrder();
         window.scrollTo(0,0);
+      })
+      .catch(function(err){
+        openOrderFailed('Could not reach the server: ' + err.message);
       });
   }
 
