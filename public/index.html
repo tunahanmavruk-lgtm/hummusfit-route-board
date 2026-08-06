@@ -5,62 +5,74 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hummus Fit — Route Board</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#141311">
+<meta name="theme-color" content="#182B3A">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#F7F6F3;
+    --bg:#FFFFFF;
     --card:#FFFFFF;
-    --ink:#141311;
-    --dim:#7A776E;
-    --line:rgba(20,19,17,0.09);
+    --card-2:#F5F7F7;
+    --ink:#182B3A;
+    --dim:#6B7A80;
+    --line:#E7EAEA;
     --orange:#E8612C;
+    --orange-2:#F0783F;
     --orange-tint:#FDEBE3;
-    --teal:#1FA98F;
-    --teal-tint:#E3F5F1;
-    --black:#141311;
+    --teal:#2BBFAA;
+    --teal-2:#22A895;
+    --teal-tint:#E5F7F4;
+    --navy:#182B3A;
+    --black:#182B3A;
     --gold:#E0A83B;
     --red:#DA4A3F;
-    --shadow: 0 1px 2px rgba(20,19,17,0.04), 0 8px 24px rgba(20,19,17,0.06);
+    --shadow-sm: 0 1px 2px rgba(24,43,58,0.05), 0 2px 6px rgba(24,43,58,0.05);
+    --shadow-md: 0 2px 4px rgba(24,43,58,0.05), 0 12px 28px rgba(24,43,58,0.09);
+    --shadow-lg: 0 4px 10px rgba(24,43,58,0.08), 0 24px 48px rgba(24,43,58,0.14);
+    --radius: 18px;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif;}
   body{
     background:
-      radial-gradient(circle at 8% 0%, rgba(232,97,44,0.07), transparent 40%),
-      radial-gradient(circle at 95% 10%, rgba(31,169,143,0.08), transparent 40%),
+      radial-gradient(circle at 6% -4%, rgba(232,97,44,0.09), transparent 38%),
+      radial-gradient(circle at 100% 6%, rgba(43,191,170,0.12), transparent 42%),
       var(--bg);
     padding-bottom: 60px;
   }
 
   header{
-    padding: 30px 5vw 22px;
+    padding: 26px 5vw 20px;
     display:flex;
-    align-items:flex-end;
+    align-items:center;
     justify-content:space-between;
     flex-wrap:wrap;
-    gap:14px;
-    border-bottom: 2px solid var(--black);
+    gap:16px;
+    border-bottom: 1.5px solid var(--line);
+    background: var(--card);
   }
-  .eyebrow{
+  .brand-block{ display:flex; align-items:center; gap:14px; }
+  .brand-logo{ height:38px; width:auto; display:block; }
+  .brand-divider{ width:1.5px; height:30px; background:var(--line); }
+  .eyebrow-block .eyebrow{
     font-family:'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight:700;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--orange);
-    margin-bottom: 8px;
+    margin-bottom: 3px;
   }
-  h1{
-    font-family:'Bebas Neue', sans-serif;
-    font-size: clamp(36px, 5.5vw, 60px);
-    line-height: 0.95;
-    letter-spacing: 0.01em;
+  .eyebrow-block h1{
+    font-family:'Poppins', sans-serif;
+    font-weight:800;
+    font-size: 22px;
+    color: var(--navy);
+    letter-spacing: -0.01em;
   }
-  h1 span{ color: var(--teal); }
+  .eyebrow-block h1 span{ color: var(--teal); }
 
   .reset-btn{
     font-family:'JetBrains Mono', monospace;
@@ -71,24 +83,27 @@
     color: var(--dim);
     background: var(--card);
     border: 1.5px solid var(--line);
-    padding: 9px 16px;
+    padding: 10px 18px;
     border-radius: 999px;
     cursor:pointer;
-    transition: border-color .15s ease, color .15s ease;
+    box-shadow: var(--shadow-sm);
+    transition: border-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
   }
-  .reset-btn:hover{ border-color: var(--red); color: var(--red); }
+  .reset-btn:hover{ border-color: var(--red); color: var(--red); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .reset-btn:active{ transform: translateY(0); }
 
   .modal-overlay{
-    position:fixed; inset:0; background:rgba(20,19,17,0.55);
+    position:fixed; inset:0; background:rgba(24,43,58,0.55);
     display:flex; align-items:center; justify-content:center;
     z-index:100; padding:20px;
   }
   .modal{
-    background: var(--card); border-radius: var(--radius, 16px);
-    padding: 24px; max-width: 420px; width:100%;
+    background: var(--card); border-radius: var(--radius);
+    padding: 26px; max-width: 420px; width:100%;
+    box-shadow: var(--shadow-lg);
   }
   .modal h3{
-    font-family:'Bebas Neue', sans-serif; font-size: 26px; letter-spacing:0.02em;
+    font-family:'Poppins', sans-serif; font-weight:800; font-size: 21px; letter-spacing:-0.01em;
     margin-bottom: 6px;
   }
   .modal-hint{
@@ -101,28 +116,34 @@
     color: var(--dim); margin-bottom:6px; margin-top:14px;
   }
   .modal input[type="text"], .modal textarea{
-    width:100%; background: var(--bg); border: 1.5px solid var(--line);
+    width:100%; background: var(--card-2); border: 1.5px solid var(--line);
     color: var(--ink); font-family:'Inter', sans-serif; font-size: 14px;
-    padding: 10px 12px; border-radius: 10px; outline:none; resize:vertical;
+    padding: 11px 13px; border-radius: 12px; outline:none; resize:vertical;
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
-  .modal input[type="text"]:focus, .modal textarea:focus{ border-color: var(--orange); }
+  .modal input[type="text"]:focus, .modal textarea:focus{ border-color: var(--orange); box-shadow: 0 0 0 3px rgba(232,97,44,0.12); }
   .modal-actions{ display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
   .modal-btn-secondary{
     font-family:'JetBrains Mono', monospace; font-size: 11px; font-weight:700;
     text-transform:uppercase; color: var(--dim); background: var(--card);
     border: 1.5px solid var(--line); padding: 10px 18px; border-radius: 999px; cursor:pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
   }
+  .modal-btn-secondary:hover{ transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .modal-btn-primary{
     font-family:'JetBrains Mono', monospace; font-size: 11px; font-weight:700;
-    text-transform:uppercase; color:#fff; background: var(--orange);
+    text-transform:uppercase; color:#fff; background: linear-gradient(135deg, var(--orange), var(--orange-2));
     border: none; padding: 10px 18px; border-radius: 999px; cursor:pointer;
+    box-shadow: 0 3px 10px rgba(232,97,44,0.35);
+    transition: transform .15s ease, box-shadow .15s ease;
   }
-  .modal-btn-primary:disabled{ opacity:0.5; cursor:default; }
+  .modal-btn-primary:hover{ transform: translateY(-1px); }
+  .modal-btn-primary:disabled{ opacity:0.5; cursor:default; transform:none; }
 
   main{
-    max-width: 1100px;
+    max-width: 1120px;
     margin: 0 auto;
-    padding: 26px 5vw 0;
+    padding: 28px 5vw 0;
   }
 
   /* Motion on real state changes only — render() rebuilds the whole
@@ -131,14 +152,14 @@
      last render, not a plain `transition` (which needs a persisted
      element to animate between two states, and there isn't one here). */
   @keyframes rowFlash{
-    0%{ background: var(--teal-tint); box-shadow: 0 0 0 2px rgba(31,169,143,0.4); }
-    100%{ background: var(--bg); box-shadow: 0 0 0 0 rgba(31,169,143,0); }
+    0%{ background: var(--teal-tint); box-shadow: 0 0 0 2px rgba(43,191,170,0.45); }
+    100%{ background: var(--card-2); box-shadow: 0 0 0 0 rgba(43,191,170,0); }
   }
   .stop-row.just-changed{ animation: rowFlash 1.1s ease-out; }
 
   @keyframes dotPop{
     0%{ transform: scale(1); }
-    40%{ transform: scale(1.55); }
+    40%{ transform: scale(1.6); }
     100%{ transform: scale(1); }
   }
   .status-dot.just-changed{ animation: dotPop 0.5s cubic-bezier(.34,1.56,.64,1); }
@@ -151,47 +172,52 @@
   .order-pill.just-arrived{ animation: pillArrive 0.5s cubic-bezier(.34,1.56,.64,1); }
 
   @keyframes routeStartFlash{
-    0%{ box-shadow: inset 0 0 0 3px rgba(31,169,143,0); }
-    30%{ box-shadow: inset 0 0 0 3px rgba(31,169,143,0.9); }
-    100%{ box-shadow: inset 0 0 0 3px rgba(31,169,143,0); }
+    0%{ box-shadow: var(--shadow-md), inset 0 0 0 3px rgba(43,191,170,0); }
+    30%{ box-shadow: var(--shadow-md), inset 0 0 0 3px rgba(43,191,170,0.9); }
+    100%{ box-shadow: var(--shadow-md), inset 0 0 0 3px rgba(43,191,170,0); }
   }
   .route-card.just-started{ animation: routeStartFlash 1.4s ease-out; }
 
   .route-card{
     background: var(--card);
-    border-radius: 16px;
-    margin-bottom: 22px;
-    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    margin-bottom: 26px;
+    box-shadow: var(--shadow-md);
     border: 1px solid var(--line);
     overflow:hidden;
+    transition: box-shadow .2s ease, transform .2s ease;
   }
+  .route-card:hover{ box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+
   .route-head{
     display:flex;
     align-items:center;
     flex-wrap:wrap;
-    gap: 10px;
-    padding: 18px 22px;
-    background: var(--black);
+    gap: 12px;
+    padding: 19px 24px;
+    background: linear-gradient(120deg, var(--navy) 0%, #1F3A4D 60%, #1B4E48 130%);
     color: #fff;
   }
   .route-name{
-    font-family:'Bebas Neue', sans-serif;
-    font-size: 25px;
-    letter-spacing:0.01em;
+    font-family:'Poppins', sans-serif;
+    font-weight:800;
+    font-size: 19px;
+    letter-spacing:-0.01em;
   }
   .route-time{
     font-family:'JetBrains Mono', monospace;
     font-size: 11.5px;
     font-weight:700;
-    color: var(--black);
+    color: var(--navy);
     background: #fff;
-    padding: 4px 10px;
+    padding: 4px 11px;
     border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
   .route-size{
     font-family:'JetBrains Mono', monospace;
     font-size: 10.5px;
-    color: rgba(255,255,255,0.55);
+    color: rgba(255,255,255,0.6);
     text-transform:uppercase;
     letter-spacing:0.05em;
   }
@@ -200,16 +226,17 @@
     font-family:'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight:700;
-    color: var(--teal);
+    color: #7EEAD6;
   }
 
   .route-actions{
     display:flex;
     gap: 10px;
-    padding: 14px 22px;
+    padding: 15px 24px;
     flex-wrap:wrap;
     border-bottom: 1px solid var(--line);
     align-items:center;
+    background: var(--card-2);
   }
   .action-btn{
     font-family:'JetBrains Mono', monospace;
@@ -217,20 +244,22 @@
     font-weight:700;
     letter-spacing:0.04em;
     text-transform:uppercase;
-    padding: 9px 16px;
+    padding: 10px 18px;
     border-radius: 999px;
     border: none;
     cursor:pointer;
-    transition: transform .15s ease, opacity .15s ease;
+    box-shadow: var(--shadow-sm);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
   }
-  .action-btn:hover{ transform: translateY(-1px); }
+  .action-btn:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .action-btn:active{ transform: translateY(0); }
   .action-btn:disabled{ opacity:0.5; cursor:default; transform:none; }
-  .action-btn.optimize{ background: var(--black); color:#fff; }
-  .action-btn.start{ background: var(--orange); color:#fff; }
-  .action-btn.started{ background: var(--teal-tint); color: var(--teal); }
+  .action-btn.optimize{ background: linear-gradient(135deg, var(--navy), #274A61); color:#fff; }
+  .action-btn.start{ background: linear-gradient(135deg, var(--orange), var(--orange-2)); color:#fff; box-shadow: 0 3px 10px rgba(232,97,44,0.35); }
+  .action-btn.started{ background: var(--teal-tint); color: var(--teal-2); box-shadow:none; }
   .action-btn.maps{
     background: #fff;
-    color: var(--teal);
+    color: var(--teal-2);
     border: 1.5px solid var(--teal);
     text-decoration:none;
   }
@@ -244,32 +273,22 @@
     margin-left:auto;
   }
   .eta-summary.live{
-    color: var(--teal);
-  }
-
-  .started-time-badge{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight:700;
-    color: var(--orange);
-    background: var(--orange-tint);
-    padding: 6px 12px;
-    border-radius: 999px;
+    color: var(--teal-2);
   }
 
   .hq-address{
     font-family:'JetBrains Mono', monospace;
     font-size: 10px;
     color: var(--dim);
-    padding: 8px 22px 0;
+    padding: 8px 24px 0;
   }
 
   .parkway-warning{
-    margin: 10px 22px 0;
-    padding: 10px 14px;
+    margin: 12px 24px 0;
+    padding: 11px 15px;
     background: #FFF4E5;
     border: 1.5px solid var(--gold);
-    border-radius: 10px;
+    border-radius: 12px;
     font-family:'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight:700;
@@ -293,13 +312,15 @@
     flex-shrink:0;
   }
   .status-dot{
-    width: 13px; height:13px;
+    width: 14px; height:14px;
     border-radius:50%;
     background: #fff;
     border: 2.5px solid var(--dim);
     cursor:pointer;
     transition: all .15s ease;
+    box-shadow: var(--shadow-sm);
   }
+  .status-dot:hover{ transform: scale(1.15); }
   .status-dot.enroute{ background: var(--gold); border-color: var(--gold); }
   .status-dot.picked{ background: #A25FE0; border-color: #A25FE0; }
   .status-dot.arrived{ background: #4F9BE8; border-color: #4F9BE8; }
@@ -316,19 +337,22 @@
   .notif-banner{
     display:block;
     width:100%;
-    background: var(--teal-tint);
-    border: 1.5px solid rgba(31,169,143,0.4);
+    background: linear-gradient(120deg, var(--teal-tint), #F3FBFA);
+    border: 1.5px solid rgba(43,191,170,0.4);
     color: var(--ink);
     font-family:'Inter', sans-serif;
     font-weight:700;
     font-size: 13.5px;
-    padding: 14px 20px;
-    border-radius: var(--radius, 16px);
-    margin-bottom: 18px;
+    padding: 15px 22px;
+    border-radius: var(--radius);
+    margin-bottom: 20px;
     cursor:pointer;
     text-align:left;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .15s ease, transform .15s ease;
   }
-  .notif-banner:active{ opacity:0.8; }
+  .notif-banner:hover{ box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .notif-banner:active{ opacity:0.85; transform: translateY(0); }
 
   .picking-flash-chip{
     font-family:'JetBrains Mono', monospace;
@@ -339,12 +363,12 @@
     padding: 4px 10px;
     border-radius: 999px;
     color: #fff;
-    background: #E8612C;
+    background: linear-gradient(120deg, var(--orange), #FF5470);
     animation: pickingFlash 1s ease-in-out infinite;
   }
   @keyframes pickingFlash{
-    0%, 100% { background: #E8612C; box-shadow: 0 0 0 rgba(232,97,44,0); }
-    50% { background: #FF2D55; box-shadow: 0 0 10px rgba(255,45,85,0.6); }
+    0%, 100% { box-shadow: 0 0 0 rgba(232,97,44,0); }
+    50% { box-shadow: 0 0 12px rgba(255,45,85,0.55); }
   }
   .picking-done-chip{
     font-family:'JetBrains Mono', monospace;
@@ -353,7 +377,7 @@
     white-space:nowrap;
     padding: 4px 10px;
     border-radius: 999px;
-    color: var(--teal);
+    color: var(--teal-2);
     background: var(--teal-tint);
   }
 
@@ -365,14 +389,14 @@
     padding: 4px 10px;
     border-radius: 999px;
     color: var(--ink);
-    background: var(--card-2, #F1F0EC);
+    background: var(--card-2);
     border: 1.5px solid var(--line);
   }
 
   .assign-row{
     display:flex;
     gap: 12px;
-    padding: 16px 22px;
+    padding: 17px 24px;
     flex-wrap:wrap;
     border-bottom: 1px solid var(--line);
     align-items:flex-end;
@@ -389,17 +413,18 @@
   }
   select, input[type="text"]{
     width:100%;
-    background: var(--bg);
+    background: var(--card-2);
     border: 1.5px solid var(--line);
     color: var(--ink);
     font-family:'Inter', sans-serif;
     font-weight:600;
     font-size: 13.5px;
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 11px 13px;
+    border-radius: 12px;
     outline:none;
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
-  select:focus, input[type="text"]:focus{ border-color: var(--teal); }
+  select:focus, input[type="text"]:focus{ border-color: var(--teal); box-shadow: 0 0 0 3px rgba(43,191,170,0.15); }
 
   .van-live{
     flex-shrink:0;
@@ -409,15 +434,16 @@
     font-family:'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight:700;
-    padding: 10px 14px;
-    border-radius: 10px;
+    padding: 11px 15px;
+    border-radius: 12px;
     background: var(--teal-tint);
-    color: var(--teal);
+    color: var(--teal-2);
     text-decoration:none;
     white-space:nowrap;
-    transition: transform .15s ease;
+    box-shadow: var(--shadow-sm);
+    transition: transform .15s ease, box-shadow .15s ease;
   }
-  .van-live:hover{ transform: translateY(-1px); }
+  .van-live:hover{ transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .van-live .dot{
     width:7px; height:7px; border-radius:50%;
     background: var(--teal);
@@ -426,22 +452,24 @@
   }
   .van-live.idle{ background: var(--orange-tint); color: var(--orange); }
   .van-live.idle .dot{ background: var(--orange); box-shadow:0 0 6px var(--orange); }
-  .van-live.offline{ background: #F0EFEC; color: var(--dim); }
+  .van-live.offline{ background: var(--card-2); color: var(--dim); }
   .van-live.offline .dot{ background: var(--dim); box-shadow:none; animation:none; }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
 
-  .stops{ padding: 14px 22px 18px; display:flex; flex-direction:column; gap:10px; }
+  .stops{ padding: 16px 24px 20px; display:flex; flex-direction:column; gap:10px; }
 
   .stop-row{
     display:flex;
     align-items:center;
     flex-wrap:wrap;
     gap: 12px;
-    padding: 12px 14px;
-    border-radius: 12px;
+    padding: 13px 15px;
+    border-radius: 14px;
     border: 1.5px solid var(--line);
-    background: var(--bg);
+    background: var(--card-2);
+    transition: box-shadow .15s ease, border-color .15s ease;
   }
+  .stop-row:hover{ box-shadow: var(--shadow-sm); border-color: rgba(43,191,170,0.3); }
 
   .stop-name{ font-weight:700; font-size: 14.5px; flex-shrink:0; }
   .stop-badge{
@@ -463,31 +491,33 @@
     font-weight:700;
     letter-spacing:0.04em;
     text-transform:uppercase;
-    padding: 7px 14px;
+    padding: 8px 15px;
     border-radius: 999px;
     white-space:nowrap;
     border: 1.5px solid var(--line);
     color: var(--dim);
     background: #fff;
+    transition: transform .15s ease, box-shadow .15s ease;
   }
   .order-pill.not-scheduled{
     border-style: dashed;
-    color: var(--steel-light, var(--dim));
+    color: var(--dim);
     background: transparent;
     opacity: 0.65;
   }
   .order-pill.lit{
-    background: var(--orange);
+    background: linear-gradient(135deg, var(--orange), var(--orange-2));
     color: #fff;
-    border-color: var(--orange);
+    border-color: transparent;
     cursor:pointer;
     text-decoration:none;
-    box-shadow: 0 2px 10px rgba(232,97,44,0.35);
+    box-shadow: 0 3px 12px rgba(232,97,44,0.4);
     animation: litPulse 1.8s ease-in-out infinite;
   }
+  .order-pill.lit:hover{ transform: translateY(-2px); }
   @keyframes litPulse{
-    0%,100%{ box-shadow: 0 2px 10px rgba(232,97,44,0.35); }
-    50%{ box-shadow: 0 2px 18px rgba(232,97,44,0.6); }
+    0%,100%{ box-shadow: 0 3px 12px rgba(232,97,44,0.35); }
+    50%{ box-shadow: 0 3px 20px rgba(232,97,44,0.6); }
   }
 
   .status-label{
@@ -496,16 +526,16 @@
     font-weight:700;
     text-transform:uppercase;
     color: var(--dim);
-    width: 78px;
+    width: 82px;
   }
   .status-label.enroute{ color: var(--gold); }
   .status-label.picked{ color: #A25FE0; }
   .status-label.arrived{ color: #4F9BE8; }
-  .status-label.delivered{ color: var(--teal); }
+  .status-label.delivered{ color: var(--teal-2); }
 
   .refresh-note{
-    max-width: 1100px;
-    margin: 20px auto 0;
+    max-width: 1120px;
+    margin: 22px auto 0;
     padding: 0 5vw;
     font-family:'JetBrains Mono', monospace;
     font-size: 10.5px;
@@ -516,34 +546,16 @@
     display:flex;
     flex-direction:column;
     align-items:flex-end;
-    gap: 6px;
+    gap: 7px;
   }
   .live-clock{
     font-family:'JetBrains Mono', monospace;
-    font-size: 20px;
+    font-size: 19px;
     font-weight:700;
-    color: var(--black);
+    color: var(--navy);
     font-variant-numeric: tabular-nums;
   }
-  .window-badge{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-family:'JetBrains Mono', monospace;
-    font-size: 10px;
-    font-weight:700;
-    letter-spacing:0.04em;
-    text-transform:uppercase;
-    padding: 5px 11px;
-    border-radius: 999px;
-  }
-  .window-badge.open{ background: var(--orange-tint); color: var(--orange); }
-  .window-badge.closed{ background: #F0EFEC; color: var(--dim); }
-  .window-badge .dot{
-    width:6px; height:6px; border-radius:50%;
-  }
-  .window-badge.open .dot{ background: var(--orange); animation: pulse 1.5s infinite; }
-  .window-badge.closed .dot{ background: var(--dim); }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; }
 
   @media (max-width: 640px){
     .stop-row{ flex-wrap:wrap; }
@@ -555,15 +567,20 @@
 <body>
 
 <header>
-  <div>
-    <div class="eyebrow">Hummus Fit / Transportation</div>
-    <h1>ROUTE <span>BOARD</span></h1>
+  <div class="brand-block">
+    <img class="brand-logo" src="/assets/logo.png" alt="Hummus Fit">
+    <div class="brand-divider"></div>
+    <div class="eyebrow-block">
+      <div class="eyebrow">Transportation</div>
+      <h1>Route <span>Board</span></h1>
+    </div>
   </div>
   <div class="clock-block">
     <div class="live-clock" id="liveClock">--:--:-- --</div>
-    <div class="window-badge closed" id="windowBadge"><span class="dot"></span><span id="windowBadgeText">Checking order window…</span></div>
-    <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
-    <button class="reset-btn" id="announceBtn" style="margin-left:8px;">📣 Send Announcement</button>
+    <div class="btn-row">
+      <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
+      <button class="reset-btn" id="announceBtn">📣 Send Announcement</button>
+    </div>
   </div>
 </header>
 
@@ -670,12 +687,12 @@
   var prevRouteMeta = {};
   var hasRenderedOnce = false;
 
-  // Short, reusable tap feedback (sound + haptic) for the board's main
-  // actions — cycling a stop's status, creating/starting a route, turning
-  // on notifications. One shared AudioContext, not a fresh one per call:
-  // dispatchers tap through this a lot more often than, say, a single
-  // barcode scan on the picking screen, and browsers cap how many
-  // contexts can be alive at once.
+  // Short, reusable tap feedback (sound + haptic) for the board's
+  // clickable surface — now wired to every interactive control, not just
+  // the original four (status dot, optimize, start, notif banner): every
+  // select, link, and modal action fires it too. One shared AudioContext,
+  // not a fresh one per call — dispatchers tap through this a lot, and
+  // browsers cap how many contexts can be alive at once.
   var tapAudioCtx = null;
   function tapFeedback(){
     try{
@@ -733,11 +750,11 @@
     if(!vanName) return '';
     var v = findVanStatus(vanName);
     if(!v){
-      return '<a class="van-live offline" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>No live data</a>';
+      return '<a class="van-live offline" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>No live data</a>';
     }
     var cls = v.speed > 1 ? '' : (v.isRunning ? 'idle' : 'offline');
     var label = v.speed > 1 ? Math.round(v.speed) + ' mph' : (v.isRunning ? 'Idling' : 'Parked');
-    return '<a class="van-live ' + cls + '" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener"><span class="dot"></span>' + label + '</a>';
+    return '<a class="van-live ' + cls + '" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>' + label + '</a>';
   }
 
   var FLEET_TRACKER_URL = 'https://hummusfit-fleet-tracker-production.up.railway.app';
@@ -817,7 +834,7 @@
 
         var pillHtml;
         if(order){
-          pillHtml = '<a class="order-pill lit' + (orderJustArrived ? ' just-arrived' : '') + '" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
+          pillHtml = '<a class="order-pill lit' + (orderJustArrived ? ' just-arrived' : '') + '" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener" data-tap-link>' + order.orderName + ' →</a>';
         } else if(!isScheduled){
           pillHtml = '<span class="order-pill not-scheduled">No delivery today</span>';
         } else {
@@ -905,7 +922,7 @@
           var waypoints = orderedForMaps.map(function(s){ return encodeURIComponent(s.address); }).join('|');
           var mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + origin +
             '&destination=' + destination + '&waypoints=' + waypoints + '&travelmode=driving';
-          openMapsBtn = '<a class="action-btn maps" href="' + mapsUrl + '" target="_blank" rel="noopener">Open in Google Maps</a>';
+          openMapsBtn = '<a class="action-btn maps" href="' + mapsUrl + '" target="_blank" rel="noopener" data-tap-link>Open in Google Maps</a>';
         }
       }
 
@@ -1030,6 +1047,7 @@
 
     document.querySelectorAll('.van-select').forEach(function(sel){
       sel.addEventListener('change', function(){
+        tapFeedback();
         var routeId = sel.dataset.route;
         stateData.assignments[routeId] = stateData.assignments[routeId] || {};
         stateData.assignments[routeId].van = sel.value;
@@ -1048,6 +1066,7 @@
 
     document.querySelectorAll('.driver-select').forEach(function(sel){
       sel.addEventListener('change', function(){
+        tapFeedback();
         var routeId = sel.dataset.route;
         stateData.assignments[routeId] = stateData.assignments[routeId] || {};
         stateData.assignments[routeId].driver = sel.value;
@@ -1059,6 +1078,14 @@
         });
       });
     });
+
+    // Links (van-live, maps, lit order pills) navigate on their own —
+    // this just gives them the same tap feedback as every button before
+    // the browser follows the href, so nothing on the board is silent.
+    document.querySelectorAll('[data-tap-link]').forEach(function(link){
+      link.addEventListener('click', function(){ tapFeedback(); });
+    });
+
     wireNotifBanner();
   }
 
@@ -1118,6 +1145,7 @@
   }
 
   document.getElementById('resetBtn').addEventListener('click', function(){
+    tapFeedback();
     if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
     fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
   });
@@ -1128,18 +1156,21 @@
   var announceSendBtn = document.getElementById('announceSend');
 
   document.getElementById('announceBtn').addEventListener('click', function(){
+    tapFeedback();
     announceTitleInput.value = '';
     announceBodyInput.value = '';
     announceModal.style.display = 'flex';
     announceTitleInput.focus();
   });
   document.getElementById('announceCancel').addEventListener('click', function(){
+    tapFeedback();
     announceModal.style.display = 'none';
   });
   announceModal.addEventListener('click', function(e){
     if(e.target === announceModal) announceModal.style.display = 'none';
   });
   announceSendBtn.addEventListener('click', function(){
+    tapFeedback();
     var title = announceTitleInput.value.trim();
     var body = announceBodyInput.value.trim();
     if(!title || !body){
@@ -1185,29 +1216,6 @@
   }
   tickClock();
   setInterval(tickClock, 1000);
-
-  // ---- Order window badge ----
-  function updateWindowBadge(){
-    fetch('/api/status').then(function(r){ return r.json(); }).then(function(data){
-      var badge = document.getElementById('windowBadge');
-      var text = document.getElementById('windowBadgeText');
-      if(!data.orderWindow){ return; }
-      var start = new Date(data.orderWindow.start);
-      var end = new Date(data.orderWindow.end);
-      var fmtOpts = { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true };
-      var startStr = start.toLocaleTimeString('en-US', fmtOpts);
-      var endStr = end.toLocaleTimeString('en-US', fmtOpts);
-      if(data.orderWindow.isOpen){
-        badge.className = 'window-badge open';
-        text.textContent = 'Orders open until ' + endStr;
-      } else {
-        badge.className = 'window-badge closed';
-        text.textContent = 'Showing orders from ' + startStr + '–' + endStr;
-      }
-    }).catch(function(){});
-  }
-  updateWindowBadge();
-  setInterval(updateWindowBadge, 30000);
 </script>
 
 </body>
