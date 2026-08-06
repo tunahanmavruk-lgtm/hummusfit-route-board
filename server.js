@@ -1645,7 +1645,6 @@ app.get("/api/picking-list", async (req, res) => {
         isB2B: Boolean(order.isB2B),
         pickedBy: record.pickedBy,
         completedAt: record.completedAt,
-        eta: computeEtaForStop(state, key),
       };
     });
     saveState(state); // persist any freshly-seeded records
@@ -1686,7 +1685,6 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       completedAt: record.completedAt,
       completedBy: record.completedBy,
       pickers: PICKERS,
-      eta: computeEtaForStop(state, key),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2336,8 +2334,14 @@ function computeEtaForStop(state, stopName) {
     };
   }
   const startedAt = new Date(meta.startedAt).getTime();
+  const UNLOAD_MS = UNLOAD_MINUTES_PER_STOP * 60 * 1000;
   let cumulativeMs = 0;
   for (let i = 0; i < meta.optimizedStopIds.length; i++) {
+    // Same math as /api/route-eta/:routeId — drive time for this leg,
+    // plus every prior stop already used up its own unload buffer before
+    // the van could pull away again. Leaving the unload buffer out here
+    // would show every stop after the first as arriving earlier than the
+    // van actually can.
     cumulativeMs += (meta.legDurationsSeconds[i] || 0) * 1000;
     if (meta.optimizedStopIds[i] === stop.id) {
       return {
@@ -2350,6 +2354,7 @@ function computeEtaForStop(state, stopName) {
         totalStopsOnRoute: meta.optimizedStopIds.length,
       };
     }
+    cumulativeMs += UNLOAD_MS;
   }
   // Route was started, but this stop isn't in the optimized order (e.g.
   // it was added after "Create Route" already ran today) — no ETA yet.
@@ -2564,6 +2569,22 @@ app.get("/api/route-eta/:routeId", (req, res) => {
     startedAt: meta.startedAt,
     unloadMinutesPerStop: UNLOAD_MINUTES_PER_STOP,
   });
+});
+
+// Public, cross-service ETA lookup by store name — this is what the
+// hummusfit-receiving app's employee-facing page calls (via a browser
+// fetch from a different Railway domain, hence the CORS header) to show
+// "your delivery arrives at X" alongside the receiving checklist. Kept
+// deliberately separate from the warehouse-only /api/picking-* routes,
+// which have nothing to do with the store side of this.
+app.get("/api/store-eta/:stopName", (req, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  const state = loadState();
+  const eta = computeEtaForStop(state, decodeURIComponent(req.params.stopName));
+  if (!eta) {
+    return res.status(404).json({ error: "No route stop matches that store name." });
+  }
+  res.json(eta);
 });
 
 app.get("/api/status", (req, res) => {
