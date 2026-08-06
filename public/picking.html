@@ -1185,6 +1185,7 @@
       orderDetail.itemStatus = result.itemStatus;
       orderDetail.itemScannedCount = result.itemScannedCount;
       orderDetail.itemCrateNumber = result.itemCrateNumber;
+      orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
       var nowFullyPicked = result.itemStatus[idx] === 'picked';
       if(nowFullyPicked){
@@ -1228,36 +1229,32 @@
       crateFabEl.style.display = 'none';
       return;
     }
-    // Real unit count, not a line-item count — an item's actual quantity
-    // in the crate is its picked quantity (itemPickedQty, for a partial
-    // pick) or the full ordered quantity otherwise. Counting line items
-    // instead of summing quantities was the bug: 5 different products in
-    // a crate showed "5" even if, say, one of them was 4 units by
-    // itself — the badge was answering "how many distinct products" when
-    // the real question is "how many total units are physically in
-    // there."
+    // Real unit count, not a line-item count, and split-aware: a
+    // large-quantity item can legitimately have some units already
+    // packed in an earlier crate and the rest going into this one, if
+    // "New Crate" got tapped mid-scan. itemCrateBreakdown tracks exactly
+    // how many units of each item are in EACH crate, so this reads the
+    // real count for the crate that's active right now instead of
+    // assuming an item belongs entirely to one crate — that assumption
+    // was the bug: continuing to scan the same (or another) item after
+    // switching crates kept crediting the crate that item was FIRST
+    // scanned into, so the new crate's badge stayed stuck at 0.
     var unitsInCurrentCrate = 0;
     orderDetail.lineItems.forEach(function(item, idx){
-      if(!orderDetail.itemCrateNumber || orderDetail.itemCrateNumber[idx] !== orderDetail.currentCrateNumber) return;
-      // The server now tags an item with the active crate as soon as its
-      // FIRST unit is scanned, not just once it's fully picked — so this
-      // loop has to handle a still-in-progress multi-unit item (e.g. 5
-      // of 25 scanned) as well as a finished one. Falling back to the
-      // full ordered quantity for an in-progress item was the bug: a
-      // large-quantity item being scanned never moved this badge until
-      // every last unit was in, because it wasn't tagged into the crate
-      // at all until then. Use the real running scan count for anything
-      // not yet fully resolved.
-      var status = orderDetail.itemStatus ? orderDetail.itemStatus[idx] : undefined;
-      var qty;
-      if(status === 'partial' && orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined){
-        qty = orderDetail.itemPickedQty[idx];
-      } else if(status === 'picked'){
-        qty = item.quantity;
-      } else {
-        qty = (orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx]) || 0;
+      var breakdown = orderDetail.itemCrateBreakdown && orderDetail.itemCrateBreakdown[idx];
+      if(breakdown && breakdown[orderDetail.currentCrateNumber]){
+        unitsInCurrentCrate += breakdown[orderDetail.currentCrateNumber];
+        return;
       }
-      unitsInCurrentCrate += qty;
+      // Manual tap-to-pick items never get split across crates (one
+      // instant action, one crate) — itemCrateNumber still covers those.
+      if(!orderDetail.itemCrateNumber || orderDetail.itemCrateNumber[idx] !== orderDetail.currentCrateNumber) return;
+      var status = orderDetail.itemStatus ? orderDetail.itemStatus[idx] : undefined;
+      if(status === 'partial' && orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined){
+        unitsInCurrentCrate += orderDetail.itemPickedQty[idx];
+      } else if(status === 'picked'){
+        unitsInCurrentCrate += item.quantity;
+      }
     });
     crateFabEl.style.display = 'flex';
     crateFabEl.disabled = unitsInCurrentCrate === 0;
@@ -1407,6 +1404,7 @@
       orderDetail.itemStatus = result.itemStatus;
       orderDetail.itemScannedCount = result.itemScannedCount;
       orderDetail.itemCrateNumber = result.itemCrateNumber;
+      orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
       renderOrder();
     }).catch(function(err){
@@ -1640,10 +1638,17 @@
           delete orderDetail.itemPickedQty[idx];
         }
         orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
+        orderDetail.itemCrateBreakdown = orderDetail.itemCrateBreakdown || {};
         if(newStatus === 'picked' || newStatus === 'partial'){
           orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
+          // A manual entry is one instant action — always fully replaces
+          // any prior per-crate breakdown for this item, never split.
+          var breakdownEntry = {};
+          breakdownEntry[orderDetail.currentCrateNumber] = newStatus === 'partial' ? qty : item.quantity;
+          orderDetail.itemCrateBreakdown[idx] = breakdownEntry;
         } else {
           delete orderDetail.itemCrateNumber[idx];
+          delete orderDetail.itemCrateBreakdown[idx];
         }
         renderOrder();
         fetch('/api/picking-item', {
@@ -1669,10 +1674,22 @@
         var next = nextItemStatus(current);
         orderDetail.itemStatus[idx] = next;
         orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
+        orderDetail.itemCrateBreakdown = orderDetail.itemCrateBreakdown || {};
         if(next === 'picked' || next === 'partial'){
           orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
+          // Cycling straight to "picked" via tap (not partial) always
+          // means the full ordered quantity — one instant action, one
+          // crate, never split.
+          var tapItem = orderDetail.lineItems[idx];
+          var tapQty = next === 'partial'
+            ? ((orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined) ? orderDetail.itemPickedQty[idx] : 0)
+            : (tapItem ? tapItem.quantity : 0);
+          var tapBreakdownEntry = {};
+          tapBreakdownEntry[orderDetail.currentCrateNumber] = tapQty;
+          orderDetail.itemCrateBreakdown[idx] = tapBreakdownEntry;
         } else {
           delete orderDetail.itemCrateNumber[idx];
+          delete orderDetail.itemCrateBreakdown[idx];
         }
         renderOrder();
         fetch('/api/picking-item', {

@@ -800,7 +800,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     // anything in it. This is what tells receiving how many physical
     // boxes to expect for this delivery.
     const closedSet = new Set(record.closedCrates || []);
-    const currentHasItems = Object.values(record.itemCrateNumber || {}).includes(record.currentCrateNumber);
+    const currentHasItems = crateHasAnyItems(record, record.currentCrateNumber);
     if (currentHasItems) closedSet.add(record.currentCrateNumber);
     const crateCount = closedSet.size;
 
@@ -1260,7 +1260,7 @@ app.get("/api/today-orders", async (req, res) => {
       // anything in it. This is what tells a driver how many physical
       // boxes to expect/load for this stop.
       const closedSet = new Set(record.closedCrates || []);
-      const currentHasItems = Object.values(record.itemCrateNumber || {}).includes(record.currentCrateNumber);
+      const currentHasItems = crateHasAnyItems(record, record.currentCrateNumber);
       if (currentHasItems) closedSet.add(record.currentCrateNumber);
       const crateCount = closedSet.size;
 
@@ -1507,7 +1507,8 @@ function getPickingRecord(state, stopName, order) {
       itemNotes: {}, // index -> free text reason
       itemPickedQty: {}, // index -> actual quantity picked (only meaningful for 'partial')
       itemScannedCount: {}, // index -> how many individual units have actually been scanned so far
-      itemCrateNumber: {}, // index -> which crate this item was physically packed into
+      itemCrateNumber: {}, // index -> which crate this item is CURRENTLY active in (legacy/presence field — see itemCrateBreakdown for real per-crate quantities)
+      itemCrateBreakdown: {}, // index -> { crateNumber: unitsPhysicallyPackedIntoThatCrate } — a large-quantity item can legitimately get split across crates if "New Crate" is tapped mid-scan, so quantity has to be tracked per crate, not just one crate per item
       currentCrateNumber: 1, // crate currently being filled; increments via "New Crate"
       closedCrates: [], // list of crate numbers already closed out (label already printed)
       pickedBy: null, // employee name working this order
@@ -1519,10 +1520,40 @@ function getPickingRecord(state, stopName, order) {
   if (!state.picking[key].itemPickedQty) state.picking[key].itemPickedQty = {}; // migrate older records
   if (!state.picking[key].itemScannedCount) state.picking[key].itemScannedCount = {};
   if (!state.picking[key].itemCrateNumber) state.picking[key].itemCrateNumber = {};
+  if (!state.picking[key].itemCrateBreakdown) state.picking[key].itemCrateBreakdown = {};
   if (!state.picking[key].currentCrateNumber) state.picking[key].currentCrateNumber = 1;
   if (!state.picking[key].closedCrates) state.picking[key].closedCrates = [];
   if (state.picking[key].startedAt === undefined) state.picking[key].startedAt = null;
   return state.picking[key];
+}
+
+// Whether a given crate has ANYTHING physically in it yet — used to
+// block "New Crate" on an empty box and to size crateCount for the
+// driver/receiving side. Split-aware: checks the real per-crate
+// breakdown first (covers a large item scanned across multiple crates),
+// then falls back to itemCrateNumber for manually-toggled items, which
+// are never split (a tap-to-pick is one instant, one crate).
+function crateHasAnyItems(record, crateNumber) {
+  const breakdown = record.itemCrateBreakdown || {};
+  for (const idx in breakdown) {
+    if ((breakdown[idx][crateNumber] || 0) > 0) return true;
+  }
+  return Object.values(record.itemCrateNumber || {}).includes(crateNumber);
+}
+
+// How many units of one line item are physically in a specific crate.
+// Split-aware for scanned items (real per-crate breakdown); a manually
+// toggled item was never split, so it's either entirely in whichever
+// crate itemCrateNumber points at, or not in this crate at all.
+function crateQtyForItem(record, idx, item, crateNumber) {
+  const breakdown = record.itemCrateBreakdown && record.itemCrateBreakdown[idx];
+  if (breakdown && breakdown[crateNumber]) return breakdown[crateNumber];
+  if (record.itemCrateNumber[idx] === crateNumber) {
+    const status = record.itemStatus[idx];
+    if (status === "partial") return record.itemPickedQty[idx] || 0;
+    if (status === "picked") return item.quantity;
+  }
+  return 0;
 }
 
 // Finds which route a given stop belongs to, and that route's display
@@ -1714,6 +1745,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       itemPickedQty: record.itemPickedQty,
       itemScannedCount: record.itemScannedCount,
       itemCrateNumber: record.itemCrateNumber,
+      itemCrateBreakdown: record.itemCrateBreakdown,
       currentCrateNumber: record.currentCrateNumber,
       closedCrates: record.closedCrates,
       isB2B: Boolean(order.isB2B),
@@ -1771,11 +1803,17 @@ app.post("/api/picking-item", async (req, res) => {
     }
     if (status === "picked" || status === "partial") {
       // Physically going into a box right now — tag it with whichever
-      // crate is currently active.
+      // crate is currently active. A manual tap is one instant, all-
+      // at-once action, so unlike a multi-scan item it can never
+      // legitimately be split across crates — this fully replaces any
+      // prior breakdown for this item rather than adding to it.
       record.itemCrateNumber[itemIndex] = record.currentCrateNumber;
+      const qtyInCrate = status === "partial" ? (pickedQty || 0) : (order.lineItems[itemIndex] ? order.lineItems[itemIndex].quantity : 0);
+      record.itemCrateBreakdown[itemIndex] = { [record.currentCrateNumber]: qtyInCrate };
     } else {
       // Missing/not_picked items never go in a physical crate
       delete record.itemCrateNumber[itemIndex];
+      delete record.itemCrateBreakdown[itemIndex];
     }
     saveState(state);
     res.json({
@@ -1785,6 +1823,7 @@ app.post("/api/picking-item", async (req, res) => {
       itemPickedQty: record.itemPickedQty,
       itemScannedCount: record.itemScannedCount,
       itemCrateNumber: record.itemCrateNumber,
+      itemCrateBreakdown: record.itemCrateBreakdown,
       currentCrateNumber: record.currentCrateNumber,
     });
   } catch (err) {
@@ -1848,17 +1887,22 @@ app.post("/api/picking-scan", async (req, res) => {
     const item = order.lineItems[matchIdx];
     record.itemScannedCount[matchIdx] = (record.itemScannedCount[matchIdx] || 0) + 1;
     const scannedNow = record.itemScannedCount[matchIdx];
-    // Tag this item with the active crate as soon as the FIRST unit is
-    // scanned, not just once the whole line item is fully accounted
-    // for. Physically, the item is already going into the box the
-    // moment it's scanned — a multi-unit item (e.g. 5 of 25 scanned so
-    // far) is genuinely sitting in the current crate right now, and the
-    // "New Crate" button's running unit count needs to see that. Only
-    // setting this on full completion was why scanning a large-quantity
-    // item never moved the crate badge until every last unit was done.
-    if (!record.itemCrateNumber[matchIdx]) {
-      record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
-    }
+    // This unit is physically going into whichever crate is active RIGHT
+    // NOW — not necessarily the same crate earlier units of this same
+    // item went into. If "New Crate" gets tapped mid-scan on a
+    // large-quantity item, the remaining units really do end up in a
+    // different physical box, so each crate needs its own accurate
+    // count of this item rather than the whole quantity being credited
+    // to a single crate (which either undercounted the new crate or
+    // overcounted it, depending which crate "won").
+    if (!record.itemCrateBreakdown[matchIdx]) record.itemCrateBreakdown[matchIdx] = {};
+    record.itemCrateBreakdown[matchIdx][record.currentCrateNumber] =
+      (record.itemCrateBreakdown[matchIdx][record.currentCrateNumber] || 0) + 1;
+    // itemCrateNumber now just tracks "which crate is this item active
+    // in right now" for quick presence checks — always the current
+    // crate, updated on every scan. The real per-crate quantities live
+    // in itemCrateBreakdown above.
+    record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
     let newStatus = "not_picked";
     if (scannedNow >= item.quantity) {
       newStatus = "picked";
@@ -1877,6 +1921,7 @@ app.post("/api/picking-scan", async (req, res) => {
       itemStatus: record.itemStatus,
       itemScannedCount: record.itemScannedCount,
       itemCrateNumber: record.itemCrateNumber,
+      itemCrateBreakdown: record.itemCrateBreakdown,
       currentCrateNumber: record.currentCrateNumber,
     });
   } catch (err) {
@@ -1901,7 +1946,7 @@ app.post("/api/picking-new-crate", async (req, res) => {
     const record = getPickingRecord(state, key, order);
 
     const closedCrateNumber = record.currentCrateNumber;
-    const hasItemsInCrate = Object.values(record.itemCrateNumber).includes(closedCrateNumber);
+    const hasItemsInCrate = crateHasAnyItems(record, closedCrateNumber);
     if (!hasItemsInCrate) {
       return res.status(400).json({ error: "This crate is empty — pick at least one item before starting a new crate." });
     }
@@ -1972,7 +2017,7 @@ app.post("/api/picking-finish", async (req, res) => {
     // label by the time the order is finished, including the last one,
     // even if the picker never explicitly tapped "New Crate" for it.
     const finalCrateNumber = record.currentCrateNumber;
-    const finalCrateHasItems = Object.values(record.itemCrateNumber).includes(finalCrateNumber);
+    const finalCrateHasItems = crateHasAnyItems(record, finalCrateNumber);
     if (finalCrateHasItems && !record.closedCrates.includes(finalCrateNumber)) {
       record.closedCrates.push(finalCrateNumber);
     }
@@ -2054,23 +2099,16 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
     const state = loadState();
     const record = getPickingRecord(state, key, order);
 
+    // Split-aware: a large-quantity item can legitimately have some
+    // units in an earlier crate and the rest in this one, if "New
+    // Crate" was tapped mid-scan. crateQtyForItem pulls the REAL count
+    // that's physically in THIS specific crate — never the item's full
+    // quantity just because it happens to still be active here, and
+    // never zero just because most of it ended up somewhere else.
     const crateItems = order.lineItems
       .map((item, idx) => {
-        if (record.itemCrateNumber[idx] !== crateNumber) return null;
-        const itemStatusNow = record.itemStatus[idx];
-        // itemCrateNumber now gets tagged on the FIRST scanned unit (see
-        // /api/picking-scan), not just once an item is fully picked — so
-        // a crate can legitimately close while one of its items is still
-        // mid-scan (e.g. 5 of 25 units). The label has to print what's
-        // actually physically in the box: the full ordered quantity for
-        // a completed item, the recorded short-count for an explicit
-        // partial, or the real running scanned count for anything still
-        // in progress — never the full quantity for an item that isn't
-        // actually all there yet.
-        const qty =
-          itemStatusNow === "partial" ? record.itemPickedQty[idx] :
-          itemStatusNow === "picked" ? item.quantity :
-          record.itemScannedCount[idx] || 0;
+        const qty = crateQtyForItem(record, idx, item, crateNumber);
+        if (qty <= 0) return null;
         return { title: item.title, quantity: qty };
       })
       .filter((item) => item !== null);
