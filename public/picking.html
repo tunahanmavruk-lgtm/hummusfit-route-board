@@ -1219,18 +1219,29 @@
       crateFabEl.style.display = 'none';
       return;
     }
-    var itemsInCurrentCrate = orderDetail.lineItems.filter(function(item, idx){
-      return orderDetail.itemCrateNumber && orderDetail.itemCrateNumber[idx] === orderDetail.currentCrateNumber;
-    }).length;
+    // Real unit count, not a line-item count — an item's actual quantity
+    // in the crate is its picked quantity (itemPickedQty, for a partial
+    // pick) or the full ordered quantity otherwise. Counting line items
+    // instead of summing quantities was the bug: 5 different products in
+    // a crate showed "5" even if, say, one of them was 4 units by
+    // itself — the badge was answering "how many distinct products" when
+    // the real question is "how many total units are physically in
+    // there."
+    var unitsInCurrentCrate = 0;
+    orderDetail.lineItems.forEach(function(item, idx){
+      if(!orderDetail.itemCrateNumber || orderDetail.itemCrateNumber[idx] !== orderDetail.currentCrateNumber) return;
+      var qty = (orderDetail.itemPickedQty && orderDetail.itemPickedQty[idx] !== undefined)
+        ? orderDetail.itemPickedQty[idx]
+        : item.quantity;
+      unitsInCurrentCrate += qty;
+    });
     crateFabEl.style.display = 'flex';
-    crateFabEl.disabled = itemsInCurrentCrate === 0;
+    crateFabEl.disabled = unitsInCurrentCrate === 0;
     // Big number: which crate you're actively packing into right now —
     // stays meaningful however far you've scrolled. Small corner badge:
-    // how many items are in it so far. Splitting these out (this button
-    // used to show only the item count, unlabeled) is what was getting
-    // misread as some product's quantity.
+    // total units physically in it so far.
     crateFabCountEl.textContent = orderDetail.currentCrateNumber;
-    crateFabItemCountEl.textContent = itemsInCurrentCrate;
+    crateFabItemCountEl.textContent = unitsInCurrentCrate;
   }
 
   crateFabEl.addEventListener('click', function(){

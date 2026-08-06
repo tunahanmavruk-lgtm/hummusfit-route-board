@@ -875,16 +875,12 @@
       });
 
       var optimizeBtn = '<button class="action-btn optimize" data-optimize="' + route.id + '">Create Route</button>';
+      // This used to also render a second, near-identical "🕐 Started at
+      // HH:MM" badge right next to this one — same information, worded
+      // slightly differently, showing twice in a row. Just the one now.
       var startBtn = meta.startedAt
-        ? '<span class="action-btn started">Started ' + fmtTime(meta.startedAt) + '</span>'
+        ? '<span class="action-btn started">🕐 Started ' + fmtTime(meta.startedAt) + '</span>'
         : '<button class="action-btn start" data-start="' + route.id + '">Start Route</button>';
-
-      // A clearly distinct badge showing the actual start time, separate
-      // from the button label — makes it obvious at a glance that this
-      // route is actively live, not just planned.
-      var startedTimeBadge = meta.startedAt
-        ? '<span class="started-time-badge">🕐 Started at ' + fmtTime(meta.startedAt) + '</span>'
-        : '';
 
       var etaSummary = '';
       if(eta && eta.available && eta.etaBackToHQ){
@@ -941,7 +937,7 @@
           (assignment.van ? vanLiveHtml(assignment.van) : '') +
         '</div>' +
         '<div class="route-actions">' +
-          optimizeBtn + startBtn + openMapsBtn + startedTimeBadge + etaSummary +
+          optimizeBtn + startBtn + openMapsBtn + etaSummary +
         '</div>' +
         '<div class="stops">' + stopsHtml + '</div>';
 
