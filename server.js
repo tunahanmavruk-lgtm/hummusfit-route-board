@@ -6,6 +6,16 @@ const QRCode = require("qrcode");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const webpush = require("web-push");
 
+// Railway rebuilds this service's container fresh on every deploy — any
+// file written to the app's own directory does not survive that (this is
+// exactly what wiped Lynbrook's picking progress on the 8/6/2026 deploy).
+// /data is a persistent Volume mounted onto this service specifically so
+// runtime state (picking progress, push subscriptions) survives deploys
+// and restarts alike. Falls back to the app directory if that mount is
+// ever missing (e.g. running locally without the volume) so the app
+// still works — just without the durability.
+const PERSISTENT_DIR = fs.existsSync("/data") ? "/data" : __dirname;
+
 // The crate label printer is black-ink-only (thermal) — no brand colors
 // on the physical label, so "professional" has to come from real
 // typography/layout/logo instead of color. This is the black-silhouette
@@ -71,7 +81,7 @@ webpush.setVapidDetails(
   VAPID_PRIVATE_KEY
 );
 
-const SUBSCRIPTIONS_FILE = path.join(__dirname, "push-subscriptions.json");
+const SUBSCRIPTIONS_FILE = path.join(PERSISTENT_DIR, "push-subscriptions.json");
 function loadSubscriptions() {
   try {
     return JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, "utf8"));
@@ -121,7 +131,7 @@ function fitTextFontSize(doc, text, maxWidth, maxSize, minSize) {
 
 const app = express();
 const PORT = 3000;
-const DATA_FILE = path.join(__dirname, "data.json");
+const DATA_FILE = path.join(PERSISTENT_DIR, "data.json");
 
 // state.picking gets wiped every day at midnight so today's board
 // starts clean — correct for day-to-day picking, but wrong for
