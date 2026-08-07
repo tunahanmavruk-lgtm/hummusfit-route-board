@@ -1768,6 +1768,8 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       orderName: order.orderName,
       orderId: order.orderId,
       createdAt: order.createdAt,
+      orderCount: order.orderCount || 1,
+      orders: order.orders || [{ name: order.orderName, createdAt: order.createdAt }],
       lineItems: order.lineItems,
       itemStatus: record.itemStatus,
       itemNotes: record.itemNotes,
