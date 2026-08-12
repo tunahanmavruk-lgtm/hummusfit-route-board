@@ -140,7 +140,7 @@ const DATA_FILE = path.join(PERSISTENT_DIR, "data.json");
 // separate file is NEVER touched by the daily reset, so a completed
 // order's real picked data stays findable regardless of what day it
 // currently is when someone actually checks it in.
-const ARCHIVE_FILE = path.join(__dirname, "completed-orders-archive.json");
+const ARCHIVE_FILE = path.join(PERSISTENT_DIR, "completed-orders-archive.json");
 function loadArchive() {
   try {
     return JSON.parse(fs.readFileSync(ARCHIVE_FILE, "utf8"));
@@ -582,7 +582,22 @@ function loadState() {
   try {
     const state = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     if (state.day !== todayEastern()) {
-      return defaultState();
+      // Used to return a brand-new defaultState() here — wiping
+      // EVERYTHING (including state.picking) the instant the calendar
+      // date ticked over at midnight ET. Stores order 12pm-11pm ET for
+      // NEXT-day delivery and picking realistically runs well past
+      // midnight on busy nights, so this was nuking in-progress AND
+      // fully-completed picking work out from under whoever was mid-shift
+      // (confirmed root cause of routes/picklists "randomly disappearing"
+      // — 8/12/2026). state.picking doesn't need protecting here on
+      // purpose: it already self-heals per-order via the orderId check in
+      // getPickingRecord, exactly like the comment below explains for the
+      // deliveryWindowStart/b2bLastResetDate resets. So this now only
+      // bumps the bookkeeping date forward — the two mechanisms below
+      // (deliveryWindowStart for local, b2bLastResetDate for B2B) are
+      // what actually decide when assignments/stopStatus/routeMeta reset,
+      // each on its own correct schedule.
+      state.day = todayEastern();
     }
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     if (!state.picking) state.picking = {}; // migrate older saved state

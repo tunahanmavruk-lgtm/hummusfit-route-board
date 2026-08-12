@@ -442,6 +442,14 @@
     color: var(--teal);
     margin: -6px 0 14px;
   }
+  .crate-reprint-link{
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .crate-reprint-hint{
+    opacity: 0.6;
+  }
 
   #crateFab{
     position: fixed;
@@ -1564,7 +1572,11 @@
           '<div class="crate-info">Currently packing: <strong>Crate ' + orderDetail.currentCrateNumber + '</strong> (' + itemsInCurrentCrate + ' item' + (itemsInCurrentCrate === 1 ? '' : 's') + ') — use the floating button, bottom right, to close it out from anywhere on the page</div>' +
         '</div>';
       if((orderDetail.closedCrates || []).length > 0){
-        html += '<div class="closed-crates-note">Printed: Crate ' + orderDetail.closedCrates.join(', Crate ') + '</div>';
+        html += '<div class="closed-crates-note">Printed: ' +
+          orderDetail.closedCrates.map(function(c){
+            return '<span class="crate-reprint-link" data-crate="' + c + '">Crate ' + c + '</span>';
+          }).join(', ') +
+          ' <span class="crate-reprint-hint">(tap to reprint)</span></div>';
       }
 
       html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>Finish Order</button>';
@@ -1650,6 +1662,17 @@
         showFinishConfirmation(picked, missing, partial, total);
       });
     }
+
+    // Reprint an already-closed crate's label. The backend endpoint
+    // regenerates the PDF fresh from current state every time it's
+    // called (it's not a one-shot/consumed thing), so there's nothing
+    // special to do here beyond just calling it again for the crate
+    // number the picker tapped.
+    document.querySelectorAll('.crate-reprint-link').forEach(function(el){
+      el.addEventListener('click', function(){
+        printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + el.dataset.crate);
+      });
+    });
 
     document.querySelectorAll('[data-scan-idx]').forEach(function(btn){
       btn.addEventListener('click', function(){
