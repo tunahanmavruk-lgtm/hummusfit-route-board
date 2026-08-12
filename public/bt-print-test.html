@@ -3,27 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Phomemo M260 — Bluetooth Diagnostic</title>
+<title>Phomemo M260 — Bluetooth Diagnostic v2</title>
 <style>
   body { font-family: -apple-system, sans-serif; background: #111; color: #eee; padding: 16px; margin: 0; }
   h1 { font-size: 18px; margin: 0 0 4px; }
   p.sub { color: #999; font-size: 13px; margin: 0 0 20px; }
-  button { display: block; width: 100%; padding: 16px; font-size: 16px; font-weight: bold; border: none; border-radius: 10px; margin-bottom: 12px; }
+  button { display: block; width: 100%; padding: 14px; font-size: 15px; font-weight: bold; border: none; border-radius: 10px; margin-bottom: 10px; }
   #connectBtn { background: #2BBFAA; color: #000; }
-  #printTestBtn { background: #E8612C; color: #fff; }
-  button:disabled { opacity: 0.4; }
-  #log { background: #000; border: 1px solid #333; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; height: 60vh; overflow-y: auto; }
+  .trial { background: #E8612C; color: #fff; }
+  button:disabled { opacity: 0.35; }
+  #log { background: #000; border: 1px solid #333; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; height: 42vh; overflow-y: auto; margin-top: 8px; }
   .ok { color: #2BBFAA; }
   .err { color: #ff6b6b; }
   .info { color: #999; }
+  .divider { border-top: 1px solid #333; margin: 16px 0 12px; padding-top: 4px; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
   canvas { display: none; }
 </style>
 </head>
 <body>
-  <h1>Phomemo M260 — Bluetooth Diagnostic</h1>
-  <p class="sub">Step 1: Connect. Step 2: read what it logs (services/characteristics found). Step 3: try the test print. Screenshot the log either way and send it back.</p>
+  <h1>Phomemo M260 — Bluetooth Diagnostic v2</h1>
+  <p class="sub">Connect once, then run each trial below in order — after EACH one, check the printer for any reaction (beep, light, paper feed, print, garbled print) before trying the next. Tell Claude the result of each one, even "nothing happened."</p>
   <button id="connectBtn">1. Connect to Printer</button>
-  <button id="printTestBtn" disabled>2. Send Test Print</button>
+
+  <div class="divider">Trials (try in order)</div>
+  <button class="trial" id="trialInitOnly" disabled>A. Send init only (ESC @) — no image, just see if it reacts at all</button>
+  <button class="trial" id="trialA" disabled>B. Init + raster @ 384px wide (first attempt, repeated)</button>
+  <button class="trial" id="trialB" disabled>C. Init + raster @ 576px wide</button>
+  <button class="trial" id="trialC" disabled>D. Raster only @ 576px, NO init command</button>
+
   <div id="log"></div>
   <canvas id="workCanvas"></canvas>
 
@@ -38,39 +45,32 @@
   }
 
   let device = null;
-  let writeChar = null; // the characteristic we'll actually try writing to
+  let writeChar = null;
 
-  // Candidate services known to be used by Phomemo / generic cheap BLE
-  // thermal printers (confirmed against a working third-party Phomemo
-  // web tool that explicitly lists "M260" support, 8/12/2026) — we ask
-  // for all of them as optionalServices so the browser grants access,
-  // then we actually enumerate whichever the device really exposes
-  // rather than assuming.
   const CANDIDATE_SERVICES = [
     0xff00, 0xff20, 0xae30,
     '49535343-fe7d-4ae5-8fa9-9fafd205e455',
   ];
 
+  const trialButtons = ['trialInitOnly', 'trialA', 'trialB', 'trialC'];
+
   document.getElementById('connectBtn').addEventListener('click', async () => {
     try {
       if (!navigator.bluetooth) {
-        log('navigator.bluetooth is not available in this browser. Must use Chrome on Android, not Safari/iOS.', 'err');
+        log('navigator.bluetooth is not available in this browser. Must use Chrome on Android.', 'err');
         return;
       }
-      log('Requesting device... (Android will show a picker — pick the M260)', 'info');
+      log('Requesting device... (pick the M260)', 'info');
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: CANDIDATE_SERVICES,
       });
-      log('Picked device: ' + device.name + ' (id ' + device.id + ')', 'ok');
-
+      log('Picked: ' + device.name, 'ok');
       device.addEventListener('gattserverdisconnected', () => log('Disconnected.', 'err'));
 
-      log('Connecting to GATT server...', 'info');
       const server = await device.gatt.connect();
-      log('Connected.', 'ok');
+      log('GATT connected.', 'ok');
 
-      log('Enumerating services...', 'info');
       const services = await server.getPrimaryServices();
       log('Found ' + services.length + ' service(s).', 'ok');
 
@@ -88,38 +88,43 @@
           if (ch.properties.write) props.push('write');
           if (ch.properties.writeWithoutResponse) props.push('writeWithoutResponse');
           if (ch.properties.notify) props.push('notify');
-          if (ch.properties.read) props.push('read');
-          log('  CHARACTERISTIC: ' + ch.uuid + '  [' + props.join(', ') + ']');
-          // Prefer the first writable characteristic we find as our
-          // best guess for where to send print data — Phomemo-style
-          // clone printers almost always expose exactly one.
+          log('  CHAR: ' + ch.uuid + '  [' + props.join(', ') + ']');
           if (!writeChar && (ch.properties.write || ch.properties.writeWithoutResponse)) {
             writeChar = ch;
-            log('    -> marking this as the WRITE target for the test print', 'ok');
+            log('    -> using this as WRITE target', 'ok');
           }
         }
       }
 
       if (writeChar) {
-        document.getElementById('printTestBtn').disabled = false;
-        log('Ready. Tap "Send Test Print" whenever you want.', 'ok');
+        trialButtons.forEach(id => document.getElementById(id).disabled = false);
+        log('Ready — run trials A through D in order, checking the printer after each.', 'ok');
       } else {
-        log('No writable characteristic found across any service. This printer may need a different service UUID than the ones we tried, or it uses Bluetooth Classic (SPP) instead of BLE — which Web Bluetooth cannot reach at all.', 'err');
+        log('No writable characteristic found.', 'err');
       }
     } catch (e) {
       log('ERROR: ' + e.message, 'err');
     }
   });
 
-  // Builds a simple 1-bit test raster (text via canvas) and sends it
-  // using the ESC/POS "GS v 0" raster print command — the standard
-  // command real thermal printers (and Phomemo clones) use to print an
-  // arbitrary bitmap. If the M260 uses a genuinely different/proprietary
-  // command set, this will either print garbage or nothing — either
-  // result tells us something real, which is the point of this test.
-  async function buildTestRaster() {
-    const widthPx = 384; // 48mm-wide print head guess at 8px/mm; adjust once we see real output
-    const heightPx = 120;
+  async function sendBytes(payload, label) {
+    log('Sending ' + payload.length + ' bytes (' + label + ')...', 'info');
+    const CHUNK = 180;
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const chunk = payload.slice(i, i + CHUNK);
+      if (writeChar.properties.writeWithoutResponse) {
+        await writeChar.writeValueWithoutResponse(chunk);
+      } else {
+        await writeChar.writeValue(chunk);
+      }
+      // Small pause between chunks — some cheap BLE printer stacks drop
+      // packets sent back-to-back with no gap at all.
+      await new Promise(r => setTimeout(r, 15));
+    }
+    log('  done sending ' + label + '.', 'ok');
+  }
+
+  function buildRaster(widthPx, heightPx) {
     const canvas = document.getElementById('workCanvas');
     canvas.width = widthPx;
     canvas.height = heightPx;
@@ -131,10 +136,10 @@
     ctx.fillStyle = '#fff';
     ctx.fillRect(8, 8, widthPx - 16, heightPx - 16);
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillText('HUMMUS FIT', 20, 50);
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('BT TEST PRINT', 20, 85);
+    ctx.font = 'bold ' + Math.round(widthPx / 14) + 'px sans-serif';
+    ctx.fillText('HUMMUS FIT', 20, Math.round(heightPx * 0.42));
+    ctx.font = 'bold ' + Math.round(widthPx / 20) + 'px sans-serif';
+    ctx.fillText('BT TEST', 20, Math.round(heightPx * 0.72));
 
     const imgData = ctx.getImageData(0, 0, widthPx, heightPx);
     const bytesPerRow = Math.ceil(widthPx / 8);
@@ -142,17 +147,19 @@
     for (let y = 0; y < heightPx; y++) {
       for (let x = 0; x < widthPx; x++) {
         const idx = (y * widthPx + x) * 4;
-        const r = imgData.data[idx], g = imgData.data[idx + 1], b = imgData.data[idx + 2];
-        const luminance = (r + g + b) / 3;
-        const isBlack = luminance < 128;
-        if (isBlack) {
+        const luminance = (imgData.data[idx] + imgData.data[idx + 1] + imgData.data[idx + 2]) / 3;
+        if (luminance < 128) {
           const byteIndex = y * bytesPerRow + (x >> 3);
           const bitIndex = 7 - (x % 8);
           raster[byteIndex] |= (1 << bitIndex);
         }
       }
     }
+    return { raster, bytesPerRow, heightPx };
+  }
 
+  function rasterCommand(widthPx, heightPx) {
+    const { raster, bytesPerRow } = buildRaster(widthPx, heightPx);
     // ESC/POS: GS v 0 m xL xH yL yH [data]
     const header = new Uint8Array([
       0x1d, 0x76, 0x30, 0x00,
@@ -165,31 +172,39 @@
     return full;
   }
 
-  document.getElementById('printTestBtn').addEventListener('click', async () => {
-    if (!writeChar) { log('No write characteristic — connect first.', 'err'); return; }
-    try {
-      log('Building test raster...', 'info');
-      const payload = await buildTestRaster();
-      log('Sending ' + payload.length + ' bytes to ' + writeChar.uuid + '...', 'info');
+  const ESC_INIT = new Uint8Array([0x1b, 0x40]); // ESC @ — standard ESC/POS "initialize printer"
 
-      // BLE writes are capped per-packet (commonly ~180-512 bytes
-      // depending on negotiated MTU) — chunk it rather than sending the
-      // whole payload in one writeValue call, which silently fails or
-      // truncates on most BLE stacks for anything beyond a tiny size.
-      const CHUNK = 180;
-      for (let i = 0; i < payload.length; i += CHUNK) {
-        const chunk = payload.slice(i, i + CHUNK);
-        if (writeChar.properties.writeWithoutResponse) {
-          await writeChar.writeValueWithoutResponse(chunk);
-        } else {
-          await writeChar.writeValue(chunk);
-        }
-        log('  sent bytes ' + i + '-' + Math.min(i + CHUNK, payload.length) + ' of ' + payload.length, 'info');
-      }
-      log('Done sending. Check the printer — did anything print, even garbled?', 'ok');
-    } catch (e) {
-      log('ERROR sending: ' + e.message, 'err');
-    }
+  document.getElementById('trialInitOnly').addEventListener('click', async () => {
+    if (!writeChar) return log('Connect first.', 'err');
+    try {
+      await sendBytes(ESC_INIT, 'ESC @ init only');
+      log('If the printer beeped, blinked, or fed paper just now, ESC/POS commands ARE reaching it — the issue is the raster format. If NOTHING happened at all, this may not be the right characteristic/protocol.', 'ok');
+    } catch (e) { log('ERROR: ' + e.message, 'err'); }
+  });
+
+  document.getElementById('trialA').addEventListener('click', async () => {
+    if (!writeChar) return log('Connect first.', 'err');
+    try {
+      await sendBytes(ESC_INIT, 'init');
+      await new Promise(r => setTimeout(r, 200));
+      await sendBytes(rasterCommand(384, 120), 'raster 384px + init');
+    } catch (e) { log('ERROR: ' + e.message, 'err'); }
+  });
+
+  document.getElementById('trialB').addEventListener('click', async () => {
+    if (!writeChar) return log('Connect first.', 'err');
+    try {
+      await sendBytes(ESC_INIT, 'init');
+      await new Promise(r => setTimeout(r, 200));
+      await sendBytes(rasterCommand(576, 160), 'raster 576px + init');
+    } catch (e) { log('ERROR: ' + e.message, 'err'); }
+  });
+
+  document.getElementById('trialC').addEventListener('click', async () => {
+    if (!writeChar) return log('Connect first.', 'err');
+    try {
+      await sendBytes(rasterCommand(576, 160), 'raster 576px, NO init');
+    } catch (e) { log('ERROR: ' + e.message, 'err'); }
   });
 </script>
 </body>
