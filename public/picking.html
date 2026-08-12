@@ -1362,8 +1362,14 @@
   // print anything.
   var BT_CANDIDATE_SERVICES = [0xff00, 0xff20, 0xae30, '49535343-fe7d-4ae5-8fa9-9fafd205e455'];
   var ESC_INIT = new Uint8Array([0x1b, 0x40]); // ESC @ — standard ESC/POS "initialize printer"
-  var LABEL_RASTER_WIDTH = 576;  // confirmed-working print width for the 70mm M260 stock
-  var LABEL_RASTER_HEIGHT = 640; // 80mm at ~8px/mm (203dpi) — matches the die-cut label height
+  // 70mm stock at 203dpi (8 dots/mm) = 560px exactly. 576px (72mm) was
+  // wrong and printed past the right edge of the physical label — a
+  // real crate label (Yorktown/Crate 1, 8/12/2026) came out with
+  // "Picked by ___" and the border cut off. Using 552px gives a small
+  // safety margin under the true 560px width instead of going right up
+  // to it, since printer-to-printer/stock-batch tolerance is unknown.
+  var LABEL_RASTER_WIDTH = 552;
+  var LABEL_RASTER_HEIGHT = 640; // 80mm at 8px/mm (203dpi) — matches the die-cut label height, unaffected by the width bug
 
   var btPrinter = { device: null, writeChar: null };
 
