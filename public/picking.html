@@ -1380,6 +1380,64 @@
     }
   }
 
+  // Shared by both the manual "Connect printer" tap and the silent
+  // auto-reconnect on page load — enumerates services/characteristics,
+  // picks a writable channel, and sends the required warm-up write.
+  // Does NOT call requestDevice() itself, so it never needs a user
+  // gesture — callers hand it an already-permitted BluetoothDevice.
+  async function finishConnectingToDevice(device){
+    var server = await device.gatt.connect();
+    var services = await server.getPrimaryServices();
+    var writeChar = null;
+    for(var i = 0; i < services.length; i++){
+      var chars = await services[i].getCharacteristics();
+      for(var j = 0; j < chars.length; j++){
+        if(!writeChar && (chars[j].properties.write || chars[j].properties.writeWithoutResponse)){
+          writeChar = chars[j];
+        }
+      }
+    }
+    if(!writeChar) return false;
+    btPrinter.device = device;
+    btPrinter.writeChar = writeChar;
+    device.addEventListener('gattserverdisconnected', function(){
+      btPrinter.writeChar = null;
+      updateBtStatusUI();
+    });
+    // Required warm-up write — see note above.
+    await sendBluetoothBytes(ESC_INIT);
+    updateBtStatusUI();
+    return true;
+  }
+
+  // Tries to reconnect to a printer that was already granted Bluetooth
+  // permission on a previous page load, with NO chooser dialog and no
+  // tap required. Chrome persists Web Bluetooth device permissions per
+  // origin (navigator.bluetooth.getDevices()), and reconnecting to an
+  // already-permitted device doesn't require a user gesture — only the
+  // original requestDevice() picker did. This is what makes "connect
+  // once, ever" possible instead of re-pairing on every order, since
+  // every order opens /picking in a brand-new tab (8/12/2026 — Tony
+  // reported having to re-pair per order, which was this gap).
+  async function attemptSilentReconnect(){
+    if(!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+    try{
+      var known = await navigator.bluetooth.getDevices();
+      for(var i = 0; i < known.length; i++){
+        try{
+          var ok = await finishConnectingToDevice(known[i]);
+          if(ok) return;
+        } catch(e){
+          // This particular remembered device didn't answer (out of
+          // range, off, etc.) — try the next one, if any.
+        }
+      }
+    } catch(e){
+      // getDevices() itself failing just means we fall back to the
+      // manual connect button — not fatal.
+    }
+  }
+
   async function connectBluetoothPrinter(){
     if(!navigator.bluetooth){
       alert('This browser doesn\'t support Bluetooth printing (needs Chrome on Android). The label will print as a PDF instead.');
@@ -1390,31 +1448,11 @@
         acceptAllDevices: true,
         optionalServices: BT_CANDIDATE_SERVICES,
       });
-      var server = await device.gatt.connect();
-      var services = await server.getPrimaryServices();
-      var writeChar = null;
-      for(var i = 0; i < services.length; i++){
-        var chars = await services[i].getCharacteristics();
-        for(var j = 0; j < chars.length; j++){
-          if(!writeChar && (chars[j].properties.write || chars[j].properties.writeWithoutResponse)){
-            writeChar = chars[j];
-          }
-        }
-      }
-      if(!writeChar){
+      var ok = await finishConnectingToDevice(device);
+      if(!ok){
         alert('Connected, but couldn\'t find a printable channel on this device.');
-        return false;
       }
-      btPrinter.device = device;
-      btPrinter.writeChar = writeChar;
-      device.addEventListener('gattserverdisconnected', function(){
-        btPrinter.writeChar = null;
-        updateBtStatusUI();
-      });
-      // Required warm-up write — see note above.
-      await sendBluetoothBytes(ESC_INIT);
-      updateBtStatusUI();
-      return true;
+      return ok;
     } catch(e){
       // User cancelled the device picker, or a real connection error —
       // either way, printing falls back to the PDF flow, so this isn't
@@ -2119,14 +2157,18 @@
     }
   }
 
-  // Bluetooth printer connect button — tap to pair, tap again to
-  // reconnect if it drops. Status persists only for this page load;
-  // Web Bluetooth requires a fresh user-initiated pairing prompt after
-  // a full reload, that's a browser security rule, not a bug here.
+  // Bluetooth printer connect button — first tap ever requires the OS
+  // picker (a real user gesture, required once). After that, every new
+  // /picking page load (each order opens in its own tab) silently
+  // reconnects to the same printer in the background via
+  // attemptSilentReconnect() — no re-pairing, no tap needed. The button
+  // still works as a manual fallback/retry if the silent reconnect
+  // can't find the printer (out of range, powered off, etc.).
   updateBtStatusUI();
   btStatusEl().addEventListener('click', function(){
     connectBluetoothPrinter();
   });
+  attemptSilentReconnect();
 
   // Support deep-linking straight into a specific order, e.g.
   // /picking?stop=Lindenhurst — used by the "order number" link on the
