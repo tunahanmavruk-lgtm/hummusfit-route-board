@@ -451,6 +451,27 @@
     opacity: 0.6;
   }
 
+  .bt-status{
+    position: fixed;
+    left: 12px;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    z-index: 150;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: #2a2a28;
+    color: #999;
+    border: 1px solid #3a3a37;
+    cursor: pointer;
+  }
+  .bt-status.connected{
+    background: var(--teal, #2BBFAA);
+    color: #04231f;
+    border-color: transparent;
+  }
   #crateFab{
     position: fixed;
     right: 18px;
@@ -848,6 +869,12 @@
   <span class="fab-count" id="crateFabCount">1</span>
 </button>
 
+<!-- Tap to pair the Phomemo M260 over Bluetooth. Once connected, every
+     crate-label print (auto-print on finish, "New Crate", and reprint
+     taps) goes straight to the printer instead of opening a PDF. -->
+<div id="btPrinterStatus" class="bt-status">🖨️ Connect printer</div>
+<canvas id="btLabelCanvas" style="display:none;"></canvas>
+
 <script>
 (function(){
   function fmtTime(iso){
@@ -1052,7 +1079,7 @@
         // the time the order is done — even if "New Crate" was never
         // tapped for this last box.
         if(result.data.finalCrateNumber){
-          printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.finalCrateNumber);
+          printCrateLabel(orderDetail.stopName, result.data.finalCrateNumber);
         }
       }).catch(function(err){
         closeModal();
@@ -1308,7 +1335,7 @@
       renderOrder();
       // Print the just-closed crate's label directly, right on this
       // screen — no tab switch, tap Print and keep picking.
-      printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + result.data.closedCrateNumber);
+      printCrateLabel(orderDetail.stopName, result.data.closedCrateNumber);
     }).catch(function(err){
       alert('Could not reach the server: ' + err.message);
       updateCrateFab();
@@ -1322,6 +1349,246 @@
   // picker just scans whatever product is in their hand, and the
   // system finds which line item it matches.
   var hwScanInputEl = document.getElementById('hwScanInput');
+
+  // ---- Direct Bluetooth printing to the Phomemo M260 ----
+  // Confirmed working 8/12/2026 against the real printer via a
+  // standalone diagnostic page: the M260 exposes a writable
+  // characteristic under one of these services and accepts standard
+  // ESC/POS "GS v 0" raster commands. The very FIRST write after
+  // connecting needs to be something (even a no-op init command) or
+  // the first real print silently gets dropped — confirmed by testing,
+  // not a guess. That's why connectBluetoothPrinter() always sends
+  // ESC_INIT immediately after connecting, before anyone tries to
+  // print anything.
+  var BT_CANDIDATE_SERVICES = [0xff00, 0xff20, 0xae30, '49535343-fe7d-4ae5-8fa9-9fafd205e455'];
+  var ESC_INIT = new Uint8Array([0x1b, 0x40]); // ESC @ — standard ESC/POS "initialize printer"
+  var LABEL_RASTER_WIDTH = 576;  // confirmed-working print width for the 70mm M260 stock
+  var LABEL_RASTER_HEIGHT = 640; // 80mm at ~8px/mm (203dpi) — matches the die-cut label height
+
+  var btPrinter = { device: null, writeChar: null };
+
+  function btStatusEl(){ return document.getElementById('btPrinterStatus'); }
+  function updateBtStatusUI(){
+    var el = btStatusEl();
+    if(!el) return;
+    if(btPrinter.writeChar){
+      el.textContent = '🖨️ Printer connected';
+      el.className = 'bt-status connected';
+    } else {
+      el.textContent = '🖨️ Connect printer';
+      el.className = 'bt-status';
+    }
+  }
+
+  async function connectBluetoothPrinter(){
+    if(!navigator.bluetooth){
+      alert('This browser doesn\'t support Bluetooth printing (needs Chrome on Android). The label will print as a PDF instead.');
+      return false;
+    }
+    try{
+      var device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: BT_CANDIDATE_SERVICES,
+      });
+      var server = await device.gatt.connect();
+      var services = await server.getPrimaryServices();
+      var writeChar = null;
+      for(var i = 0; i < services.length; i++){
+        var chars = await services[i].getCharacteristics();
+        for(var j = 0; j < chars.length; j++){
+          if(!writeChar && (chars[j].properties.write || chars[j].properties.writeWithoutResponse)){
+            writeChar = chars[j];
+          }
+        }
+      }
+      if(!writeChar){
+        alert('Connected, but couldn\'t find a printable channel on this device.');
+        return false;
+      }
+      btPrinter.device = device;
+      btPrinter.writeChar = writeChar;
+      device.addEventListener('gattserverdisconnected', function(){
+        btPrinter.writeChar = null;
+        updateBtStatusUI();
+      });
+      // Required warm-up write — see note above.
+      await sendBluetoothBytes(ESC_INIT);
+      updateBtStatusUI();
+      return true;
+    } catch(e){
+      // User cancelled the device picker, or a real connection error —
+      // either way, printing falls back to the PDF flow, so this isn't
+      // a dead end for the picker.
+      if(e.name !== 'NotFoundError'){
+        alert('Could not connect to the printer: ' + e.message);
+      }
+      return false;
+    }
+  }
+
+  async function sendBluetoothBytes(payload){
+    var CHUNK = 180;
+    for(var i = 0; i < payload.length; i += CHUNK){
+      var chunk = payload.slice(i, i + CHUNK);
+      if(btPrinter.writeChar.properties.writeWithoutResponse){
+        await btPrinter.writeChar.writeValueWithoutResponse(chunk);
+      } else {
+        await btPrinter.writeChar.writeValue(chunk);
+      }
+      await new Promise(function(r){ setTimeout(r, 15); });
+    }
+  }
+
+  // Renders the same information as the PDF label (store name, crate
+  // number, order info, contents) to a 1-bit raster sized for the
+  // 70x80mm M260 stock. Deliberately simpler than the PDF version — no
+  // pattern band, no monogram, no QR, no branding footer — matching
+  // exactly what Tony asked the label to contain (8/12/2026): store
+  // name, crate number, and what's in the crate, nothing else.
+  function buildCrateLabelRaster(data, crateNumber){
+    var W = LABEL_RASTER_WIDTH, H = LABEL_RASTER_HEIGHT;
+    var canvas = document.getElementById('btLabelCanvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(10, 10, W - 20, H - 20);
+
+    var M = 26;
+    var usableWidth = W - M * 2;
+    var y = 44;
+
+    function fitFontSize(text, maxWidth, maxSize, minSize){
+      var size = maxSize;
+      ctx.font = 'bold ' + size + 'px sans-serif';
+      while(size > minSize && ctx.measureText(text).width > maxWidth){
+        size -= 4;
+        ctx.font = 'bold ' + size + 'px sans-serif';
+      }
+      return size;
+    }
+
+    ctx.fillStyle = '#000';
+    ctx.textBaseline = 'top';
+    var storeSize = fitFontSize(data.stopNameUpper, usableWidth, 66, 36);
+    ctx.font = 'bold ' + storeSize + 'px sans-serif';
+    ctx.fillText(data.stopNameUpper, M, y);
+    y += storeSize + 14;
+
+    ctx.font = 'bold 74px sans-serif';
+    ctx.fillText('CRATE ' + crateNumber, M, y);
+    y += 74 + 10;
+
+    ctx.font = '18px sans-serif';
+    ctx.fillStyle = '#444';
+    ctx.fillText('Order: ' + data.orderName, M, y);
+    if(data.pickedBy){
+      var pickedText = 'Picked by ' + data.pickedBy.split(',')[0].split(' ')[0];
+      var pickedWidth = ctx.measureText(pickedText).width;
+      ctx.fillText(pickedText, W - M - pickedWidth, y);
+    }
+    y += 30;
+
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(M, y); ctx.lineTo(W - M, y); ctx.stroke();
+    y += 16;
+
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('CONTENTS', M, y);
+    y += 30;
+
+    // Same "shrink to fit, never spill off the physical label" logic as
+    // the PDF version — try roomiest row size first, fall back to
+    // tighter tiers only if the full item list won't otherwise fit.
+    var footerReserve = 20;
+    var availableForItems = H - 10 - y - footerReserve;
+    var tiers = [
+      { fontSize: 26, rowHeight: 40, rowGap: 10 },
+      { fontSize: 22, rowHeight: 34, rowGap: 8 },
+      { fontSize: 19, rowHeight: 28, rowGap: 6 },
+      { fontSize: 16, rowHeight: 23, rowGap: 4 },
+      { fontSize: 14, rowHeight: 20, rowGap: 3 },
+    ];
+    var tier = tiers[tiers.length - 1];
+    for(var t = 0; t < tiers.length; t++){
+      if(data.crateItems.length * (tiers[t].rowHeight + tiers[t].rowGap) <= availableForItems){
+        tier = tiers[t];
+        break;
+      }
+    }
+
+    var displayItems = data.crateItems;
+    var truncatedCount = 0;
+    var maxRows = Math.max(1, Math.floor(availableForItems / (tier.rowHeight + tier.rowGap)));
+    if(data.crateItems.length > maxRows){
+      truncatedCount = data.crateItems.length - (maxRows - 1);
+      displayItems = data.crateItems.slice(0, maxRows - 1);
+    }
+
+    displayItems.forEach(function(item){
+      ctx.font = 'bold ' + tier.fontSize + 'px sans-serif';
+      ctx.fillStyle = '#000';
+      ctx.fillText(String(item.quantity), M, y);
+      ctx.fillText(item.title, M + 46, y, usableWidth - 46);
+      y += tier.rowHeight + tier.rowGap;
+    });
+    if(truncatedCount > 0){
+      ctx.font = 'italic bold ' + Math.max(tier.fontSize - 3, 13) + 'px sans-serif';
+      ctx.fillStyle = '#888';
+      ctx.fillText('+ ' + truncatedCount + ' more — see packing slip', M, y);
+    }
+
+    var imgData = ctx.getImageData(0, 0, W, H);
+    var bytesPerRow = Math.ceil(W / 8);
+    var raster = new Uint8Array(bytesPerRow * H);
+    for(var py = 0; py < H; py++){
+      for(var px = 0; px < W; px++){
+        var idx = (py * W + px) * 4;
+        var luminance = (imgData.data[idx] + imgData.data[idx + 1] + imgData.data[idx + 2]) / 3;
+        if(luminance < 128){
+          var byteIndex = py * bytesPerRow + (px >> 3);
+          var bitIndex = 7 - (px % 8);
+          raster[byteIndex] |= (1 << bitIndex);
+        }
+      }
+    }
+    var header = new Uint8Array([0x1d, 0x76, 0x30, 0x00, bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff, H & 0xff, (H >> 8) & 0xff]);
+    var full = new Uint8Array(header.length + raster.length);
+    full.set(header, 0);
+    full.set(raster, header.length);
+    return full;
+  }
+
+  async function printCrateLabelBluetooth(stopName, crateNumber){
+    var res = await fetch('/api/crate-label-data/' + encodeURIComponent(stopName) + '/' + crateNumber, { cache: 'no-store' });
+    var data = await res.json();
+    if(!res.ok || data.error){ throw new Error(data.error || 'Could not load crate data.'); }
+    var raster = buildCrateLabelRaster(data, crateNumber);
+    await sendBluetoothBytes(raster);
+  }
+
+  // The single entry point every crate-label print goes through now.
+  // If a Bluetooth printer is connected, print directly to it — no PDF,
+  // no print dialog, no tab. Otherwise fall back to the existing
+  // PDF-in-place flow exactly as before, so nothing breaks for anyone
+  // who hasn't paired a printer.
+  async function printCrateLabel(stopName, crateNumber){
+    if(btPrinter.writeChar){
+      try{
+        await printCrateLabelBluetooth(stopName, crateNumber);
+        return;
+      } catch(e){
+        alert('Bluetooth print failed (' + e.message + ') — opening as a PDF instead.');
+        // fall through to PDF
+      }
+    }
+    printPdfInPlace('/api/crate-label/' + encodeURIComponent(stopName) + '/' + crateNumber);
+  }
 
   // Prints a PDF (a crate label) directly from the current screen —
   // no new tab, no navigating away. Loads it into a hidden iframe and
@@ -1663,14 +1930,12 @@
       });
     }
 
-    // Reprint an already-closed crate's label. The backend endpoint
-    // regenerates the PDF fresh from current state every time it's
-    // called (it's not a one-shot/consumed thing), so there's nothing
-    // special to do here beyond just calling it again for the crate
-    // number the picker tapped.
+    // Reprint an already-closed crate's label. Goes through the same
+    // printCrateLabel() path as a fresh crate — Bluetooth if connected,
+    // PDF fallback otherwise — nothing special about a reprint.
     document.querySelectorAll('.crate-reprint-link').forEach(function(el){
       el.addEventListener('click', function(){
-        printPdfInPlace('/api/crate-label/' + encodeURIComponent(orderDetail.stopName) + '/' + el.dataset.crate);
+        printCrateLabel(orderDetail.stopName, el.dataset.crate);
       });
     });
 
@@ -1853,6 +2118,15 @@
       loadList();
     }
   }
+
+  // Bluetooth printer connect button — tap to pair, tap again to
+  // reconnect if it drops. Status persists only for this page load;
+  // Web Bluetooth requires a fresh user-initiated pairing prompt after
+  // a full reload, that's a browser security rule, not a bug here.
+  updateBtStatusUI();
+  btStatusEl().addEventListener('click', function(){
+    connectBluetoothPrinter();
+  });
 
   // Support deep-linking straight into a specific order, e.g.
   // /picking?stop=Lindenhurst — used by the "order number" link on the

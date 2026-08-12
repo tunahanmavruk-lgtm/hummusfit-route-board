@@ -2179,38 +2179,72 @@ app.post("/api/picking-reset-order", async (req, res) => {
 // store name (big, this is what stops a driver from dropping the wrong
 // crate at the wrong store), order number, crate number, and only the
 // items actually packed into THAT crate.
+// Shared by both the PDF label endpoint and the Bluetooth-print JSON
+// endpoint below — one place that decides what goes on a crate label,
+// so the PDF version (browser print) and the direct-to-M260 version
+// (Web Bluetooth from the picking screen) can never silently drift out
+// of sync with each other.
+async function getCrateLabelData(stopNameRaw, crateNumber) {
+  const cache = await fetchTodaysStopOrders();
+  const key = pickingKeyFor(decodeURIComponent(stopNameRaw));
+  const order = cache.byStopName[key];
+  if (!order) return null;
+
+  const state = loadState();
+  const record = getPickingRecord(state, key, order);
+
+  // Split-aware: a large-quantity item can legitimately have some
+  // units in an earlier crate and the rest in this one, if "New
+  // Crate" was tapped mid-scan. crateQtyForItem pulls the REAL count
+  // that's physically in THIS specific crate — never the item's full
+  // quantity just because it happens to still be active here, and
+  // never zero just because most of it ended up somewhere else.
+  const crateItems = order.lineItems
+    .map((item, idx) => {
+      const qty = crateQtyForItem(record, idx, item, crateNumber);
+      if (qty <= 0) return null;
+      return { title: item.title, quantity: qty };
+    })
+    .filter((item) => item !== null);
+
+  if (crateItems.length === 0) return { empty: true };
+
+  const { routeName } = routeInfoForStop(stopNameRaw);
+  const stopNameUpper = decodeURIComponent(stopNameRaw).toUpperCase();
+  const identity = storeIdentityFor(decodeURIComponent(stopNameRaw));
+
+  return {
+    empty: false,
+    orderName: order.orderName,
+    pickedBy: record.pickedBy || null,
+    routeName: routeName || null,
+    stopNameUpper,
+    identity,
+    crateItems,
+  };
+}
+
+app.get("/api/crate-label-data/:stopName/:crateNumber", async (req, res) => {
+  try {
+    const crateNumber = parseInt(req.params.crateNumber, 10);
+    const data = await getCrateLabelData(req.params.stopName, crateNumber);
+    if (!data) return res.status(404).json({ error: "No order found for this stop." });
+    if (data.empty) return res.status(404).json({ error: "No items found in this crate." });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Error building crate label data: " + err.message });
+  }
+});
+
 app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
   try {
-    const cache = await fetchTodaysStopOrders();
-    const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).send("No order found for this stop.");
-
     const crateNumber = parseInt(req.params.crateNumber, 10);
-    const state = loadState();
-    const record = getPickingRecord(state, key, order);
-
-    // Split-aware: a large-quantity item can legitimately have some
-    // units in an earlier crate and the rest in this one, if "New
-    // Crate" was tapped mid-scan. crateQtyForItem pulls the REAL count
-    // that's physically in THIS specific crate — never the item's full
-    // quantity just because it happens to still be active here, and
-    // never zero just because most of it ended up somewhere else.
-    const crateItems = order.lineItems
-      .map((item, idx) => {
-        const qty = crateQtyForItem(record, idx, item, crateNumber);
-        if (qty <= 0) return null;
-        return { title: item.title, quantity: qty };
-      })
-      .filter((item) => item !== null);
-
-    if (crateItems.length === 0) {
-      return res.status(404).send("No items found in this crate.");
-    }
-
-    const { routeName } = routeInfoForStop(req.params.stopName);
-    const stopNameUpper = decodeURIComponent(req.params.stopName).toUpperCase();
-    const identity = storeIdentityFor(decodeURIComponent(req.params.stopName));
+    const data = await getCrateLabelData(req.params.stopName, crateNumber);
+    if (!data) return res.status(404).send("No order found for this stop.");
+    if (data.empty) return res.status(404).send("No items found in this crate.");
+    const { orderName, pickedBy, routeName, stopNameUpper, identity, crateItems } = data;
+    const record = { pickedBy };
+    const order = { orderName };
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
