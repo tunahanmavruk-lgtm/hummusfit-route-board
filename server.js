@@ -2917,6 +2917,15 @@ app.get("/out-of-state", (req, res) => {
 app.get("/sku-coverage", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "sku-coverage.html"));
 });
+// Standalone Web Bluetooth diagnostic for the Phomemo M260 — NOT wired
+// into the real picking/crate-label flow yet. Connects, enumerates
+// every GATT service/characteristic the printer actually exposes, and
+// attempts one raw ESC/POS test raster. Exists to find the real
+// protocol against the real hardware before building it into the app
+// for real (8/12/2026).
+app.get("/bt-print-test", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "bt-print-test.html"));
+});
 
 app.use(express.static(path.join(__dirname, "public")));
 
