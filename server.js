@@ -255,7 +255,9 @@ const B2B_ROUTES = [
       { id: "b2b-mon-v1-2b", name: "Fishkill", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
       { id: "b2b-mon-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
       { id: "b2b-mon-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
-      { id: "b2b-mon-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
+      // Nourish'd moved off Monday (8/12/2026, Tony) — they now get
+      // Tuesday + Thursday deliveries instead. See b2b-tue-v2 and
+      // b2b-thu-v1 below.
     ],
   },
   {
@@ -328,6 +330,9 @@ const B2B_ROUTES = [
       { id: "b2b-thu-v1-2b", name: "Fishkill", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
       { id: "b2b-thu-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
       { id: "b2b-thu-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
+      // Added 8/12/2026 (Tony) — Nourish'd's new schedule is Tuesday +
+      // Thursday, replacing their old Monday/Friday days.
+      { id: "b2b-thu-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
     ],
   },
   {
@@ -342,7 +347,11 @@ const B2B_ROUTES = [
       { id: "b2b-fri-v1-2", name: "Orange", address: "297 Boston Post Rd #14, Orange, CT 06477" },
       { id: "b2b-fri-v1-3", name: "Shelton", address: "890 Bridgeport Ave Ste 14, Shelton, CT 06484" },
       { id: "b2b-fri-v1-4", name: "Fairfield", address: "2465 Black Rock Tpke Unit D, Fairfield, CT" },
-      { id: "b2b-fri-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
+      // Nourish'd removed from Friday (8/12/2026) — Tony's instruction was
+      // "Tuesdays and Thursdays" as their full new schedule, which reads as
+      // replacing Friday too, not just Monday. Flagged in chat for Tony to
+      // confirm — if Nourish'd should actually stay on Friday as a third
+      // delivery day, re-add a stop here.
     ],
   },
   {
@@ -355,6 +364,13 @@ const B2B_ROUTES = [
     stops: [
       { id: "b2b-fri-v2-1", name: "Rochelle", address: "5 W Passaic St #1b, Rochelle Park, NJ 07662" },
       { id: "b2b-fri-v2-2", name: "PWRBLD KOP", address: "167 Town Center Rd, King of Prussia, PA 19406" },
+      // Added 8/12/2026 (Tony) — new customer, Friday delivery. Placed on
+      // Van 2 (the PA/NJ route) rather than Van 1 (all-Connecticut route)
+      // because East Norriton Township is a few miles from King of
+      // Prussia/Norristown — same metro area as PWRBLD KOP, nothing like
+      // Van 1's Meriden/Orange/Shelton/Fairfield CT stops. Sequenced right
+      // after PWRBLD KOP since they're effectively neighbors.
+      { id: "b2b-fri-v2-2b", name: "Powerhouse East Norriton", address: "2704 Dekalb Pike, East Norriton Township, PA 19401" },
       { id: "b2b-fri-v2-3", name: "PWRBLD Warrington", address: "1661 Easton Rd Unit C-1, Warrington, PA 18976" },
     ],
   },
@@ -882,6 +898,12 @@ app.get("/api/b2b-routes-today", (req, res) => {
     routes: todaysRoutes.concat(tomorrowsRoutes),
     allRoutes: B2B_ROUTES,
     drivers: DRIVERS,
+    // Added 8/12/2026 — the out-of-state board's van picker was missing
+    // this entirely (it never got a real fleet dropdown, unlike the local
+    // route board), so route.van ("Van 1"/"Van 2", just a route-slot
+    // label) was the only thing shown, with no way to record which real
+    // physical vehicle is actually running the route. fleet fixes that.
+    fleet: FLEET,
     hq: HQ,
     todayDow,
   });

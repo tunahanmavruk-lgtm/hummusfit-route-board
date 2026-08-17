@@ -826,7 +826,7 @@
         '<div class="assign-row">' +
           '<div class="assign-field">' +
             '<div class="assign-label">Van</div>' +
-            '<div class="fixed-van-label">' + (route.van || '—') + '</div>' +
+            '<select data-route="' + route.id + '" class="van-select">' + buildVanOptions(assignment.van) + '</select>' +
           '</div>' +
           '<div class="assign-field">' +
             '<div class="assign-label">Driver</div>' +
@@ -903,6 +903,25 @@
       });
     });
 
+    // Added 8/12/2026 — this board never had a real van picker, only the
+    // static "Van 1"/"Van 2" route-slot label (route.name already shows
+    // that). Mirrors index.html's .van-select handler exactly, including
+    // the deferred render() (rebuilding the DOM synchronously inside its
+    // own change event is a known iOS Safari white-screen crash).
+    document.querySelectorAll('.van-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var routeId = sel.dataset.route;
+        stateData.assignments[routeId] = stateData.assignments[routeId] || {};
+        stateData.assignments[routeId].van = sel.value;
+        setTimeout(render, 0);
+        fetch('/api/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routeId: routeId, van: sel.value })
+        });
+      });
+    });
+
     document.querySelectorAll('.driver-select').forEach(function(sel){
       sel.addEventListener('change', function(){
         var routeId = sel.dataset.route;
@@ -942,6 +961,7 @@
     ]).then(function(results){
       routesData = results[0].routes;
       driversData = results[0].drivers || [];
+      fleetData = results[0].fleet || [];
       hqData = results[0].hq || { name: 'HQ', address: '' };
       stateData = results[1];
       ordersByStop = results[2].byStopName || {};
