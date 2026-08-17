@@ -854,9 +854,18 @@
      input. A paired hardware scanner types the barcode into whatever
      text field is focused, then sends Enter — this field stays
      silently focused during picking so a scan works no matter what
-     the picker is looking at on screen, no button tap required. -->
+     the picker is looking at on screen, no button tap required.
+     IMPORTANT: this must stay INSIDE the visible viewport (top:0;
+     left:0), not off-screen at a negative offset. renderOrder() calls
+     focusHwScanInput() after every single item action, and re-focusing
+     an element parked outside the viewport makes mobile browsers
+     auto-scroll the page to reveal it — that was the "page jumps up
+     every time I fulfill an item" bug (8/17/2026). Fixed-position at
+     0,0 is always inside the viewport regardless of scroll, so no
+     scroll-into-view is ever triggered, while opacity:0 and
+     pointer-events:none keep it fully invisible and untappable. -->
 <input type="text" id="hwScanInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-  style="position:fixed; top:-100px; left:-100px; width:1px; height:1px; opacity:0; pointer-events:none;">
+  style="position:fixed; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none;">
 
 <!-- Floating "New Crate" button — lives outside the scrolling item
      list entirely, always reachable regardless of order size, so a
@@ -1678,7 +1687,15 @@
 
   function focusHwScanInput(){
     if(view === 'order' && orderDetail && !orderDetail.completedAt){
-      hwScanInputEl.focus();
+      // preventScroll is a second line of defense on top of the fixed
+      // top:0/left:0 positioning above — belt-and-suspenders against
+      // any browser that still tries to scroll a freshly-focused
+      // element into view.
+      try{
+        hwScanInputEl.focus({ preventScroll: true });
+      } catch(e){
+        hwScanInputEl.focus();
+      }
     }
   }
 
