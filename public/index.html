@@ -470,6 +470,19 @@
     transition: box-shadow .15s ease, border-color .15s ease;
   }
   .stop-row:hover{ box-shadow: var(--shadow-sm); border-color: rgba(43,191,170,0.3); }
+  .stop-instruction{
+    flex-basis:100%;
+    margin:8px 0 0 38px;
+    padding:9px 12px;
+    border-radius:11px;
+    border:1px solid rgba(232,97,44,0.28);
+    background:var(--orange-tint);
+    color:var(--orange);
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    font-weight:700;
+    line-height:1.4;
+  }
 
   .stop-name{ font-weight:700; font-size: 14.5px; flex-shrink:0; }
   .stop-badge{
@@ -810,7 +823,7 @@
 
       // Determine stop display order: optimized order if we have it, otherwise original
       var orderedStops = visibleStops;
-      if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length){
+      if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length && meta.optimizedStopIds.every(function(id){ return route.stops.some(function(s){ return s.id === id; }); })){
         orderedStops = meta.optimizedStopIds
           .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
           .filter(function(s){ return s && scheduledToday[s.name.toLowerCase()] !== false; });
@@ -888,6 +901,7 @@
             (etaChip || arrivedChip) +
             pillHtml +
             '<div class="stop-address">' + (stop.address || '') + '</div>' +
+            (stop.instruction ? '<div class="stop-instruction">↔ ' + stop.instruction + '</div>' : '') +
           '</div>';
       });
 

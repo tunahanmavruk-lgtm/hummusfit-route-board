@@ -178,33 +178,33 @@ const ROUTES = [
     time: "4:00 AM",
     vanSize: "Large (350)",
     stops: [
-      { id: "r1-1", name: "Lindenhurst", address: "38 E Sunrise Hwy, Lindenhurst, NY" },
-      { id: "r1-2", name: "Lynbrook", address: "433 Sunrise Highway, Lynbrook, NY" },
-      { id: "r1-3", name: "Island Park", address: "4587 Austin Blvd, Island Park, NY" },
-      { id: "r1-4", name: "Bellmore", address: "2060 Bellmore Ave, Bellmore, NY" },
+      { id: "r1-deer-park-v2", name: "Deer Park", address: "550 Commack Road, Unit B, Deer Park, NY" },
+      { id: "r1-lindenhurst-v2", name: "Lindenhurst", address: "38 E Sunrise Hwy, Lindenhurst, NY" },
+      { id: "r1-islip-v2", name: "Islip", address: "14 E Main St, East Islip, NY" },
     ],
   },
   {
     id: "r2",
     name: "Route #2",
-    time: "7:30 AM",
+    time: "After Route #1",
     vanSize: "Large (350)",
     stops: [
-      { id: "r2-1", name: "Islip", address: "14 E Main St, East Islip, NY" },
-      { id: "r2-2", name: "Farmingdale", address: "101 Fulton Street, Farmingdale, NY" },
-      { id: "r2-3", name: "Deer Park", address: "550 Commack Road, Unit B, Deer Park, NY" },
+      { id: "r2-lynbrook-v2", name: "Lynbrook", address: "433 Sunrise Highway, Lynbrook, NY" },
+      { id: "r2-island-park-v2", name: "Island Park", address: "4587 Austin Blvd, Island Park, NY" },
+      { id: "r2-bellmore-v2", name: "Bellmore", address: "2060 Bellmore Ave, Bellmore, NY" },
+      { id: "r2-ozone-park-v2", name: "Ozone Park", brand: "Natural Body", address: "135-26 Crossbay Blvd, Ozone Park, NY 11417", deliveryDays: [1, 3, 5] },
     ],
   },
   {
     id: "r3",
     name: "Route #3",
-    time: "9:00 AM",
+    time: "8:00 AM",
     vanSize: "Small",
     stops: [
-      { id: "r3-1", name: "Woodbury", address: "150 Woodbury Road, Woodbury, NY" },
-      { id: "r3-2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
-      { id: "r3-3", name: "Ozone Park", brand: "Natural Body", address: "135-26 Crossbay Blvd, Ozone Park, NY 11417", deliveryDays: [1, 3, 5] },
-      { id: "r3-4", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
+      { id: "r3-woodbury-v2", name: "Woodbury", address: "150 Woodbury Road, Woodbury, NY" },
+      { id: "r3-huntington-v2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
+      { id: "r3-farmingdale-v2", name: "Farmingdale", address: "101 Fulton Street, Farmingdale, NY" },
+      { id: "r3-hicksville-v2", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
     ],
   },
   {
@@ -215,7 +215,7 @@ const ROUTES = [
     stops: [
       { id: "r4-1", name: "Selden", address: "680 Middle Country Rd, Selden, NY" },
       { id: "r4-2", name: "Miller Place", address: "451 Route 25A, Miller Place, NY" },
-      { id: "r4-3", name: "Lake Grove", address: "2810 Middle Country Rd, Lake Grove, NY" },
+      { id: "r4-3", name: "Lake Grove", address: "2810 Middle Country Rd, Lake Grove, NY", instruction: "Swap vans at Lake Grove before returning to Islandia HQ" },
     ],
   },
   {
@@ -2855,6 +2855,13 @@ async function optimizeRouteWithGoogle(route) {
   };
 }
 
+function cachedRouteMatchesDefinition(meta, route) {
+  if (!meta || !Array.isArray(meta.optimizedStopIds)) return false;
+  if (meta.optimizedStopIds.length !== route.stops.length) return false;
+  const currentStopIds = new Set(route.stops.map((stop) => stop.id));
+  return meta.optimizedStopIds.every((stopId) => currentStopIds.has(stopId));
+}
+
 app.post("/api/optimize-route", async (req, res) => {
   const { routeId } = req.body;
   const route = getRouteById(routeId);
@@ -2881,8 +2888,8 @@ app.post("/api/start-route", async (req, res) => {
 
   const state = loadState();
   try {
-    // If we don't already have an optimized order cached for today, compute one now
-    if (!state.routeMeta[routeId] || !state.routeMeta[routeId].optimizedStopIds) {
+    // Recompute when today's cached route was created from an older permanent definition.
+    if (!cachedRouteMatchesDefinition(state.routeMeta[routeId], route)) {
       const optimized = await optimizeRouteWithGoogle(route);
       state.routeMeta[routeId] = { ...(state.routeMeta[routeId] || {}), ...optimized };
     }
