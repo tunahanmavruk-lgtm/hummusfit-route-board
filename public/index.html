@@ -228,6 +228,19 @@
     font-weight:700;
     color: #7EEAD6;
   }
+  .route-duty{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:5px 12px;
+    padding:12px 24px;
+    border-bottom:1px solid var(--line);
+    background:#f3faf7;
+    color:var(--navy);
+    font-size:12px;
+    line-height:1.45;
+  }
+  .route-duty strong{ color:var(--teal-dark); }
+  .route-duty span{ grid-column:1 / -1; color:var(--muted); }
 
   .route-actions{
     display:flex;
@@ -810,7 +823,8 @@
         return scheduledToday[key] !== false;
       });
 
-      var deliveredCount = visibleStops.filter(function(s){
+      var deliveryStops = visibleStops.filter(function(s){ return !s.isServiceStop; });
+      var deliveredCount = deliveryStops.filter(function(s){
         var st = stateData.stopStatus[s.id];
         return st && st.status === 'delivered';
       }).length;
@@ -953,8 +967,10 @@
           '<span class="route-name">' + route.name + '</span>' +
           '<span class="route-time">' + route.time + '</span>' +
           '<span class="route-size">' + route.vanSize + '</span>' +
-          '<span class="route-progress">' + deliveredCount + '/' + visibleStops.length + ' delivered</span>' +
+          '<span class="route-progress">' + deliveredCount + '/' + deliveryStops.length + ' delivered</span>' +
         '</div>' +
+        ((route.responsibleDriver || route.dutySummary) ?
+          '<div class="route-duty"><strong>Permanent responsibility</strong><b>' + (route.responsibleDriver || 'Assigned manager') + '</b><span>' + (route.dutySummary || '') + '</span></div>' : '') +
         parkwayWarning +
         '<div class="assign-row">' +
           '<div class="assign-field">' +

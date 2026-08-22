@@ -12,10 +12,20 @@ test("keeps the current Long Island routes grouped in delivery order", () => {
   assert.match(server, /name: "Route #3"[\s\S]*?time: "8:00 AM"[\s\S]*?Woodbury[\s\S]*?Huntington[\s\S]*?Farmingdale[\s\S]*?Hicksville/);
 });
 
-test("shows the Lake Grove van swap without creating a fake delivery stop", () => {
-  assert.match(server, /name: "Lake Grove"[^\n]*instruction: "Swap vans at Lake Grove before returning to Islandia HQ"/);
+test("keeps Route #4's Lake Grove visit as a van-swap checkpoint only", () => {
+  assert.match(server, /responsibleDriver: "Berke or Hazar"/);
+  assert.match(server, /name: "Lake Grove — Van Swap"[^\n]*isServiceStop: true/);
+  assert.match(server, /route\.stops\.filter\(\(s\) => !s\.isServiceStop\)/);
   assert.match(board, /stop-instruction/);
   assert.match(board, /stop\.instruction/);
+});
+
+test("assigns Route #5 to Richie and separates Lake Grove delivery and pickup duties", () => {
+  assert.match(server, /name: "Route #5"[\s\S]*?responsibleDriver: "Richie"[\s\S]*?defaultDriver: "Chavez, Richy C"/);
+  assert.match(server, /name: "Ronkonkoma"[^\n]*instruction: "Product drop-off\."/);
+  assert.match(server, /name: "Lake Grove"[^\n]*Drop off Lake Grove's order and empty crates\. Pick up chicken, ingredients, and bus containers for Holbrook\./);
+  assert.match(server, /name: "Holbrook"[^\n]*Drop off the chicken, ingredients, and bus containers picked up at Lake Grove\./);
+  assert.match(board, /Permanent responsibility/);
 });
 
 test("invalidates cached navigation when a permanent route changes", () => {

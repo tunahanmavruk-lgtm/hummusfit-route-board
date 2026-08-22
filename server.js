@@ -212,10 +212,12 @@ const ROUTES = [
     name: "Route #4",
     time: "8:00 AM",
     vanSize: "Any",
+    responsibleDriver: "Berke or Hazar",
+    dutySummary: "Deliver Selden and Miller Place. At Lake Grove, swap vans only before returning to Islandia HQ.",
     stops: [
       { id: "r4-1", name: "Selden", address: "680 Middle Country Rd, Selden, NY" },
       { id: "r4-2", name: "Miller Place", address: "451 Route 25A, Miller Place, NY" },
-      { id: "r4-3", name: "Lake Grove", address: "2810 Middle Country Rd, Lake Grove, NY", instruction: "Swap vans at Lake Grove before returning to Islandia HQ" },
+      { id: "r4-swap-lake-grove", name: "Lake Grove — Van Swap", address: "2810 Middle Country Rd, Lake Grove, NY", instruction: "Swap vans only before returning to Islandia HQ. Route #5 handles Lake Grove's order, crates, and product pickup.", isServiceStop: true },
     ],
   },
   {
@@ -223,9 +225,13 @@ const ROUTES = [
     name: "Route #5",
     time: "8:00 AM",
     vanSize: "Any",
+    responsibleDriver: "Richie",
+    defaultDriver: "Chavez, Richy C",
+    dutySummary: "Deliver Ronkonkoma, service Lake Grove, then continue to Holbrook.",
     stops: [
-      { id: "r5-1", name: "Holbrook", address: "1066 Main Street, Holbrook, NY" },
-      { id: "r5-2", name: "Ronkonkoma", address: "200 Ronkonkoma Ave, Ronkonkoma, NY" },
+      { id: "r5-ronkonkoma-v2", name: "Ronkonkoma", address: "200 Ronkonkoma Ave, Ronkonkoma, NY", instruction: "Product drop-off." },
+      { id: "r5-lake-grove-v2", name: "Lake Grove", address: "2810 Middle Country Rd, Lake Grove, NY", instruction: "Drop off Lake Grove's order and empty crates. Pick up chicken, ingredients, and bus containers for Holbrook." },
+      { id: "r5-holbrook-v2", name: "Holbrook", address: "1066 Main Street, Holbrook, NY", instruction: "Drop off the chicken, ingredients, and bus containers picked up at Lake Grove." },
     ],
   },
 ];
@@ -388,7 +394,7 @@ const B2B_ROUTES = [
 // theme so pickers can't mistake one for a local order.
 const VALID_STOP_NAMES = new Map(
   ROUTES.concat(B2B_ROUTES).flatMap((route) =>
-    route.stops.map((s) => [
+    route.stops.filter((s) => !s.isServiceStop).map((s) => [
       s.name.toLowerCase(),
       { isB2B: Boolean(s.isB2B) || Boolean(route.day !== undefined), deliveryDays: s.deliveryDays || null },
     ])
@@ -399,7 +405,7 @@ const VALID_STOP_NAMES = new Map(
 // stop's real display name — this maps the lowercase key used internally
 // back to how it should actually be shown (e.g. "harrison" -> "Harrison").
 const STOP_DISPLAY_NAME = new Map(
-  ROUTES.concat(B2B_ROUTES).flatMap((route) => route.stops.map((s) => [s.name.toLowerCase(), s.name]))
+  ROUTES.concat(B2B_ROUTES).flatMap((route) => route.stops.filter((s) => !s.isServiceStop).map((s) => [s.name.toLowerCase(), s.name]))
 );
 
 function isStopScheduledToday(stopMeta, now = new Date()) {
@@ -585,7 +591,12 @@ function getOrderWindowEastern(now = new Date()) {
 function defaultState() {
   return {
     day: todayEastern(),
-    assignments: {},
+    assignments: Object.fromEntries(
+      ROUTES.filter((route) => route.defaultDriver).map((route) => [
+        route.id,
+        { van: "", driver: route.defaultDriver },
+      ])
+    ),
     stopStatus: {},
     routeMeta: {},
     picking: {},
@@ -644,6 +655,9 @@ function loadState() {
         delete state.assignments[id];
         delete state.stopStatus[id];
         delete state.routeMeta[id];
+      });
+      ROUTES.filter((route) => route.defaultDriver).forEach((route) => {
+        state.assignments[route.id] = { van: "", driver: route.defaultDriver };
       });
       state.deliveryWindowStart = currentWindowStart;
       saveState(state);
