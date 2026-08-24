@@ -447,6 +447,14 @@
     text-underline-offset: 2px;
     cursor: pointer;
   }
+  .crate-edit-link{
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    color: var(--orange);
+    font-weight: 600;
+    margin-left: 2px;
+  }
   .crate-reprint-hint{
     opacity: 0.6;
   }
@@ -1900,11 +1908,12 @@
           '<div class="crate-info">Currently packing: <strong>Crate ' + orderDetail.currentCrateNumber + '</strong> (' + itemsInCurrentCrate + ' item' + (itemsInCurrentCrate === 1 ? '' : 's') + ') — use the floating button, bottom right, to close it out from anywhere on the page</div>' +
         '</div>';
       if((orderDetail.closedCrates || []).length > 0){
-        html += '<div class="closed-crates-note">Printed: ' +
-          orderDetail.closedCrates.map(function(c){
-            return '<span class="crate-reprint-link" data-crate="' + c + '">Crate ' + c + '</span>';
+        html += '<div class="closed-crates-note">Closed: ' +
+          orderDetail.closedCrates.slice().sort(function(a, b){ return a - b; }).map(function(c){
+            return '<span class="crate-reprint-link" data-crate="' + c + '">Crate ' + c + '</span>' +
+              ' <span class="crate-edit-link" data-edit-crate="' + c + '">Edit</span>';
           }).join(', ') +
-          ' <span class="crate-reprint-hint">(tap to reprint)</span></div>';
+          ' <span class="crate-reprint-hint">(tap the crate number to reprint its label, tap Edit to add/remove items in it)</span></div>';
       }
 
       html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>Finish Order</button>';
@@ -1997,6 +2006,37 @@
     document.querySelectorAll('.crate-reprint-link').forEach(function(el){
       el.addEventListener('click', function(){
         printCrateLabel(orderDetail.stopName, el.dataset.crate);
+      });
+    });
+
+    // Reopen a closed crate so its items can be edited — adds/removes/
+    // quantity changes on any item then land in THIS crate, because
+    // every pick/scan action already writes to whichever crate number
+    // the server considers "current." Closing it again (New Crate)
+    // reprints its label with whatever changed.
+    document.querySelectorAll('.crate-edit-link').forEach(function(el){
+      el.addEventListener('click', function(){
+        var crateNumber = el.dataset.editCrate;
+        el.textContent = 'Reopening…';
+        fetch('/api/picking-reopen-crate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stopName: orderDetail.stopName, crateNumber: crateNumber })
+        }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+          .then(function(result){
+            if(!result.ok || result.data.error){
+              alert(result.data.error || 'Could not reopen this crate.');
+              renderOrder();
+              return;
+            }
+            orderDetail.closedCrates = result.data.closedCrates;
+            orderDetail.currentCrateNumber = result.data.currentCrateNumber;
+            renderOrder();
+          })
+          .catch(function(err){
+            alert('Could not reach the server: ' + err.message);
+            renderOrder();
+          });
       });
     });
 

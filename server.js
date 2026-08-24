@@ -336,30 +336,33 @@ const B2B_ROUTES = [
       { id: "b2b-thu-v1-2b", name: "Fishkill", address: "540 Federal Rd Unit 2B, Brookfield, CT 06804" },
       { id: "b2b-thu-v1-3", name: "Carmel", address: "51 Gleneida Ave, Carmel Hamlet, NY 10512" },
       { id: "b2b-thu-v1-4", name: "Yorktown", address: "1420 E Main St, Shrub Oak, NY 10588" },
-      // Added 8/12/2026 (Tony) — Nourish'd's new schedule is Tuesday +
-      // Thursday, replacing their old Monday/Friday days.
-      { id: "b2b-thu-v1-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
     ],
   },
   {
-    id: "b2b-fri-v1",
-    day: 5,
-    name: "Friday — Van 1",
-    van: "Van 1",
+    // Added 8/17/2026 (Tony, with the full written schedule) — Nourish'd's
+    // Tuesday+Thursday delivery isn't a stop tacked onto the existing
+    // Thursday NY/CT route (that was wrong, corrected same day) — it's a
+    // second full Thursday route, same driver/stop pattern as Tuesday's
+    // Van 2 run.
+    id: "b2b-thu-v2",
+    day: 4,
+    name: "Thursday — Van 2",
+    van: "Van 2",
     miles: 268,
     baseShiftHours: 7.3,
     stops: [
-      { id: "b2b-fri-v1-1", name: "Meriden", address: "477 S Broad St Ste 8, Meriden, CT 06451" },
-      { id: "b2b-fri-v1-2", name: "Orange", address: "297 Boston Post Rd #14, Orange, CT 06477" },
-      { id: "b2b-fri-v1-3", name: "Shelton", address: "890 Bridgeport Ave Ste 14, Shelton, CT 06484" },
-      { id: "b2b-fri-v1-4", name: "Fairfield", address: "2465 Black Rock Tpke Unit D, Fairfield, CT" },
-      // Nourish'd removed from Friday (8/12/2026) — Tony's instruction was
-      // "Tuesdays and Thursdays" as their full new schedule, which reads as
-      // replacing Friday too, not just Monday. Flagged in chat for Tony to
-      // confirm — if Nourish'd should actually stay on Friday as a third
-      // delivery day, re-add a stop here.
+      { id: "b2b-thu-v2-1", name: "Meriden", address: "477 S Broad St Ste 8, Meriden, CT 06451" },
+      { id: "b2b-thu-v2-2", name: "Orange", address: "297 Boston Post Rd #14, Orange, CT 06477" },
+      { id: "b2b-thu-v2-3", name: "Shelton", address: "890 Bridgeport Ave Ste 14, Shelton, CT 06484" },
+      { id: "b2b-thu-v2-4", name: "Fairfield", address: "2465 Black Rock Tpke Unit D, Fairfield, CT" },
+      { id: "b2b-thu-v2-5", name: "Nourish'd", address: "91 High Ridge Rd, Stamford, CT 06905" },
     ],
   },
+  // b2b-fri-v1 (the Friday CT route: Meriden/Orange/Shelton/Fairfield)
+  // removed entirely 8/17/2026 — Tony's written schedule confirms Friday
+  // only runs one van (Van 2, below). This resolves the open question
+  // from the last deploy about whether Nourish'd should stay on Friday —
+  // the whole route it was on doesn't run Fridays anymore.
   {
     id: "b2b-fri-v2",
     day: 5,
@@ -2053,9 +2056,63 @@ app.post("/api/picking-new-crate", async (req, res) => {
     }
 
     record.closedCrates.push(closedCrateNumber);
-    record.currentCrateNumber = closedCrateNumber + 1;
+    // NOT closedCrateNumber + 1 — a picker can reopen an earlier closed
+    // crate to fix it (see /api/picking-reopen-crate below), close it
+    // again, and by then higher-numbered crates may already exist.
+    // Always resume from the true highest crate number seen so far, or
+    // this would hand out a crate number that's already in use and
+    // silently merge two different physical boxes into one record.
+    record.currentCrateNumber = Math.max(0, ...record.closedCrates) + 1;
     saveState(state);
     res.json({ ok: true, closedCrateNumber, currentCrateNumber: record.currentCrateNumber });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reopen an already-closed crate so a picker can add items to it, pull
+// items out of it, or fix a mistake — while it's still physically sitting
+// in the fridge/warehouse, not yet loaded onto the van. This just moves
+// the "currently packing" pointer back to that crate number; every
+// existing pick/scan/remove action already writes to whichever crate
+// number is "current," so nothing else has to change for edits to land
+// in the right place. Tapping "New Crate" again re-closes it (and
+// reprints its label with whatever changed) through the normal path.
+app.post("/api/picking-reopen-crate", async (req, res) => {
+  try {
+    const { stopName, crateNumber } = req.body;
+    if (!stopName || crateNumber === undefined) {
+      return res.status(400).json({ error: "stopName and crateNumber required" });
+    }
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const order = cache.byStopName[key];
+    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const record = getPickingRecord(state, key, order);
+    const targetCrate = Number(crateNumber);
+
+    if (!record.closedCrates.includes(targetCrate)) {
+      return res.status(400).json({ error: "That crate isn't closed — nothing to reopen." });
+    }
+
+    // Whatever crate is active right now has to go somewhere first — if
+    // it already has real items in it, close it out properly (same rule
+    // /api/picking-new-crate and finish-order already use) so those
+    // items don't silently become untracked once the pointer moves.
+    if (
+      record.currentCrateNumber !== targetCrate &&
+      crateHasAnyItems(record, record.currentCrateNumber) &&
+      !record.closedCrates.includes(record.currentCrateNumber)
+    ) {
+      record.closedCrates.push(record.currentCrateNumber);
+    }
+
+    record.closedCrates = record.closedCrates.filter((c) => c !== targetCrate);
+    record.currentCrateNumber = targetCrate;
+    saveState(state);
+    res.json({ ok: true, closedCrates: record.closedCrates, currentCrateNumber: record.currentCrateNumber });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
