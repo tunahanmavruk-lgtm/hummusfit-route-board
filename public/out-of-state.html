@@ -412,6 +412,14 @@
     background: var(--orange-tint);
     color: var(--orange);
   }
+  /* Distinct from the plain brand badge above — this one's a warning
+     that the stop only showed up today because a real order exists
+     outside its normal delivery day, not a routine label. Teal instead
+     of orange so it doesn't visually blend with the brand badge. */
+  .stop-badge.off-cycle{
+    background: var(--teal-tint);
+    color: var(--teal);
+  }
 
   .order-pill{
     margin-left:auto;
@@ -680,10 +688,16 @@
 
       // Stops that aren't scheduled to deliver today (e.g. Natural Body's
       // Mon/Wed/Fri-only schedule) are fully hidden from the board, not
-      // just muted — the route visually shrinks on its off days.
+      // just muted — the route visually shrinks on its off days. BUT a
+      // stop with a real unfulfilled order sitting on it always stays
+      // visible regardless of schedule — a B2B account that orders off
+      // its normal day (see Brookfield-style off-cycle orders) still has
+      // a real order that needs to be picked and delivered, and hiding
+      // the row entirely made that order invisible until its normal day
+      // came back around, even though nothing had actually fulfilled it.
       var visibleStops = route.stops.filter(function(s){
         var key = s.name.toLowerCase();
-        return scheduledToday[key] !== false;
+        return scheduledToday[key] !== false || Boolean(ordersByStop[key]);
       });
 
       var deliveredCount = visibleStops.filter(function(s){
@@ -699,7 +713,7 @@
       if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length){
         orderedStops = meta.optimizedStopIds
           .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
-          .filter(function(s){ return s && scheduledToday[s.name.toLowerCase()] !== false; });
+          .filter(function(s){ return s && (scheduledToday[s.name.toLowerCase()] !== false || Boolean(ordersByStop[s.name.toLowerCase()])); });
       }
 
       var stopsHtml = '';
@@ -709,6 +723,14 @@
         var stopKey = stop.name.toLowerCase();
         var order = ordersByStop[stopKey];
         var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
+        // A real order sitting on an off-day stop (see visibleStops filter
+        // above) is exactly the case this badge exists for — dispatch
+        // needs to know at a glance that this isn't a mistake or a stale
+        // row, it's a customer who ordered outside their normal cadence
+        // and still needs picking/delivery like any other order.
+        var offCycleBadge = (order && !isScheduled)
+          ? '<span class="stop-badge off-cycle" title="Ordered outside this stop\'s normal delivery day">Off-cycle order</span>'
+          : '';
         var pillHtml;
         if(order){
           pillHtml = '<a class="order-pill lit" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener">' + order.orderName + ' →</a>';
@@ -759,6 +781,7 @@
             '<div class="status-dot ' + status + '" data-stop="' + stop.id + '"></div>' +
             '<div class="stop-name">' + stop.name + '</div>' +
             (stop.brand ? '<span class="stop-badge">' + stop.brand + '</span>' : '') +
+            offCycleBadge +
             statusLabelHtml +
             pickingChip +
             crateChip +
@@ -796,7 +819,7 @@
       if(meta.optimizedStopIds && meta.optimizedStopIds.length){
         var orderedForMaps = meta.optimizedStopIds
           .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
-          .filter(function(s){ return s && s.address && scheduledToday[s.name.toLowerCase()] !== false; });
+          .filter(function(s){ return s && s.address && (scheduledToday[s.name.toLowerCase()] !== false || Boolean(ordersByStop[s.name.toLowerCase()])); });
         if(orderedForMaps.length){
           var origin = encodeURIComponent(hqData.address);
           var destination = encodeURIComponent(hqData.address);
