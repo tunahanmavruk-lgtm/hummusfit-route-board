@@ -1170,7 +1170,10 @@ async function refreshOrdersCache() {
       // picking LIST screen still needs to show each individual order's
       // own timestamp so it's obvious a second order came in later, not
       // just a combined item count.
-      orders: stopOrders.map((o) => ({ name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      // id kept alongside name/createdAt so a finished pick can auto-
+      // fulfill the REAL underlying Shopify order(s) — a merged multi-
+      // order stop needs its own fulfillment call per real order id.
+      orders: stopOrders.map((o) => ({ id: o.id, name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: false,
     };
@@ -1317,7 +1320,10 @@ async function fetchB2BStopOrders() {
       orderName: stopOrders.map((o) => o.name).join(", "),
       orderCount: stopOrders.length,
       createdAt: stopOrders.map((o) => o.createdAt).sort()[0],
-      orders: stopOrders.map((o) => ({ name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      // id kept alongside name/createdAt so a finished pick can auto-
+      // fulfill the REAL underlying Shopify order(s) — a merged multi-
+      // order stop needs its own fulfillment call per real order id.
+      orders: stopOrders.map((o) => ({ id: o.id, name: o.name, createdAt: o.createdAt })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
       lineItems: await sortItemsForPicking(Object.values(mergedItemsByKey)),
       isB2B: true,
     };
@@ -2241,6 +2247,85 @@ app.post("/api/picking-set-picker", async (req, res) => {
   }
 });
 
+// ================= AUTO-FULFILLMENT =================
+// Once a pick is finished on Route Board, mark the REAL underlying
+// Shopify order(s) fulfilled automatically — replaces the old fully-
+// manual "pick here, then separately go fulfill in Shopify" step
+// (Tony, 9/2026). A merged multi-order stop needs its own fulfillment
+// call per real Shopify order (fulfillmentCreate only ever fulfills
+// fulfillment orders belonging to one order at a time), so this runs
+// once per order.orders entry, never assuming a stop is just one order.
+//
+// notifyCustomer is explicitly set to false. Shopify's own default is
+// already false, but it's spelled out here on purpose: silently
+// emailing a customer "your order has shipped" the instant fridge-crew
+// picking finishes — potentially hours before the van actually leaves
+// — would be wrong. This only updates Shopify's internal fulfillment
+// status; no customer-facing notification goes out.
+async function fulfillShopifyOrder(shopifyOrderId) {
+  const data = await shopifyGraphQL(
+    `query($id: ID!) {
+      order(id: $id) {
+        id
+        name
+        fulfillmentOrders(first: 10) {
+          edges { node { id status } }
+        }
+      }
+    }`,
+    { id: shopifyOrderId }
+  );
+  const ord = data && data.order;
+  if (!ord) {
+    return { orderId: shopifyOrderId, ok: false, error: "Order not found in Shopify." };
+  }
+  // SCHEDULED (deferred until a future fulfill_at) and ON_HOLD orders
+  // would just bounce back a userError if fulfillmentCreate were called
+  // on them right now — only OPEN/IN_PROGRESS are actually fulfillable
+  // in the moment picking finishes.
+  const fulfillableFOs = (ord.fulfillmentOrders.edges || [])
+    .map((e) => e.node)
+    .filter((fo) => fo.status === "OPEN" || fo.status === "IN_PROGRESS");
+  if (fulfillableFOs.length === 0) {
+    // Already fully fulfilled, or nothing left to fulfill — not an
+    // error, just nothing left to do for this specific order.
+    return { orderId: shopifyOrderId, orderName: ord.name, ok: true, skipped: true };
+  }
+  const mutationData = await shopifyGraphQL(
+    `mutation($fulfillment: FulfillmentInput!) {
+      fulfillmentCreate(fulfillment: $fulfillment) {
+        fulfillment { id status }
+        userErrors { field message }
+      }
+    }`,
+    {
+      fulfillment: {
+        notifyCustomer: false,
+        lineItemsByFulfillmentOrder: fulfillableFOs.map((fo) => ({ fulfillmentOrderId: fo.id })),
+      },
+    }
+  );
+  const result = mutationData.fulfillmentCreate;
+  if (result.userErrors && result.userErrors.length > 0) {
+    return { orderId: shopifyOrderId, orderName: ord.name, ok: false, error: result.userErrors.map((e) => e.message).join("; ") };
+  }
+  return { orderId: shopifyOrderId, orderName: ord.name, ok: true, fulfillmentId: result.fulfillment && result.fulfillment.id };
+}
+
+async function autoFulfillPickedOrders(order) {
+  const realOrders = (order.orders || []).filter((o) => o.id);
+  const results = [];
+  for (const o of realOrders) {
+    try {
+      results.push(await fulfillShopifyOrder(o.id));
+    } catch (err) {
+      console.error(`[auto-fulfill] failed for order ${o.name || o.id}:`, err.message);
+      results.push({ orderId: o.id, orderName: o.name, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
 // Locks an order as finished — but ONLY if every single line item has
 // been explicitly marked Picked or Missing. This is the actual fix for
 // "forgotten" items: nothing can silently slip through untouched.
@@ -2284,12 +2369,27 @@ app.post("/api/picking-finish", async (req, res) => {
     record.completedBy = record.pickedBy;
     saveState(state);
     archiveCompletedOrder(key, record, order);
+
+    // Auto-fulfill the real Shopify order(s) behind this stop now that
+    // picking is done. Never lets a Shopify-side failure block the
+    // finish itself — the physical pick is already done regardless —
+    // any failure is logged (Railway logs) and returned in the
+    // response so it can be handled by hand if it ever comes up.
+    let fulfillmentResults = [];
+    try {
+      fulfillmentResults = await autoFulfillPickedOrders(order);
+    } catch (err) {
+      console.error(`[auto-fulfill] unexpected failure for stop ${key}:`, err.message);
+      fulfillmentResults = [{ ok: false, error: err.message }];
+    }
+
     res.json({
       ok: true,
       completedAt: record.completedAt,
       completedBy: record.completedBy,
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: record.closedCrates,
+      fulfillment: fulfillmentResults,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
