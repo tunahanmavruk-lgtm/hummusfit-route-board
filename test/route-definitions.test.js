@@ -33,3 +33,18 @@ test("invalidates cached navigation when a permanent route changes", () => {
   assert.match(server, /!cachedRouteMatchesDefinition\(state\.routeMeta\[routeId\], route\)/);
   assert.match(board, /meta\.optimizedStopIds\.every/);
 });
+
+test("uses the warehouse picker roster requested for order picking", () => {
+  const pickerBlock = server.match(/const PICKERS = \[([\s\S]*?)\];/)[1];
+  assert.match(pickerBlock, /"Hakan"/);
+  assert.match(pickerBlock, /"Ufuk"/);
+  assert.doesNotMatch(pickerBlock, /Tanglay, Serol/);
+  assert.doesNotMatch(pickerBlock, /Ali Dumez/);
+});
+
+test("shows Monday out-of-state work from Friday through delivery day", () => {
+  assert.match(server, /todayDow === 5 \|\| todayDow === 6/);
+  assert.match(server, /day: 1, dayLabel: "Preparing for Monday"/);
+  assert.match(server, /routes: visibleRoutes/);
+  assert.match(server, /dayLabel: "Tomorrow — " \+ dayNames\[tomorrowDow\]/);
+});

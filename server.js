@@ -480,9 +480,9 @@ const PICKERS = [
   "Hermosa Melendez, Edson D",
   "Kaba, Berke",
   "Soto, Daniel U",
-  "Tanglay, Serol",
   "Hazar Kutuk",
-  "Ali Dumez",
+  "Hakan",
+  "Ufuk",
 ];
 
 // Maps a picker's name to their headshot file under /public/headshots/.
@@ -903,22 +903,33 @@ app.get("/api/b2b-routes-today", (req, res) => {
   const tomorrowDow = getEasternWeekday(tomorrow);
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  // Real B2B orders come in days ahead of the actual delivery, so by
-  // the time "today" rolls around a lot of tomorrow's picking could
-  // already be doable — showing tomorrow's route here too (clearly
-  // labeled, never confused with today's) lets the team get ahead
-  // instead of only finding out what's coming once it's already today.
-  const todaysRoutes = B2B_ROUTES.filter((r) => r.day === todayDow).map((r) => ({
-    ...r,
+  // Monday orders are commonly picked on Friday or Saturday, so the
+  // operational board must expose Monday's route list throughout the
+  // full preparation window (Friday-Monday), not only on Sunday. On
+  // Monday, Tuesday remains directly beneath the live Monday routes so
+  // the warehouse can prepare the next wave without changing screens.
+  const visibleDays = [{
+    day: todayDow,
     dayLabel: "Today — " + dayNames[todayDow],
-  }));
-  const tomorrowsRoutes = B2B_ROUTES.filter((r) => r.day === tomorrowDow).map((r) => ({
-    ...r,
-    dayLabel: "Tomorrow — " + dayNames[tomorrowDow],
-  }));
+  }];
+  if (todayDow === 5 || todayDow === 6) {
+    visibleDays.push({ day: 1, dayLabel: "Preparing for Monday" });
+  } else {
+    visibleDays.push({
+      day: tomorrowDow,
+      dayLabel: "Tomorrow — " + dayNames[tomorrowDow],
+    });
+  }
+
+  const visibleRoutes = visibleDays.flatMap(({ day, dayLabel }) =>
+    B2B_ROUTES.filter((route) => route.day === day).map((route) => ({
+      ...route,
+      dayLabel,
+    }))
+  );
 
   res.json({
-    routes: todaysRoutes.concat(tomorrowsRoutes),
+    routes: visibleRoutes,
     allRoutes: B2B_ROUTES,
     drivers: DRIVERS,
     // Added 8/12/2026 — the out-of-state board's van picker was missing

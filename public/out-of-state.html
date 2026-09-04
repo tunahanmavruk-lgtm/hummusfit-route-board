@@ -688,7 +688,7 @@
     routesData.forEach(function(route){
       if(route.dayLabel && route.dayLabel !== lastDayLabel){
         lastDayLabel = route.dayLabel;
-        var isTomorrow = route.dayLabel.indexOf('Tomorrow') === 0;
+        var isTomorrow = route.dayLabel.indexOf('Today') !== 0;
         var header = document.createElement('div');
         header.className = 'day-group-header' + (isTomorrow ? ' tomorrow' : '');
         header.innerHTML = (isTomorrow ? '📅 ' : '') + route.dayLabel
