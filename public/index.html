@@ -618,7 +618,6 @@
   <div class="clock-block">
     <div class="live-clock" id="liveClock">--:--:-- --</div>
     <div class="btn-row">
-      <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
       <button class="reset-btn" id="announceBtn">📣 Send Announcement</button>
     </div>
   </div>
@@ -1187,12 +1186,6 @@
       refreshAllStartedEtas();
     }).catch(function(){});
   }
-
-  document.getElementById('resetBtn').addEventListener('click', function(){
-    tapFeedback();
-    if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
-    fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
-  });
 
   var announceModal = document.getElementById('announceModal');
   var announceTitleInput = document.getElementById('announceTitle');

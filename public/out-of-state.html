@@ -541,7 +541,6 @@
   <div class="clock-block">
     <div class="live-clock" id="liveClock">--:--:-- --</div>
     <div class="window-badge closed" id="windowBadge"><span class="dot"></span><span id="windowBadgeText">Checking order window…</span></div>
-    <button class="reset-btn" id="resetBtn">Reset Today's Board</button>
   </div>
 </header>
 
@@ -1032,11 +1031,6 @@
       refreshAllStartedEtas();
     }).catch(function(){});
   }
-
-  document.getElementById('resetBtn').addEventListener('click', function(){
-    if (!confirm('Reset all van/driver assignments and stop statuses for today?')) return;
-    fetch('/api/reset-day', { method: 'POST' }).then(function(){ loadInitial(); });
-  });
 
   loadInitial();
   setInterval(pollState, 10000);

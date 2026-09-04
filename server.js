@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
@@ -987,7 +988,21 @@ app.post("/api/stop-issue", (req, res) => {
   res.json({ ok: true, state });
 });
 
-app.post("/api/reset-day", (req, res) => {
+function authorizedBoardReset(req, res, next) {
+  const configuredToken = process.env.ROUTE_BOARD_WRITE_TOKEN || "";
+  const authorization = req.get("authorization") || "";
+  const suppliedToken = authorization.replace(/^Bearer\s+/i, "");
+  const configuredBuffer = Buffer.from(configuredToken);
+  const suppliedBuffer = Buffer.from(suppliedToken);
+  const authorized = configuredBuffer.length > 0 &&
+    configuredBuffer.length === suppliedBuffer.length &&
+    crypto.timingSafeEqual(configuredBuffer, suppliedBuffer);
+  if (!configuredToken) return res.status(503).json({ error: "Manager reset is not configured" });
+  if (!authorized) return res.status(403).json({ error: "Manager authorization required" });
+  next();
+}
+
+app.post("/api/reset-day", authorizedBoardReset, (req, res) => {
   const state = defaultState();
   saveState(state);
   res.json({ ok: true, state });

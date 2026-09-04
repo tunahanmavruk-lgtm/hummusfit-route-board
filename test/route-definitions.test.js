@@ -4,6 +4,18 @@ const path = require("node:path");
 const test = require("node:test");
 
 const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+const localBoard = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+const outOfStateBoard = fs.readFileSync(path.join(__dirname, "..", "public", "out-of-state.html"), "utf8");
+
+test("board reset requires the protected manager bridge", () => {
+  assert.match(server, /ROUTE_BOARD_WRITE_TOKEN/);
+  assert.match(server, /app\.post\("\/api\/reset-day", authorizedBoardReset/);
+  assert.match(server, /timingSafeEqual/);
+  assert.doesNotMatch(localBoard, /id="resetBtn"/);
+  assert.doesNotMatch(outOfStateBoard, /id="resetBtn"/);
+  assert.doesNotMatch(localBoard, /fetch\('\/api\/reset-day'/);
+  assert.doesNotMatch(outOfStateBoard, /fetch\('\/api\/reset-day'/);
+});
 const board = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
 
 test("keeps the current Long Island routes grouped in delivery order", () => {
