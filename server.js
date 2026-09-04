@@ -831,8 +831,14 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     const liveRecord = order ? state.picking[key] : null;
 
     let record, orderName, isB2B, lineItems;
-    if (liveRecord && order && liveRecord.orderId === order.orderId) {
-      // Today's live data has it — the normal, same-day case.
+    if (liveRecord && liveRecord.completedAt) {
+      // Today's live data has a completed record for this stop — trust
+      // it regardless of whether the merged orderId string has since
+      // drifted (e.g. a new, unrelated order arrived for this stop
+      // after this one was finished, but nobody's touched picking for
+      // it yet) — this endpoint is specifically about "the most recent
+      // COMPLETED order," and a completed record's items are locked in
+      // at completion time either way.
       record = liveRecord;
       orderName = order.orderName;
       isB2B = Boolean(order.isB2B);
@@ -855,10 +861,10 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     }
 
     const items = lineItems.map((item, idx) => {
-      const status = record.itemStatus[idx] || "not_picked";
+      const status = readItemState(record.itemStatus, item, idx) || "not_picked";
       const pickedQty =
         status === "picked" ? item.quantity :
-        status === "partial" ? (record.itemPickedQty[idx] || 0) :
+        status === "partial" ? (readItemState(record.itemPickedQty, item, idx) || 0) :
         0; // missing or not_picked
       return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status, imageUrl: item.imageUrl || null };
     });
@@ -1332,7 +1338,14 @@ app.get("/api/today-orders", async (req, res) => {
     Object.keys(cache.byStopName).forEach((key) => {
       const order = cache.byStopName[key];
       const record = state.picking[key];
-      if (!record || record.orderId !== order.orderId) {
+      // Mirrors getPickingRecord's own fresh-record condition exactly:
+      // no record at all, or the last one there was already finished
+      // under a since-superseded order, both mean "nothing started yet
+      // for the order that's actually showing right now." A record
+      // that's still mid-pick is trusted regardless of orderId drift —
+      // the merged order set can legitimately shift under an
+      // in-progress pick without that meaning progress was lost.
+      if (!record || (record.completedAt && record.orderId !== order.orderId)) {
         pickingStatus[key] = { status: "not_started", crateCount: 0 };
         return;
       }
@@ -1483,9 +1496,9 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
     itemsWithMeta.forEach(({ item, originalIdx, location }, idx) => {
-      const itemStatus = pickingRecord && pickingRecord.itemStatus ? pickingRecord.itemStatus[originalIdx] : undefined;
+      const itemStatus = pickingRecord && pickingRecord.itemStatus ? readItemState(pickingRecord.itemStatus, item, originalIdx) : undefined;
       const isPartial = itemStatus === "partial";
-      const pickedQty = isPartial && pickingRecord.itemPickedQty ? pickingRecord.itemPickedQty[originalIdx] : undefined;
+      const pickedQty = isPartial && pickingRecord && pickingRecord.itemPickedQty ? readItemState(pickingRecord.itemPickedQty, item, originalIdx) : undefined;
       const qtyLabel = isPartial && pickedQty !== undefined ? `${pickedQty}/${item.quantity}` : String(item.quantity);
       const displayTitle = isPartial ? `${item.title} (SHORT)` : item.title;
       const locationLabel = location ? location.laneLabel : "\u2014 NOT ON FILE \u2014";
@@ -1577,19 +1590,72 @@ function pickingKeyFor(stopName) {
   return stopName.toLowerCase();
 }
 
+// Stable identity for a line item within one order's merged lineItems
+// array — title+sku, matching the exact key both fetchTodaysStopOrders'
+// and fetchB2BStopOrders' own mergedItemsByKey already dedupe on, so
+// it's guaranteed unique within a given order's lineItems. Per-item
+// picking state (status/notes/qty/scans/crates) is keyed by THIS now,
+// never by raw array position — position shifts every time
+// sortItemsForPicking re-sorts a growing/shrinking merged item list,
+// which used to silently corrupt which stored status applied to which
+// real item (confirmed root cause alongside the orderId-reset bug,
+// Tony's report 9/2026).
+function lineItemKey(item) {
+  return item.title + "::" + (item.sku || "");
+}
+
+// Reads one item's state, preferring the stable key but falling back to
+// the legacy numeric-index key — lets a picking record written before
+// this migration keep displaying correctly until it's next touched,
+// instead of appearing to silently reset the moment this deploys.
+function readItemState(dict, item, idx) {
+  if (!dict) return undefined;
+  const key = lineItemKey(item);
+  if (Object.prototype.hasOwnProperty.call(dict, key)) return dict[key];
+  return dict[idx];
+}
+
+// Converts an internal stable-keyed per-item state dict into the
+// index-keyed shape the frontend expects (it addresses items by their
+// position in the lineItems array it was given), using THIS order's
+// current lineItems ordering. Same legacy-numeric-index fallback as
+// readItemState, applied across the whole dict at once.
+function toIndexKeyedDict(dict, lineItems) {
+  const out = {};
+  if (!dict) return out;
+  (lineItems || []).forEach((item, idx) => {
+    const val = readItemState(dict, item, idx);
+    if (val !== undefined) out[idx] = val;
+  });
+  return out;
+}
+
 function getPickingRecord(state, stopName, order) {
   const key = pickingKeyFor(stopName);
-  if (!state.picking[key] || state.picking[key].orderId !== order.orderId) {
-    // fresh order for this stop (or first time seeing it today) — seed it
+  const existing = state.picking[key];
+  // A brand new record only gets seeded when there's genuinely nothing
+  // there yet, OR the last thing there was already a FINISHED order
+  // whose orderId doesn't match this one anymore — i.e. a real new
+  // order cycle has started for this stop after the previous one was
+  // completed and archived. Resetting on ANY orderId change (the old
+  // behavior) wiped live scanning progress the instant a new order
+  // arrived mid-pick, or one order in a merged multi-order set got
+  // fulfilled elsewhere — a confirmed real data-loss bug (Tony,
+  // 9/2026). While picking is still actively in progress (not
+  // completed yet), the merged orderId string is allowed to keep
+  // drifting underneath it without ever wiping anything — only the
+  // order reference (name/id shown in the UI) gets kept current.
+  const needsFreshRecord = !existing || (existing.completedAt && existing.orderId !== order.orderId);
+  if (needsFreshRecord) {
     state.picking[key] = {
       orderId: order.orderId,
       orderName: order.orderName,
-      itemStatus: {}, // index -> 'not_picked' | 'picked' | 'missing' | 'partial'
-      itemNotes: {}, // index -> free text reason
-      itemPickedQty: {}, // index -> actual quantity picked (only meaningful for 'partial')
-      itemScannedCount: {}, // index -> how many individual units have actually been scanned so far
-      itemCrateNumber: {}, // index -> which crate this item is CURRENTLY active in (legacy/presence field — see itemCrateBreakdown for real per-crate quantities)
-      itemCrateBreakdown: {}, // index -> { crateNumber: unitsPhysicallyPackedIntoThatCrate } — a large-quantity item can legitimately get split across crates if "New Crate" is tapped mid-scan, so quantity has to be tracked per crate, not just one crate per item
+      itemStatus: {}, // stable item key -> 'not_picked' | 'picked' | 'missing' | 'partial'
+      itemNotes: {}, // stable item key -> free text reason
+      itemPickedQty: {}, // stable item key -> actual quantity picked (only meaningful for 'partial')
+      itemScannedCount: {}, // stable item key -> how many individual units have actually been scanned so far
+      itemCrateNumber: {}, // stable item key -> which crate this item is CURRENTLY active in (legacy/presence field — see itemCrateBreakdown for real per-crate quantities)
+      itemCrateBreakdown: {}, // stable item key -> { crateNumber: unitsPhysicallyPackedIntoThatCrate } — a large-quantity item can legitimately get split across crates if "New Crate" is tapped mid-scan, so quantity has to be tracked per crate, not just one crate per item
       currentCrateNumber: 1, // crate currently being filled; increments via "New Crate"
       closedCrates: [], // list of crate numbers already closed out (label already printed)
       pickedBy: null, // employee name working this order
@@ -1597,6 +1663,12 @@ function getPickingRecord(state, stopName, order) {
       completedAt: null, // set once Finish Order succeeds
       completedBy: null,
     };
+  } else {
+    // Keep every bit of picking progress already made — just keep the
+    // order reference (name/id) current so the UI shows the right
+    // order info even as the underlying merged order set shifts.
+    state.picking[key].orderId = order.orderId;
+    state.picking[key].orderName = order.orderName;
   }
   if (!state.picking[key].itemPickedQty) state.picking[key].itemPickedQty = {}; // migrate older records
   if (!state.picking[key].itemScannedCount) state.picking[key].itemScannedCount = {};
@@ -1627,11 +1699,12 @@ function crateHasAnyItems(record, crateNumber) {
 // toggled item was never split, so it's either entirely in whichever
 // crate itemCrateNumber points at, or not in this crate at all.
 function crateQtyForItem(record, idx, item, crateNumber) {
-  const breakdown = record.itemCrateBreakdown && record.itemCrateBreakdown[idx];
+  const breakdown = readItemState(record.itemCrateBreakdown, item, idx);
   if (breakdown && breakdown[crateNumber]) return breakdown[crateNumber];
-  if (record.itemCrateNumber[idx] === crateNumber) {
-    const status = record.itemStatus[idx];
-    if (status === "partial") return record.itemPickedQty[idx] || 0;
+  const crateNum = readItemState(record.itemCrateNumber, item, idx);
+  if (crateNum === crateNumber) {
+    const status = readItemState(record.itemStatus, item, idx);
+    if (status === "partial") return readItemState(record.itemPickedQty, item, idx) || 0;
     if (status === "picked") return item.quantity;
   }
   return 0;
@@ -1825,12 +1898,16 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       orderCount: order.orderCount || 1,
       orders: order.orders || [{ name: order.orderName, createdAt: order.createdAt }],
       lineItems: order.lineItems,
-      itemStatus: record.itemStatus,
-      itemNotes: record.itemNotes,
-      itemPickedQty: record.itemPickedQty,
-      itemScannedCount: record.itemScannedCount,
-      itemCrateNumber: record.itemCrateNumber,
-      itemCrateBreakdown: record.itemCrateBreakdown,
+      // Converted from the server's internal stable-item-key storage
+      // back to the index-keyed shape the frontend has always expected
+      // — the wire contract stays exactly the same, only the internal
+      // storage key changed (see lineItemKey/toIndexKeyedDict above).
+      itemStatus: toIndexKeyedDict(record.itemStatus, order.lineItems),
+      itemNotes: toIndexKeyedDict(record.itemNotes, order.lineItems),
+      itemPickedQty: toIndexKeyedDict(record.itemPickedQty, order.lineItems),
+      itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
+      itemCrateNumber: toIndexKeyedDict(record.itemCrateNumber, order.lineItems),
+      itemCrateBreakdown: toIndexKeyedDict(record.itemCrateBreakdown, order.lineItems),
       currentCrateNumber: record.currentCrateNumber,
       closedCrates: record.closedCrates,
       isB2B: Boolean(order.isB2B),
@@ -1857,33 +1934,38 @@ app.post("/api/picking-item", async (req, res) => {
     const order = cache.byStopName[key];
     if (!order) return res.status(404).json({ error: "No order found for this stop." });
 
+    const item = order.lineItems[itemIndex];
+    if (!item) {
+      return res.status(400).json({ error: "Invalid itemIndex for this order." });
+    }
+    const itemKey = lineItemKey(item);
+
     const state = loadState();
     const record = getPickingRecord(state, key, order);
     if (!record.startedAt) {
       record.startedAt = new Date().toISOString();
     }
-    record.itemStatus[itemIndex] = status;
+    record.itemStatus[itemKey] = status;
     if (note !== undefined) {
-      record.itemNotes[itemIndex] = note;
+      record.itemNotes[itemKey] = note;
     }
     if (status === "partial") {
       if (pickedQty === undefined) {
         return res.status(400).json({ error: "pickedQty required when status is partial" });
       }
-      record.itemPickedQty[itemIndex] = pickedQty;
-      record.itemScannedCount[itemIndex] = pickedQty;
+      record.itemPickedQty[itemKey] = pickedQty;
+      record.itemScannedCount[itemKey] = pickedQty;
     } else {
       // Clear any stale partial-quantity value once the item is no longer partial
-      delete record.itemPickedQty[itemIndex];
+      delete record.itemPickedQty[itemKey];
       if (status === "picked") {
         // Manually tapped fully picked (not via scanning) — treat as
         // fully accounted for so a later scan doesn't re-open it.
-        const itemQty = order.lineItems[itemIndex] ? order.lineItems[itemIndex].quantity : 0;
-        record.itemScannedCount[itemIndex] = itemQty;
+        record.itemScannedCount[itemKey] = item.quantity;
       } else if (status === "not_picked") {
         // Cycled back to the start — clear scan progress so a fresh
         // scan-count cycle can begin cleanly.
-        delete record.itemScannedCount[itemIndex];
+        delete record.itemScannedCount[itemKey];
       }
     }
     if (status === "picked" || status === "partial") {
@@ -1892,23 +1974,32 @@ app.post("/api/picking-item", async (req, res) => {
       // at-once action, so unlike a multi-scan item it can never
       // legitimately be split across crates — this fully replaces any
       // prior breakdown for this item rather than adding to it.
-      record.itemCrateNumber[itemIndex] = record.currentCrateNumber;
-      const qtyInCrate = status === "partial" ? (pickedQty || 0) : (order.lineItems[itemIndex] ? order.lineItems[itemIndex].quantity : 0);
-      record.itemCrateBreakdown[itemIndex] = { [record.currentCrateNumber]: qtyInCrate };
+      record.itemCrateNumber[itemKey] = record.currentCrateNumber;
+      const qtyInCrate = status === "partial" ? (pickedQty || 0) : item.quantity;
+      record.itemCrateBreakdown[itemKey] = { [record.currentCrateNumber]: qtyInCrate };
     } else {
       // Missing/not_picked items never go in a physical crate
-      delete record.itemCrateNumber[itemIndex];
-      delete record.itemCrateBreakdown[itemIndex];
+      delete record.itemCrateNumber[itemKey];
+      delete record.itemCrateBreakdown[itemKey];
     }
+    // Also clear out any legacy numeric-index entry for this same item
+    // so a record spanning the stable-key migration doesn't keep a
+    // stale duplicate lying around once the item's been touched again.
+    delete record.itemStatus[itemIndex];
+    delete record.itemNotes[itemIndex];
+    delete record.itemPickedQty[itemIndex];
+    delete record.itemScannedCount[itemIndex];
+    delete record.itemCrateNumber[itemIndex];
+    delete record.itemCrateBreakdown[itemIndex];
     saveState(state);
     res.json({
       ok: true,
-      itemStatus: record.itemStatus,
-      itemNotes: record.itemNotes,
-      itemPickedQty: record.itemPickedQty,
-      itemScannedCount: record.itemScannedCount,
-      itemCrateNumber: record.itemCrateNumber,
-      itemCrateBreakdown: record.itemCrateBreakdown,
+      itemStatus: toIndexKeyedDict(record.itemStatus, order.lineItems),
+      itemNotes: toIndexKeyedDict(record.itemNotes, order.lineItems),
+      itemPickedQty: toIndexKeyedDict(record.itemPickedQty, order.lineItems),
+      itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
+      itemCrateNumber: toIndexKeyedDict(record.itemCrateNumber, order.lineItems),
+      itemCrateBreakdown: toIndexKeyedDict(record.itemCrateBreakdown, order.lineItems),
       currentCrateNumber: record.currentCrateNumber,
     });
   } catch (err) {
@@ -1964,8 +2055,8 @@ app.post("/api/picking-scan", async (req, res) => {
     for (let i = 0; i < order.lineItems.length; i++) {
       const item = order.lineItems[i];
       const sku = (item.sku || "").trim();
-      const currentStatus = record.itemStatus[i] || "not_picked";
-      const scannedSoFar = record.itemScannedCount[i] || 0;
+      const currentStatus = readItemState(record.itemStatus, item, i) || "not_picked";
+      const scannedSoFar = readItemState(record.itemScannedCount, item, i) || 0;
       const alreadyResolved = currentStatus === "picked" || currentStatus === "missing" || currentStatus === "partial";
       if (sku && codeVariants.has(sku) && !alreadyResolved && scannedSoFar < item.quantity) {
         matchIdx = i;
@@ -1976,7 +2067,7 @@ app.post("/api/picking-scan", async (req, res) => {
     if (matchIdx === -1) {
       const alreadyResolvedMatch = order.lineItems.some((item, i) => {
         const sku = (item.sku || "").trim();
-        const s = record.itemStatus[i] || "not_picked";
+        const s = readItemState(record.itemStatus, item, i) || "not_picked";
         return codeVariants.has(sku) && (s === "picked" || s === "missing" || s === "partial");
       });
       // Log every miss so a real "this barcode doesn't match anything on
@@ -1989,8 +2080,10 @@ app.post("/api/picking-scan", async (req, res) => {
     }
 
     const item = order.lineItems[matchIdx];
-    record.itemScannedCount[matchIdx] = (record.itemScannedCount[matchIdx] || 0) + 1;
-    const scannedNow = record.itemScannedCount[matchIdx];
+    const matchKey = lineItemKey(item);
+    const priorScanned = readItemState(record.itemScannedCount, item, matchIdx) || 0;
+    record.itemScannedCount[matchKey] = priorScanned + 1;
+    const scannedNow = record.itemScannedCount[matchKey];
     // This unit is physically going into whichever crate is active RIGHT
     // NOW — not necessarily the same crate earlier units of this same
     // item went into. If "New Crate" gets tapped mid-scan on a
@@ -1999,19 +2092,26 @@ app.post("/api/picking-scan", async (req, res) => {
     // count of this item rather than the whole quantity being credited
     // to a single crate (which either undercounted the new crate or
     // overcounted it, depending which crate "won").
-    if (!record.itemCrateBreakdown[matchIdx]) record.itemCrateBreakdown[matchIdx] = {};
-    record.itemCrateBreakdown[matchIdx][record.currentCrateNumber] =
-      (record.itemCrateBreakdown[matchIdx][record.currentCrateNumber] || 0) + 1;
+    const priorBreakdown = readItemState(record.itemCrateBreakdown, item, matchIdx) || {};
+    record.itemCrateBreakdown[matchKey] = { ...priorBreakdown };
+    record.itemCrateBreakdown[matchKey][record.currentCrateNumber] =
+      (record.itemCrateBreakdown[matchKey][record.currentCrateNumber] || 0) + 1;
     // itemCrateNumber now just tracks "which crate is this item active
     // in right now" for quick presence checks — always the current
     // crate, updated on every scan. The real per-crate quantities live
     // in itemCrateBreakdown above.
-    record.itemCrateNumber[matchIdx] = record.currentCrateNumber;
+    record.itemCrateNumber[matchKey] = record.currentCrateNumber;
     let newStatus = "not_picked";
     if (scannedNow >= item.quantity) {
       newStatus = "picked";
     }
-    record.itemStatus[matchIdx] = newStatus;
+    record.itemStatus[matchKey] = newStatus;
+    // Clear any legacy numeric-index entry for this item now that it's
+    // been touched and re-written under its stable key.
+    delete record.itemStatus[matchIdx];
+    delete record.itemScannedCount[matchIdx];
+    delete record.itemCrateNumber[matchIdx];
+    delete record.itemCrateBreakdown[matchIdx];
     saveState(state);
 
     res.json({
@@ -2022,10 +2122,10 @@ app.post("/api/picking-scan", async (req, res) => {
       scannedCount: scannedNow,
       totalQty: item.quantity,
       status: newStatus,
-      itemStatus: record.itemStatus,
-      itemScannedCount: record.itemScannedCount,
-      itemCrateNumber: record.itemCrateNumber,
-      itemCrateBreakdown: record.itemCrateBreakdown,
+      itemStatus: toIndexKeyedDict(record.itemStatus, order.lineItems),
+      itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
+      itemCrateNumber: toIndexKeyedDict(record.itemCrateNumber, order.lineItems),
+      itemCrateBreakdown: toIndexKeyedDict(record.itemCrateBreakdown, order.lineItems),
       currentCrateNumber: record.currentCrateNumber,
     });
   } catch (err) {
@@ -2161,7 +2261,7 @@ app.post("/api/picking-finish", async (req, res) => {
     }
 
     const outstanding = order.lineItems
-      .map((item, idx) => ({ idx, title: item.title, status: record.itemStatus[idx] || "not_picked" }))
+      .map((item, idx) => ({ idx, title: item.title, status: readItemState(record.itemStatus, item, idx) || "not_picked" }))
       .filter((item) => item.status === "not_picked");
 
     if (outstanding.length > 0) {
@@ -2209,7 +2309,11 @@ app.post("/api/picking-reopen", async (req, res) => {
 
     const state = loadState();
     const liveRecord = state.picking[key];
-    const alreadyHasRealData = liveRecord && liveRecord.orderId === order.orderId && liveRecord.completedAt;
+    // Trust any completed live record regardless of orderId drift — same
+    // reasoning as /api/picked-summary above: completion locks the
+    // record's items in place, and the merged orderId string can keep
+    // moving underneath it without that meaning this data is stale.
+    const alreadyHasRealData = Boolean(liveRecord && liveRecord.completedAt);
 
     if (!alreadyHasRealData) {
       // Today's live record doesn't actually have this order's real
@@ -2491,17 +2595,17 @@ app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
 
     const missingItems = order.lineItems
       .map((item, idx) => {
-        const status = record.itemStatus[idx];
+        const status = readItemState(record.itemStatus, item, idx);
         if (status === "missing") {
-          return { ...item, idx, note: record.itemNotes[idx] || "", quantity: item.quantity };
+          return { ...item, idx, note: readItemState(record.itemNotes, item, idx) || "", quantity: item.quantity };
         }
         if (status === "partial") {
-          const pickedQty = record.itemPickedQty[idx] || 0;
+          const pickedQty = readItemState(record.itemPickedQty, item, idx) || 0;
           const shortQty = item.quantity - pickedQty;
           return {
             ...item,
             idx,
-            note: record.itemNotes[idx] || "",
+            note: readItemState(record.itemNotes, item, idx) || "",
             quantity: shortQty,
             isPartial: true,
             originalQty: item.quantity,
