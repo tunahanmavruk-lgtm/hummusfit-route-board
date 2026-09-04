@@ -516,8 +516,22 @@
     .status-label{ display:none; }
   }
 </style>
+<link rel="stylesheet" href="/hf-logistics-theme.css?v=1">
 </head>
-<body>
+<body class="page-out-of-state">
+
+<nav class="hf-appbar" aria-label="HF Logistics applications">
+  <a class="hf-appbar-brand" href="https://logistics.myhummusfit.com/" aria-label="Back to HF Logistics">
+    <span class="hf-logo-frame"><img src="/assets/logo.png" alt="Hummus Fit"></span>
+    <span><b>HF Logistics</b><small>Transportation &amp; Warehouse</small></span>
+  </a>
+  <div class="hf-appbar-links">
+    <a href="/">Long Island routes</a>
+    <a class="active" href="/out-of-state">Out-of-state</a>
+    <a href="/picking">Order picking</a>
+  </div>
+  <a class="hf-hub-link" href="https://logistics.myhummusfit.com/">Open logistics hub <span aria-hidden="true">↗</span></a>
+</nav>
 
 <header>
   <div>
@@ -707,6 +721,11 @@
 
       var card = document.createElement('div');
       card.className = 'route-card';
+      var routeTimeLabel = route.time || '4:00 AM';
+      var routeSizeLabel = route.vanSize || [
+        route.miles ? route.miles + ' mi' : '',
+        route.baseShiftHours ? route.baseShiftHours + ' hr base' : ''
+      ].filter(Boolean).join(' · ') || 'Out-of-state';
 
       // Determine stop display order: optimized order if we have it, otherwise original
       var orderedStops = visibleStops;
@@ -841,8 +860,8 @@
       card.innerHTML =
         '<div class="route-head">' +
           '<span class="route-name">' + route.name + '</span>' +
-          '<span class="route-time">' + route.time + '</span>' +
-          '<span class="route-size">' + route.vanSize + '</span>' +
+          '<span class="route-time">' + routeTimeLabel + '</span>' +
+          '<span class="route-size">' + routeSizeLabel + '</span>' +
           '<span class="route-progress">' + deliveredCount + '/' + visibleStops.length + ' delivered</span>' +
         '</div>' +
         parkwayWarning +

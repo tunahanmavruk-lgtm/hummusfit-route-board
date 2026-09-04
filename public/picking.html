@@ -833,9 +833,23 @@
     pointer-events:none;
   }
 </style>
+<link rel="stylesheet" href="/hf-logistics-theme.css?v=1">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
-<body>
+<body class="page-picking">
+
+<nav class="hf-appbar" aria-label="HF Logistics applications">
+  <a class="hf-appbar-brand" href="https://logistics.myhummusfit.com/" aria-label="Back to HF Logistics">
+    <span class="hf-logo-frame"><img src="/assets/logo.png" alt="Hummus Fit"></span>
+    <span><b>HF Logistics</b><small>Warehouse operations</small></span>
+  </a>
+  <div class="hf-appbar-links">
+    <a href="/">Long Island routes</a>
+    <a href="/out-of-state">Out-of-state</a>
+    <a class="active" href="/picking">Order picking</a>
+  </div>
+  <a class="hf-hub-link" href="https://logistics.myhummusfit.com/">Open logistics hub <span aria-hidden="true">↗</span></a>
+</nav>
 
 <header>
   <div class="eyebrow"><span class="dot"></span>Hummus Fit / Warehouse</div>
