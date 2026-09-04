@@ -50,6 +50,8 @@ test("uses the warehouse picker roster requested for order picking", () => {
   const pickerBlock = server.match(/const PICKERS = \[([\s\S]*?)\];/)[1];
   assert.match(pickerBlock, /"Hakan"/);
   assert.match(pickerBlock, /"Ufuk"/);
+  assert.doesNotMatch(pickerBlock, /Flores Morales, Carlos E/);
+  assert.doesNotMatch(pickerBlock, /Hermosa Melendez, Edson D/);
   assert.doesNotMatch(pickerBlock, /Tanglay, Serol/);
   assert.doesNotMatch(pickerBlock, /Ali Dumez/);
 });

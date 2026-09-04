@@ -472,13 +472,11 @@ const DRIVERS = [
   "Ali Dumez",
 ];
 
-// Warehouse/fridge crew who do the actual picking — using the same
-// roster as drivers as a starting default until the real picking crew
-// names are provided (swap this list once we have it, same pattern).
+// Warehouse/fridge crew who are authorized to identify themselves as
+// the active picker. Keep this separate from the driver roster: being
+// assigned a delivery route does not automatically make someone a picker.
 const PICKERS = [
   "Chavez, Richy C",
-  "Flores Morales, Carlos E",
-  "Hermosa Melendez, Edson D",
   "Kaba, Berke",
   "Soto, Daniel U",
   "Hazar Kutuk",
