@@ -73,14 +73,11 @@ async function sortItemsForPicking(items) {
 // to the browser when it subscribes, the private one signs outgoing
 // notifications server-side. These need to stay stable (don't
 // regenerate them) or every existing subscriber's subscription breaks.
-const VAPID_PUBLIC_KEY =
-  "BPOP3h7QFDviLTCcd8OLIMK0vyXYTa_icDUddsj7CzkZ9ohVOugqQ35QSebi9YsmVMeWeU93WNs-bOEFOl9kou4";
-const VAPID_PRIVATE_KEY = "MtFdE8HQmopjtFzUIEZ69D_ll-wr-yWWXWph92L_nd8";
-webpush.setVapidDetails(
-  "mailto:ops@hummusfitmeals.com",
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:ops@hummusfitmeals.com";
+const VAPID_CONFIGURED = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+if (VAPID_CONFIGURED) webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const SUBSCRIPTIONS_FILE = path.join(PERSISTENT_DIR, "push-subscriptions.json");
 function loadSubscriptions() {
@@ -99,6 +96,7 @@ function saveSubscriptions(subs) {
 // Web Push returns a 410/404 — clean those out automatically instead of
 // letting the list quietly fill up with dead subscriptions.
 async function sendPushToAll(payload) {
+  if (!VAPID_CONFIGURED) return;
   const subs = loadSubscriptions();
   const stillValid = [];
   for (const sub of subs) {
@@ -165,6 +163,83 @@ function archiveCompletedOrder(stopKey, record, order) {
 }
 
 app.use(express.json());
+
+// HF Logistics is the identity boundary for the operational boards. The
+// signed handoff is deliberately short lived and is stored as an HttpOnly
+// cookie, so drivers and pickers can work normally without exposing a shared
+// password or a reusable API token to browser JavaScript.
+const HF_LOGISTICS_HANDOFF_SECRET = process.env.HF_LOGISTICS_HANDOFF_SECRET || "";
+const HF_LOGISTICS_COOKIE = "hf_logistics_access";
+
+function decodeBase64Url(value) {
+  return Buffer.from(String(value || "").replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+function parseCookies(req) {
+  return String(req.get("cookie") || "").split(";").reduce((cookies, part) => {
+    const separator = part.indexOf("=");
+    if (separator < 0) return cookies;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (key) cookies[key] = decodeURIComponent(value);
+    return cookies;
+  }, {});
+}
+
+function verifyLogisticsToken(token, requiredScope) {
+  if (!HF_LOGISTICS_HANDOFF_SECRET || typeof token !== "string") return null;
+  const separator = token.lastIndexOf(".");
+  if (separator < 1) return null;
+  const payloadPart = token.slice(0, separator);
+  const signaturePart = token.slice(separator + 1);
+  const expected = crypto.createHmac("sha256", HF_LOGISTICS_HANDOFF_SECRET).update(payloadPart).digest();
+  const supplied = decodeBase64Url(signaturePart);
+  if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) return null;
+  try {
+    const payload = JSON.parse(decodeBase64Url(payloadPart).toString("utf8"));
+    if (!payload.sub || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (!Array.isArray(payload.scope) || !payload.scope.includes(requiredScope)) return null;
+    return payload;
+  } catch (error) {
+    return null;
+  }
+}
+
+function safeReturnPath(value) {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
+app.get("/auth/hf-logistics", (req, res) => {
+  const token = String(req.query.token || "");
+  if (!HF_LOGISTICS_HANDOFF_SECRET) return res.status(503).send("Secure HF Logistics access is not configured.");
+  if (!verifyLogisticsToken(token, "board.write")) return res.status(403).send("This HF Logistics access link is invalid or expired.");
+  res.cookie(HF_LOGISTICS_COOKIE, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    maxAge: 12 * 60 * 60 * 1000,
+    path: "/",
+  });
+  res.redirect(302, safeReturnPath(req.query.returnTo));
+});
+
+function requireBoardWrite(req, res, next) {
+  if (!HF_LOGISTICS_HANDOFF_SECRET) return res.status(503).json({ error: "Secure HF Logistics access is not configured" });
+  const token = parseCookies(req)[HF_LOGISTICS_COOKIE];
+  const identity = verifyLogisticsToken(token, "board.write");
+  if (!identity) return res.status(401).json({ error: "Open this operational board from HF Logistics to make changes" });
+  req.hfLogisticsIdentity = identity;
+  next();
+}
+
+// All operational mutations require a current HF Logistics handoff. The
+// manager-only reset keeps its separate server-to-server bearer check below.
+app.use((req, res, next) => {
+  if (req.method === "POST" && req.path.startsWith("/api/") && req.path !== "/api/reset-day") {
+    return requireBoardWrite(req, res, next);
+  }
+  next();
+});
 
 // ================= ROUTE DEFINITIONS =================
 const HQ = {

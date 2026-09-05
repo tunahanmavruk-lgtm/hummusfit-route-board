@@ -44,3 +44,18 @@ test('never renders undefined route metadata on the out-of-state board', () => {
   assert.match(html, /route\.time \|\| '4:00 AM'/);
   assert.match(html, /route\.vanSize \|\|/);
 });
+
+test('requires a signed HF Logistics session for operational changes', () => {
+  const server = read('server.js');
+  assert.match(server, /HF_LOGISTICS_HANDOFF_SECRET/);
+  assert.match(server, /app\.get\("\/auth\/hf-logistics"/);
+  assert.match(server, /verifyLogisticsToken\(token, "board\.write"\)/);
+  assert.match(server, /httpOnly: true/);
+  assert.match(server, /req\.method === "POST"[\s\S]*requireBoardWrite/);
+});
+
+test('does not embed the VAPID private key in source', () => {
+  const server = read('server.js');
+  assert.match(server, /process\.env\.VAPID_PRIVATE_KEY/);
+  assert.doesNotMatch(server, /VAPID_PRIVATE_KEY\s*=\s*"B[A-Za-z0-9_-]{40,}"/);
+});
