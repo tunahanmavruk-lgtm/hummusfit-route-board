@@ -54,6 +54,27 @@ test('requires a signed HF Logistics session for operational changes', () => {
   assert.match(server, /req\.method === "POST"[\s\S]*requireBoardWrite/);
 });
 
+test('keeps active warehouse picking available on dedicated scanners', () => {
+  const server = read('server.js');
+  assert.match(server, /PUBLIC_OPERATIONAL_POST_PATHS/);
+  for (const path of [
+    '/api/picking-item',
+    '/api/picking-scan',
+    '/api/picking-new-crate',
+    '/api/picking-reopen-crate',
+    '/api/picking-set-picker',
+    '/api/picking-finish',
+    '/api/picking-reopen',
+  ]) {
+    assert.ok(server.includes(`"${path}"`), `${path} must remain available to warehouse scanners`);
+  }
+  const allowlist = server.slice(
+    server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS'),
+    server.indexOf('app.use((req, res, next)', server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS')),
+  );
+  assert.doesNotMatch(allowlist, /"\/api\/picking-reset-order"/);
+});
+
 test('does not embed the VAPID private key in source', () => {
   const server = read('server.js');
   assert.match(server, /process\.env\.VAPID_PRIVATE_KEY/);

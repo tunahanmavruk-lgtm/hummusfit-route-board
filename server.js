@@ -232,10 +232,29 @@ function requireBoardWrite(req, res, next) {
   next();
 }
 
-// All operational mutations require a current HF Logistics handoff. The
-// manager-only reset keeps its separate server-to-server bearer check below.
+// Keep the warehouse picking workflow usable on dedicated scanners that do
+// not sign in to HF Logistics. Administrative route changes still require a
+// current signed handoff, while the destructive day/order reset paths retain
+// their separate protection.
+const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
+  "/api/push-subscribe",
+  "/api/push-unsubscribe",
+  "/api/picking-item",
+  "/api/picking-scan",
+  "/api/picking-new-crate",
+  "/api/picking-reopen-crate",
+  "/api/picking-set-picker",
+  "/api/picking-finish",
+  "/api/picking-reopen",
+]);
+
 app.use((req, res, next) => {
-  if (req.method === "POST" && req.path.startsWith("/api/") && req.path !== "/api/reset-day") {
+  if (
+    req.method === "POST" &&
+    req.path.startsWith("/api/") &&
+    req.path !== "/api/reset-day" &&
+    !PUBLIC_OPERATIONAL_POST_PATHS.has(req.path)
+  ) {
     return requireBoardWrite(req, res, next);
   }
   next();
