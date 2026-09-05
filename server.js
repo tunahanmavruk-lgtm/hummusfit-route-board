@@ -988,6 +988,15 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
 app.get("/api/routes", (req, res) => {
   res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
 });
+// Minimal, non-operational identity feed for Shipping OS. It deliberately
+// contains no orders, customer details, drivers, assignments, or route state.
+// Shipping uses these exact stop tags plus B2B destination ZIPs to keep every
+// van-delivery customer out of the UPS/DHL workflow, including future orders.
+app.get("/api/shipping-exclusions", (req, res) => {
+  const stopTags = Array.from(VALID_STOP_NAMES.keys()).sort();
+  const b2bDestinationZips = Array.from(B2B_ZIP_TO_STOP.keys()).sort();
+  res.json({ version: 1, stopTags, b2bDestinationZips });
+});
 app.get("/api/b2b-routes-today", (req, res) => {
   const now = new Date();
   const todayDow = getEasternWeekday(now);
