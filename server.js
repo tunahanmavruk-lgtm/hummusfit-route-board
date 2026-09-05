@@ -521,39 +521,51 @@ function isStopScheduledToday(stopMeta, now = new Date()) {
   return stopMeta.deliveryDays.includes(todayDow) || stopMeta.deliveryDays.includes(tomorrowDow);
 }
 
-const FLEET = [
-  "2022 RAM Promaster 1500",
-  "2016 FORD Transit",
-  "Small Diesel 2 — Mercedes Sprinter",
-  "Mercedes Big Muffin — Sprinter",
-  "Mercedes Small 3 — Sprinter",
-  "Buffin Tow Truck — Sprinter",
-  "Transit 350 (1)",
-  "Big White — Sprinter",
-  "Ford Transit 3",
-  "Darian — Ford Transit",
+// Bouncie is the fleet source of truth. These are the exact current
+// nicknames and stable device identifiers returned by its API. The live
+// dropdowns refresh from /api/van-status; this list is the safe fallback
+// if Bouncie is temporarily unavailable.
+const BOUNCIE_FLEET = [
+  { name: "#1 Mercedes Blue", imei: "352602116154938" },
+  { name: "#3 Mercedes Small2", imei: "352602116156370" },
+  { name: "#2 Mercedes Small", imei: "862255068841805" },
+  { name: "#6 Black Ford", imei: "864486067680666" },
+  { name: "#9 Transit 350 - (1)", imei: "865612072243575" },
+  { name: "#7 White Mercedes", imei: "865612072353903" },
+  { name: "#8 2016 Ford Transit", imei: "866016061363304" },
+  { name: "#4 Mercedes Orange", imei: "866392061981985" },
+  { name: "Ram", imei: "866392062048891" },
 ];
 
-// Maps this app's van dropdown labels (what dispatchers actually pick,
-// stored verbatim in state.assignments[routeId].van) to that same
-// vehicle's Bouncie IMEI — the one identifier Bouncie guarantees is
-// stable. Bouncie's own nickName field is free-typed and already drifts
-// from these labels (typos, missing words, trailing spaces — "Buffin Tow
-// Truck" here vs "Buffinn Tow Truck" in Bouncie), so matching by name at
-// runtime would be fragile. Confirmed by hand against a live /api/vehicles
-// pull on 8/5/2026 — update this if a van is swapped or re-registered.
-const VAN_TO_BOUNCIE_IMEI = {
-  "2022 RAM Promaster 1500": "866392062048891",
-  "2016 FORD Transit": "866016061363304",
-  "Small Diesel 2 — Mercedes Sprinter": "352602116156370",
-  "Mercedes Big Muffin — Sprinter": "866392061981985",
-  "Mercedes Small 3 — Sprinter": "862255068841805",
-  "Buffin Tow Truck — Sprinter": "352602116154938",
-  "Transit 350 (1)": "865612072243575",
-  "Big White — Sprinter": "865612072353903",
-  "Ford Transit 3": "864486067680666",
-  "Darian — Ford Transit": "865612072360866",
-};
+const FLEET = BOUNCIE_FLEET.map((vehicle) => vehicle.name);
+const VAN_TO_BOUNCIE_IMEI = Object.fromEntries(
+  BOUNCIE_FLEET.map((vehicle) => [vehicle.name, vehicle.imei])
+);
+
+function normalizeVehicleName(value) {
+  return String(value || "").normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+
+const LEGACY_VEHICLE_ALIASES = new Map(
+  Object.entries({
+    "2022 RAM Promaster 1500": "Ram",
+    "2016 FORD Transit": "#8 2016 Ford Transit",
+    "Small Diesel 2 — Mercedes Sprinter": "#3 Mercedes Small2",
+    "Mercedes Big Muffin — Sprinter": "#4 Mercedes Orange",
+    "Mercedes Small 3 — Sprinter": "#2 Mercedes Small",
+    "Buffin Tow Truck — Sprinter": "#1 Mercedes Blue",
+    "Transit 350 (1)": "#9 Transit 350 - (1)",
+    "Big White — Sprinter": "#7 White Mercedes",
+    "Ford Transit 3": "#6 Black Ford",
+  }).map(([oldName, newName]) => [normalizeVehicleName(oldName), newName])
+);
+
+function canonicalVehicleName(value) {
+  const normalized = normalizeVehicleName(value);
+  if (!normalized) return "";
+  const liveMatch = FLEET.find((name) => normalizeVehicleName(name) === normalized);
+  return liveMatch || LEGACY_VEHICLE_ALIASES.get(normalized) || normalized;
+}
 
 const DRIVERS = [
   "Chavez, Richy C",
@@ -722,9 +734,20 @@ function loadState() {
       // each on its own correct schedule.
       state.day = todayEastern();
     }
+    if (!state.assignments) state.assignments = {}; // migrate older saved state
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     if (!state.picking) state.picking = {}; // migrate older saved state
     if (!state.b2bLastResetDate) state.b2bLastResetDate = {}; // migrate older saved state
+
+    let fleetChanged = false;
+    Object.values(state.assignments).forEach((assignment) => {
+      if (!assignment || !assignment.van) return;
+      const canonical = canonicalVehicleName(assignment.van);
+      if (canonical !== assignment.van) {
+        assignment.van = canonical;
+        fleetChanged = true;
+      }
+    });
 
     const localRouteIds = new Set(ROUTES.map((r) => r.id));
     const b2bRouteIds = new Set(B2B_ROUTES.map((r) => r.id));
@@ -791,7 +814,7 @@ function loadState() {
         b2bChanged = true;
       }
     });
-    if (b2bChanged) saveState(state);
+    if (b2bChanged || fleetChanged) saveState(state);
 
     return state;
   } catch (e) {
@@ -1052,7 +1075,7 @@ app.post("/api/assign", (req, res) => {
   if (!routeId) return res.status(400).json({ error: "routeId required" });
   const state = loadState();
   state.assignments[routeId] = {
-    van: van ?? state.assignments[routeId]?.van ?? "",
+    van: van == null ? (state.assignments[routeId]?.van ?? "") : canonicalVehicleName(van),
     driver: driver ?? state.assignments[routeId]?.driver ?? "",
   };
   saveState(state);

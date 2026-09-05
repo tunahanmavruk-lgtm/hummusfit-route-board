@@ -765,6 +765,15 @@
     return html;
   }
 
+  function normalizedVehicleName(value){
+    return (value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+  }
+
+  function syncFleetFromBouncie(){
+    var liveNames = vanStatusList.map(function(v){ return normalizedVehicleName(v.nickName); }).filter(Boolean);
+    if(liveNames.length) fleetData = liveNames;
+  }
+
   function buildDriverOptions(selected){
     var html = '<option value="">— Select driver —</option>';
     driversData.forEach(function(d){
@@ -775,10 +784,10 @@
 
   function findVanStatus(vanName){
     if(!vanName) return null;
-    var needle = vanName.toLowerCase();
+    var needle = normalizedVehicleName(vanName).toLowerCase();
     for(var i=0;i<vanStatusList.length;i++){
-      var hay = (vanStatusList[i].nickName || '').toLowerCase();
-      if(hay && (needle.indexOf(hay) !== -1 || hay.indexOf(needle.split(' ')[0]) !== -1)){
+      var hay = normalizedVehicleName(vanStatusList[i].nickName).toLowerCase();
+      if(hay && hay === needle){
         return vanStatusList[i];
       }
     }
@@ -1163,6 +1172,7 @@
       scheduledToday = results[2].scheduledToday || {};
       pickingStatusByStop = results[2].pickingStatus || {};
       vanStatusList = results[3].vehicles || [];
+      syncFleetFromBouncie();
       render();
       refreshAllStartedEtas();
     }).catch(function(){
@@ -1182,6 +1192,7 @@
       scheduledToday = results[1].scheduledToday || {};
       pickingStatusByStop = results[1].pickingStatus || {};
       vanStatusList = results[2].vehicles || [];
+      syncFleetFromBouncie();
       render();
       refreshAllStartedEtas();
     }).catch(function(){});

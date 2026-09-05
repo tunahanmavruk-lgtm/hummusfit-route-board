@@ -62,3 +62,14 @@ test("shows Monday out-of-state work from Friday through delivery day", () => {
   assert.match(server, /routes: visibleRoutes/);
   assert.match(server, /dayLabel: "Tomorrow — " \+ dayNames\[tomorrowDow\]/);
 });
+
+test("uses Bouncie names as the nine-vehicle fleet source of truth", () => {
+  for (const name of [
+    "#1 Mercedes Blue", "#3 Mercedes Small2", "#2 Mercedes Small",
+    "#6 Black Ford", "#9 Transit 350 - (1)", "#7 White Mercedes",
+    "#8 2016 Ford Transit", "#4 Mercedes Orange", "Ram",
+  ]) assert.ok(server.includes(`name: "${name}"`), `missing ${name}`);
+  assert.doesNotMatch(server, /Darian — Ford Transit/);
+  assert.match(localBoard, /syncFleetFromBouncie/);
+  assert.match(outOfStateBoard, /fetch\('\/api\/van-status'\)/);
+});
