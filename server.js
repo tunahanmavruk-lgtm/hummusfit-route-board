@@ -535,6 +535,11 @@ const BOUNCIE_FLEET = [
   { name: "#8 2016 Ford Transit", imei: "866016061363304" },
   { name: "#4 Mercedes Orange", imei: "866392061981985" },
   { name: "Ram", imei: "866392062048891" },
+  // This device is still present in the Bouncie account, but the current
+  // OAuth authorization does not include it in GET /v1/vehicles. Keep its
+  // stable IMEI in the dispatch fleet so a partial Bouncie response can
+  // never make the van disappear from either route selector.
+  { name: "#5 White Ford Transit", imei: "865612072360866" },
 ];
 
 const FLEET = BOUNCIE_FLEET.map((vehicle) => vehicle.name);
@@ -557,6 +562,7 @@ const LEGACY_VEHICLE_ALIASES = new Map(
     "Transit 350 (1)": "#9 Transit 350 - (1)",
     "Big White — Sprinter": "#7 White Mercedes",
     "Ford Transit 3": "#6 Black Ford",
+    "Darian — Ford Transit": "#5 White Ford Transit",
   }).map(([oldName, newName]) => [normalizeVehicleName(oldName), newName])
 );
 

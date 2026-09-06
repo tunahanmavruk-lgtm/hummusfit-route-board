@@ -637,7 +637,15 @@
 
   function syncFleetFromBouncie(){
     var liveNames = vanStatusList.map(function(v){ return normalizedVehicleName(v.nickName); }).filter(Boolean);
-    if(liveNames.length) fleetData = liveNames;
+    if(liveNames.length){
+      var seen = {};
+      fleetData = liveNames.concat(fleetData).filter(function(name){
+        var key = normalizedVehicleName(name).toLowerCase();
+        if(!key || seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+    }
   }
 
   function buildDriverOptions(selected){
