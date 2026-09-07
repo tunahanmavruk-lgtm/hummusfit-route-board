@@ -63,6 +63,12 @@ test("shows Monday out-of-state work from Friday through delivery day", () => {
   assert.match(server, /dayLabel: "Tomorrow — " \+ dayNames\[tomorrowDow\]/);
 });
 
+test("keeps local store orders visible until Shopify marks them fulfilled", () => {
+  assert.match(server, /const LOCAL_LOOKBACK_DAYS = 21/);
+  assert.match(server, /created_at:>='\$\{localLookbackStart\}' fulfillment_status:unfulfilled status:any -status:cancelled/);
+  assert.doesNotMatch(server, /created_at:>='\$\{isoStart\}' created_at:<='\$\{isoEnd\}' status:any/);
+});
+
 test("uses Bouncie names plus the API-omitted #5 as the ten-vehicle fleet source of truth", () => {
   for (const name of [
     "#1 Mercedes Blue", "#3 Mercedes Small2", "#2 Mercedes Small",

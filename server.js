@@ -678,15 +678,17 @@ function getStartOfDayEastern(now = new Date()) {
   return new Date(now.getTime() - ms);
 }
 
-// Stores order 12:00 PM – 11:00 PM Eastern for NEXT-DAY delivery.
-// The relevant window depends on what time it is right now:
+// Stores normally order 12:00 PM – 11:00 PM Eastern for NEXT-DAY delivery.
+// The relevant operational window depends on what time it is right now:
 //   - Before noon ET  -> yesterday's 12pm-11pm window (routes running
 //     THIS morning are fulfilling those orders)
 //   - Noon or later    -> today's 12pm-11pm window, live, as tomorrow's
 //     orders come in
-// This guarantees the board never shows orders from any day other than
-// the single, currently-relevant order window — no stale multi-day
-// leftovers.
+// This window still controls daily route state and the status display. It
+// must not be used to decide whether an order needs picking: Shopify's
+// fulfillment state is authoritative for that. Otherwise an unfulfilled
+// order placed outside the narrow window silently disappears from the
+// store board even though the warehouse still owes it.
 const HOUR_MS = 3600 * 1000;
 function getOrderWindowEastern(now = new Date()) {
   const startOfTodayET = getStartOfDayEastern(now);
@@ -1183,6 +1185,7 @@ async function shopifyGraphQL(query, variables) {
 // In-memory cache, refreshed on demand (not every request)
 let ordersCache = { fetchedAt: 0, byStopName: {}, windowStart: null, windowEnd: null };
 const ORDERS_CACHE_MS = 60 * 1000; // 1 minute
+const LOCAL_LOOKBACK_DAYS = 21;
 let ordersRefreshInFlight = null;
 
 // Stale-while-revalidate: a full refresh (Shopify local + B2B pulls, plus
@@ -1220,12 +1223,7 @@ async function fetchTodaysStopOrders() {
 async function refreshOrdersCache() {
   const now = Date.now();
   const { windowStart, windowEnd } = getOrderWindowEastern(new Date());
-  const isoStart = windowStart.toISOString();
-  // Cap the end bound at "now" if the window is still in progress today,
-  // otherwise use the fixed 11pm cutoff — either way this is a hard upper
-  // bound, so orders from outside the current window can never appear.
-  const cappedEnd = new Date(Math.min(windowEnd.getTime(), now));
-  const isoEnd = cappedEnd.toISOString();
+  const localLookbackStart = new Date(now - LOCAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   let orders = [];
   let cursor = null;
@@ -1262,7 +1260,7 @@ async function refreshOrdersCache() {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${isoStart}' created_at:<='${isoEnd}' status:any -status:cancelled`,
+      queryString: `created_at:>='${localLookbackStart}' fulfillment_status:unfulfilled status:any -status:cancelled`,
     });
 
     const edges = data.orders.edges;
