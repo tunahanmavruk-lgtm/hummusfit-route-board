@@ -67,6 +67,10 @@ test("keeps local store orders visible until Shopify marks them fulfilled", () =
   assert.match(server, /const LOCAL_LOOKBACK_DAYS = 21/);
   assert.match(server, /created_at:>='\$\{localLookbackStart\}' fulfillment_status:unfulfilled status:any -status:cancelled/);
   assert.doesNotMatch(server, /created_at:>='\$\{isoStart\}' created_at:<='\$\{isoEnd\}' status:any/);
+  assert.match(server, /displayFulfillmentStatus/);
+  assert.match(server, /ord\.displayFulfillmentStatus === "FULFILLED"/);
+  assert.match(server, /fulfillmentResults\.every\(\(result\) => result\.ok\)/);
+  assert.match(server, /delete ordersCache\.byStopName\[key\]/);
 });
 
 test("uses Bouncie names plus the API-omitted #5 as the ten-vehicle fleet source of truth", () => {

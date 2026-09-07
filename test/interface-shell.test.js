@@ -37,6 +37,7 @@ test('retains scanner, crate, picking, and finish controls', () => {
   for (const hook of ['hwScanInput', 'scannerOverlay', 'crateFab', 'pickerSelect', 'finishBtn', 'btPrinterStatus']) {
     assert.ok(html.includes(hook), `picking page must retain ${hook}`);
   }
+  assert.match(html, /Shopify has not confirmed fulfillment yet/);
 });
 
 test('never renders undefined route metadata on the out-of-state board', () => {

@@ -2428,6 +2428,7 @@ async function fulfillShopifyOrder(shopifyOrderId) {
       order(id: $id) {
         id
         name
+        displayFulfillmentStatus
         fulfillmentOrders(first: 10) {
           edges { node { id status } }
         }
@@ -2447,9 +2448,18 @@ async function fulfillShopifyOrder(shopifyOrderId) {
     .map((e) => e.node)
     .filter((fo) => fo.status === "OPEN" || fo.status === "IN_PROGRESS");
   if (fulfillableFOs.length === 0) {
-    // Already fully fulfilled, or nothing left to fulfill — not an
-    // error, just nothing left to do for this specific order.
-    return { orderId: shopifyOrderId, orderName: ord.name, ok: true, skipped: true };
+    // Only treat this as success when Shopify itself confirms the order
+    // is fulfilled. SCHEDULED, ON_HOLD, or another non-fulfillable state
+    // must remain visible on the board instead of being hidden early.
+    if (ord.displayFulfillmentStatus === "FULFILLED") {
+      return { orderId: shopifyOrderId, orderName: ord.name, ok: true, skipped: true };
+    }
+    return {
+      orderId: shopifyOrderId,
+      orderName: ord.name,
+      ok: false,
+      error: `Shopify fulfillment is ${ord.displayFulfillmentStatus || "not ready"}; the order remains on the board.`,
+    };
   }
   const mutationData = await shopifyGraphQL(
     `mutation($fulfillment: FulfillmentInput!) {
@@ -2543,6 +2553,20 @@ app.post("/api/picking-finish", async (req, res) => {
       fulfillmentResults = [{ ok: false, error: err.message }];
     }
 
+    // Remove the card immediately only after every underlying Shopify
+    // order reports a successful fulfillment. If even one order fails
+    // or is on hold, keep the merged stop visible so it cannot disappear
+    // before the warehouse's obligation is actually cleared in Shopify.
+    const removedFromBoard =
+      fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
+    if (
+      removedFromBoard &&
+      ordersCache.byStopName[key] &&
+      ordersCache.byStopName[key].orderId === order.orderId
+    ) {
+      delete ordersCache.byStopName[key];
+    }
+
     res.json({
       ok: true,
       completedAt: record.completedAt,
@@ -2550,6 +2574,7 @@ app.post("/api/picking-finish", async (req, res) => {
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: record.closedCrates,
       fulfillment: fulfillmentResults,
+      removedFromBoard,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

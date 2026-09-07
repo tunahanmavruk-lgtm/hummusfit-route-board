@@ -1112,6 +1112,10 @@
         if(result.data.finalCrateNumber){
           printCrateLabel(orderDetail.stopName, result.data.finalCrateNumber);
         }
+        var fulfillmentFailures = (result.data.fulfillment || []).filter(function(entry){ return !entry.ok; });
+        if(fulfillmentFailures.length){
+          alert('Picking is saved, but Shopify has not confirmed fulfillment yet. This order will stay on the board for a manager to review.');
+        }
       }).catch(function(err){
         closeModal();
         alert('Could not reach the server: ' + err.message);
