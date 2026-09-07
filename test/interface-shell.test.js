@@ -45,13 +45,33 @@ test('never renders undefined route metadata on the out-of-state board', () => {
   assert.match(html, /route\.vanSize \|\|/);
 });
 
-test('requires a signed HF Logistics session for operational changes', () => {
+test('requires a signed HF Logistics session for administrative changes', () => {
   const server = read('server.js');
   assert.match(server, /HF_LOGISTICS_HANDOFF_SECRET/);
   assert.match(server, /app\.get\("\/auth\/hf-logistics"/);
   assert.match(server, /verifyLogisticsToken\(token, "board\.write"\)/);
   assert.match(server, /httpOnly: true/);
   assert.match(server, /req\.method === "POST"[\s\S]*requireBoardWrite/);
+});
+
+test('keeps standalone driver route controls operational', () => {
+  const server = read('server.js');
+  for (const path of [
+    '/api/assign',
+    '/api/stop-status',
+    '/api/stop-issue',
+    '/api/optimize-route',
+    '/api/start-route',
+  ]) {
+    assert.ok(server.includes(`"${path}"`), `${path} must work on the standalone driver board`);
+  }
+  const allowlist = server.slice(
+    server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS'),
+    server.indexOf('app.use((req, res, next)', server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS')),
+  );
+  assert.doesNotMatch(allowlist, /"\/api\/push-send-manual"/);
+  assert.doesNotMatch(allowlist, /"\/api\/picking-reset-order"/);
+  assert.doesNotMatch(allowlist, /"\/api\/reset-day"/);
 });
 
 test('keeps active warehouse picking available on dedicated scanners', () => {

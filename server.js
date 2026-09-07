@@ -232,13 +232,19 @@ function requireBoardWrite(req, res, next) {
   next();
 }
 
-// Keep the warehouse picking workflow usable on dedicated scanners that do
-// not sign in to HF Logistics. Administrative route changes still require a
-// current signed handoff, while the destructive day/order reset paths retain
-// their separate protection.
+// Keep the daily driver and warehouse workflows usable from the standalone
+// operational boards. Drivers have always used these pages at dispatch to
+// select their assignment, create/start a route, and update each stop; those
+// actions must not depend on first opening HF Logistics. Administrative
+// actions (manual announcements and scoped/full resets) remain protected.
 const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/push-subscribe",
   "/api/push-unsubscribe",
+  "/api/assign",
+  "/api/stop-status",
+  "/api/stop-issue",
+  "/api/optimize-route",
+  "/api/start-route",
   "/api/picking-item",
   "/api/picking-scan",
   "/api/picking-new-crate",
