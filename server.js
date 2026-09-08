@@ -196,7 +196,11 @@ function mergeRecentCompletedOrders(activeByStopName, now = Date.now()) {
       lineItems: archived.lineItems,
       isB2B: Boolean(archived.isB2B),
       retainedAfterFulfillment: true,
-      shopifyFulfilled: Boolean(archived.shopifyFulfilled),
+      // Archives written before this field existed only disappear from the
+      // live unfulfilled feed after Shopify has cleared them; treat those
+      // legacy snapshots as fulfilled. New failed fulfillment attempts write
+      // an explicit false and remain labelled only as completed.
+      shopifyFulfilled: archived.shopifyFulfilled !== false,
       fulfilledAt: archived.fulfilledAt || null,
     };
   });
