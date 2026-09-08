@@ -1040,7 +1040,7 @@
             '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + stop.totalItems + ' items</div>' +
             '<div class="stop-order-time" style="font-size:11px; color:var(--dim); margin-top:2px;">' + orderTimesLabel(stop) + '</div>' +
             (stop.isB2B ? '<div class="b2b-tag">Out of State</div>' : '') +
-            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">Complete</div>' : '') +
+            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Complete') + '</div>' : '') +
           '</div>' +
           '<div class="stop-progress-ring">' + ringSvg(stop.pickedCount, stop.missingCount, stop.totalItems) +
             '<div class="stop-progress-label">' + done + '/' + stop.totalItems + '</div>' +
@@ -1104,6 +1104,8 @@
         }
         orderDetail.completedAt = result.data.completedAt;
         orderDetail.completedBy = result.data.completedBy;
+        orderDetail.retainedAfterFulfillment = Boolean(result.data.retainedForDelivery);
+        orderDetail.shopifyFulfilled = Boolean(result.data.retainedForDelivery);
         if(result.data.closedCrates){ orderDetail.closedCrates = result.data.closedCrates; }
         renderOrder();
         // Print the final crate's label too, so every crate has one by
@@ -1808,6 +1810,7 @@
     var total = orderDetail.lineItems.length;
     var done = picked + missing + partial;
     var isLocked = Boolean(orderDetail.completedAt);
+    var isFulfilledSnapshot = Boolean(orderDetail.retainedAfterFulfillment);
 
     var html = '';
     if(orderDetail.isB2B){
@@ -1818,7 +1821,9 @@
       html +=
         '<div class="completed-banner">' +
           '✓ Finished by ' + orderDetail.completedBy + ' — ' + fmtTime(orderDetail.completedAt) +
-          '<span class="reopen-link" id="reopenLink">Reopen</span>' +
+          (isFulfilledSnapshot
+            ? '<span>' + (orderDetail.shopifyFulfilled ? 'Shopify fulfilled' : 'Completed') + ' · kept visible for delivery &amp; receiving</span>'
+            : '<span class="reopen-link" id="reopenLink">Reopen</span>') +
         '</div>';
     }
 
@@ -1841,10 +1846,12 @@
     // day's board) stays untouched. This exists specifically so a bad
     // scan session doesn't force "Reset Today's Board," which wipes
     // literally everything for every stop and every driver.
-    html +=
-      '<div style="text-align:right; margin:-8px 0 14px;">' +
-        '<span class="reopen-link" id="restartOrderLink" style="cursor:pointer; text-decoration:underline; color:var(--dim); font-size:11px;">&#8635; Restart this order</span>' +
-      '</div>';
+    if(!isFulfilledSnapshot){
+      html +=
+        '<div style="text-align:right; margin:-8px 0 14px;">' +
+          '<span class="reopen-link" id="restartOrderLink" style="cursor:pointer; text-decoration:underline; color:var(--dim); font-size:11px;">&#8635; Restart this order</span>' +
+        '</div>';
+    }
 
     if(orderDetail.pickedBy){
       var initials = orderDetail.pickedBy.split(/[\s,]+/).filter(Boolean).slice(0,2).map(function(w){ return w.charAt(0).toUpperCase(); }).join('');

@@ -156,10 +156,51 @@ function archiveCompletedOrder(stopKey, record, order) {
     ...record,
     archivedAt: new Date().toISOString(),
     orderName: order.orderName,
+    createdAt: order.createdAt,
+    orderCount: order.orderCount || 1,
+    orders: order.orders || [{ id: order.orderId, name: order.orderName, createdAt: order.createdAt }],
     isB2B: Boolean(order.isB2B),
     lineItems: order.lineItems,
+    shopifyFulfilled: false,
   };
   saveArchive(archive);
+}
+
+function markArchivedOrderFulfilled(stopKey, orderId) {
+  const archive = loadArchive();
+  const archived = archive[stopKey];
+  if (!archived || archived.orderId !== orderId) return;
+  archived.shopifyFulfilled = true;
+  archived.fulfilledAt = new Date().toISOString();
+  saveArchive(archive);
+}
+
+// Shopify's unfulfilled feed is authoritative while an order is being picked.
+// After auto-fulfillment the same order still has an operational job to do: it
+// must remain visible to the driver and receiving store. Keep the last completed
+// snapshot per stop for seven days. A new live unfulfilled order always wins.
+const COMPLETED_ORDER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+function mergeRecentCompletedOrders(activeByStopName, now = Date.now()) {
+  const archive = loadArchive();
+  const merged = { ...activeByStopName };
+  Object.entries(archive).forEach(([key, archived]) => {
+    if (merged[key] || !archived || !archived.completedAt || !Array.isArray(archived.lineItems)) return;
+    const archivedAt = Date.parse(archived.archivedAt || archived.completedAt);
+    if (!Number.isFinite(archivedAt) || now - archivedAt > COMPLETED_ORDER_RETENTION_MS) return;
+    merged[key] = {
+      orderId: archived.orderId,
+      orderName: archived.orderName,
+      orderCount: archived.orderCount || 1,
+      createdAt: archived.createdAt || archived.completedAt,
+      orders: archived.orders || [{ id: archived.orderId, name: archived.orderName, createdAt: archived.createdAt || archived.completedAt }],
+      lineItems: archived.lineItems,
+      isB2B: Boolean(archived.isB2B),
+      retainedAfterFulfillment: true,
+      shopifyFulfilled: Boolean(archived.shopifyFulfilled),
+      fulfilledAt: archived.fulfilledAt || null,
+    };
+  });
+  return merged;
 }
 
 app.use(express.json());
@@ -1339,7 +1380,8 @@ async function refreshOrdersCache() {
     };
   }
 
-  const byStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
+  const activeByStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
+  const byStopName = mergeRecentCompletedOrders(activeByStopName, now);
   ordersCache = { fetchedAt: now, byStopName, windowStart, windowEnd };
   return ordersCache;
 }
@@ -1503,18 +1545,10 @@ app.get("/api/today-orders", async (req, res) => {
     const pickingStatus = {};
     Object.keys(cache.byStopName).forEach((key) => {
       const order = cache.byStopName[key];
-      const record = state.picking[key];
-      // Mirrors getPickingRecord's own fresh-record condition exactly:
-      // no record at all, or the last one there was already finished
-      // under a since-superseded order, both mean "nothing started yet
-      // for the order that's actually showing right now." A record
-      // that's still mid-pick is trusted regardless of orderId drift —
-      // the merged order set can legitimately shift under an
-      // in-progress pick without that meaning progress was lost.
-      if (!record || (record.completedAt && record.orderId !== order.orderId)) {
-        pickingStatus[key] = { status: "not_started", crateCount: 0 };
-        return;
-      }
+      // This also restores an archived, fulfilled snapshot after the daily
+      // live picking state resets, so route cards keep their real completed
+      // and crate status through delivery and store receiving.
+      const record = getPickingRecord(state, key, order);
       // How many distinct crates exist for this order so far — closed
       // ones plus whichever one is currently active, if it actually has
       // anything in it. This is what tells a driver how many physical
@@ -1545,6 +1579,7 @@ app.get("/api/today-orders", async (req, res) => {
       }
       pickingStatus[key] = { status: "not_started", crateCount: 0 };
     });
+    saveState(state);
     res.json({
       byStopName: cache.byStopName,
       windowStart: cache.windowStart,
@@ -1568,7 +1603,8 @@ app.get("/api/packing-slip/:stopName", async (req, res) => {
       return res.status(404).send("No order found for this stop in the current order window.");
     }
     const pickingState = loadState();
-    const pickingRecord = pickingState.picking[key];
+    const pickingRecord = getPickingRecord(pickingState, key, order);
+    saveState(pickingState);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${order.orderName}-packing-slip.pdf"`);
@@ -1798,7 +1834,14 @@ function toIndexKeyedDict(dict, lineItems) {
 
 function getPickingRecord(state, stopName, order) {
   const key = pickingKeyFor(stopName);
-  const existing = state.picking[key];
+  let existing = state.picking[key];
+  if (order.retainedAfterFulfillment && (!existing || existing.orderId !== order.orderId || !existing.completedAt)) {
+    const archived = loadArchive()[key];
+    if (archived && archived.orderId === order.orderId && archived.completedAt) {
+      state.picking[key] = { ...archived };
+      existing = state.picking[key];
+    }
+  }
   // A brand new record only gets seeded when there's genuinely nothing
   // there yet, OR the last thing there was already a FINISHED order
   // whose orderId doesn't match this one anymore — i.e. a real new
@@ -2035,6 +2078,8 @@ app.get("/api/picking-list", async (req, res) => {
         isB2B: Boolean(order.isB2B),
         pickedBy: record.pickedBy,
         completedAt: record.completedAt,
+        retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
+        shopifyFulfilled: Boolean(order.shopifyFulfilled),
       };
     });
     saveState(state); // persist any freshly-seeded records
@@ -2081,6 +2126,9 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       pickedByPhoto: record.pickedBy ? pickerPhotoFor(record.pickedBy) : null,
       completedAt: record.completedAt,
       completedBy: record.completedBy,
+      retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
+      shopifyFulfilled: Boolean(order.shopifyFulfilled),
+      fulfilledAt: order.fulfilledAt || null,
       pickers: PICKERS,
     });
   } catch (err) {
@@ -2553,18 +2601,22 @@ app.post("/api/picking-finish", async (req, res) => {
       fulfillmentResults = [{ ok: false, error: err.message }];
     }
 
-    // Remove the card immediately only after every underlying Shopify
-    // order reports a successful fulfillment. If even one order fails
-    // or is on hold, keep the merged stop visible so it cannot disappear
-    // before the warehouse's obligation is actually cleared in Shopify.
-    const removedFromBoard =
+    // A successful Shopify fulfillment moves this from the unfulfilled
+    // queue into a locked delivery/receiving snapshot. It deliberately
+    // stays on the board so drivers and stores do not lose the route,
+    // crate count, picked items, or receiving workflow.
+    const shopifyFulfilled =
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
-    if (
-      removedFromBoard &&
-      ordersCache.byStopName[key] &&
-      ordersCache.byStopName[key].orderId === order.orderId
-    ) {
-      delete ordersCache.byStopName[key];
+    if (shopifyFulfilled) {
+      markArchivedOrderFulfilled(key, order.orderId);
+      if (ordersCache.byStopName[key] && ordersCache.byStopName[key].orderId === order.orderId) {
+        ordersCache.byStopName[key] = {
+          ...ordersCache.byStopName[key],
+          retainedAfterFulfillment: true,
+          shopifyFulfilled: true,
+          fulfilledAt: new Date().toISOString(),
+        };
+      }
     }
 
     res.json({
@@ -2574,7 +2626,8 @@ app.post("/api/picking-finish", async (req, res) => {
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: record.closedCrates,
       fulfillment: fulfillmentResults,
-      removedFromBoard,
+      removedFromBoard: false,
+      retainedForDelivery: shopifyFulfilled,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2591,6 +2644,9 @@ app.post("/api/picking-reopen", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const order = cache.byStopName[key];
     if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    if (order.retainedAfterFulfillment) {
+      return res.status(409).json({ error: "This order is already fulfilled in Shopify and is locked for delivery and receiving." });
+    }
 
     const state = loadState();
     const liveRecord = state.picking[key];
@@ -2644,6 +2700,9 @@ app.post("/api/picking-reset-order", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const order = cache.byStopName[key];
     if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    if (order.retainedAfterFulfillment) {
+      return res.status(409).json({ error: "This order is already fulfilled in Shopify and is locked for delivery and receiving." });
+    }
 
     const state = loadState();
     delete state.picking[key];
