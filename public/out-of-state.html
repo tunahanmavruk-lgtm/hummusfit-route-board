@@ -952,7 +952,9 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ routeId: routeId })
-        }).then(function(r){ return r.json(); }).then(function(data){
+        }).then(function(r){ return r.json().then(function(data){ return { ok:r.ok, data:data }; }); }).then(function(result){
+          if(!result.ok || result.data.error){ alert(result.data.error || 'Could not start this route.'); render(); return; }
+          var data = result.data;
           if(data.warning){ console.warn(data.warning); }
           if(data.state){ stateData = data.state; }
           fetchEtaFor(routeId);

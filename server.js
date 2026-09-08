@@ -677,6 +677,7 @@ const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway
 // instead of just chaining raw drive times back to back. Adjust here if
 // 18 minutes isn't the right number for your stops.
 const UNLOAD_MINUTES_PER_STOP = 18;
+const STORE_TRACKING_GRACE_MS = 2 * 60 * 1000;
 
 // ================= DAY / STATE PERSISTENCE =================
 function todayEasternFor(date) {
@@ -3178,6 +3179,13 @@ function computeEtaForStop(state, stopName) {
   const vanImei = van ? VAN_TO_BOUNCIE_IMEI[van] || null : null;
 
   const stopStatus = state.stopStatus[stop.id];
+  const arrivedAt = stopStatus && (stopStatus.arrivedAt || stopStatus.deliveredAt) || null;
+  const trackingEndsAt = arrivedAt
+    ? new Date(new Date(arrivedAt).getTime() + STORE_TRACKING_GRACE_MS).toISOString()
+    : null;
+  const trackingAvailable = Boolean(
+    vanImei && (!trackingEndsAt || Date.now() < new Date(trackingEndsAt).getTime())
+  );
   if (stopStatus && stopStatus.status === "delivered") {
     return {
       routeId: route.id,
@@ -3190,6 +3198,8 @@ function computeEtaForStop(state, stopName) {
       stopsAway: null,
       van,
       vanImei,
+      trackingAvailable,
+      trackingEndsAt,
       fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
@@ -3206,6 +3216,8 @@ function computeEtaForStop(state, stopName) {
       stopsAway: null,
       van,
       vanImei,
+      trackingAvailable: false,
+      trackingEndsAt,
       fleetTrackerUrl: FLEET_TRACKER_URL,
     };
   }
@@ -3231,6 +3243,8 @@ function computeEtaForStop(state, stopName) {
         totalStopsOnRoute: meta.optimizedStopIds.length,
         van,
         vanImei,
+        trackingAvailable,
+        trackingEndsAt,
         fleetTrackerUrl: FLEET_TRACKER_URL,
       };
     }
@@ -3248,6 +3262,8 @@ function computeEtaForStop(state, stopName) {
     stopsAway: null,
     van,
     vanImei,
+    trackingAvailable,
+    trackingEndsAt,
     fleetTrackerUrl: FLEET_TRACKER_URL,
   };
 }
@@ -3410,6 +3426,10 @@ app.post("/api/start-route", async (req, res) => {
   if (!route) return res.status(404).json({ error: "Route not found" });
 
   const state = loadState();
+  const assignedVan = state.assignments[routeId] && state.assignments[routeId].van;
+  if (!assignedVan || !VAN_TO_BOUNCIE_IMEI[assignedVan]) {
+    return res.status(400).json({ error: "Select the actual Bouncie van before starting this route so stores can track their delivery." });
+  }
   try {
     // Recompute when today's cached route was created from an older permanent definition.
     if (!cachedRouteMatchesDefinition(state.routeMeta[routeId], route)) {

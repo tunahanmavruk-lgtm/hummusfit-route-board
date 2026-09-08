@@ -96,6 +96,14 @@ test('keeps active warehouse picking available on dedicated scanners', () => {
   assert.doesNotMatch(allowlist, /"\/api\/picking-reset-order"/);
 });
 
+test('requires a physical Bouncie van before route start and expires store tracking after arrival', () => {
+  const server = read('server.js');
+  assert.match(server, /Select the actual Bouncie van before starting this route/);
+  assert.match(server, /STORE_TRACKING_GRACE_MS = 2 \* 60 \* 1000/);
+  assert.match(server, /trackingAvailable/);
+  assert.match(server, /trackingEndsAt/);
+});
+
 test('does not embed the VAPID private key in source', () => {
   const server = read('server.js');
   assert.match(server, /process\.env\.VAPID_PRIVATE_KEY/);
