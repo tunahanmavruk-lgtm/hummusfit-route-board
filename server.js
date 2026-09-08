@@ -177,16 +177,47 @@ function markArchivedOrderFulfilled(stopKey, orderId) {
 
 // Shopify's unfulfilled feed is authoritative while an order is being picked.
 // After auto-fulfillment the same order still has an operational job to do: it
-// must remain visible to the driver and receiving store. Keep the last completed
-// snapshot per stop for seven days. A new live unfulfilled order always wins.
+// must remain visible to the driver and receiving store. B2B deliveries can run
+// several days after picking, so they keep the seven-day safety window. Local
+// orders only need to survive through their next delivery shift: an afternoon/
+// evening pick expires at 2 PM ET the following day, while an overnight/morning
+// pick expires at 2 PM ET that same day. A new live unfulfilled order always
+// wins, and a driver-completed stop closes its snapshot immediately.
 const COMPLETED_ORDER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function completedSnapshotExpiresAt(archived) {
+  const completed = new Date(archived.archivedAt || archived.completedAt);
+  if (!Number.isFinite(completed.getTime())) return 0;
+  if (archived.isB2B) return completed.getTime() + COMPLETED_ORDER_RETENTION_MS;
+
+  const startOfCompletedDayET = getStartOfDayEastern(completed);
+  const completedHourET = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour12: false,
+      hour: "2-digit",
+    }).format(completed)
+  ) % 24;
+  const deliveryDayOffsetHours = completedHourET >= 12 ? 38 : 14;
+  return startOfCompletedDayET.getTime() + deliveryDayOffsetHours * HOUR_MS;
+}
+
+function markArchivedStopDelivered(stopKey, deliveredAt) {
+  const archive = loadArchive();
+  const archived = archive[stopKey];
+  if (!archived || !archived.completedAt) return false;
+  archived.deliveryComplete = true;
+  archived.deliveredAt = deliveredAt;
+  saveArchive(archive);
+  return true;
+}
+
 function mergeRecentCompletedOrders(activeByStopName, now = Date.now()) {
   const archive = loadArchive();
   const merged = { ...activeByStopName };
   Object.entries(archive).forEach(([key, archived]) => {
     if (merged[key] || !archived || !archived.completedAt || !Array.isArray(archived.lineItems)) return;
-    const archivedAt = Date.parse(archived.archivedAt || archived.completedAt);
-    if (!Number.isFinite(archivedAt) || now - archivedAt > COMPLETED_ORDER_RETENTION_MS) return;
+    if (archived.deliveryComplete || now > completedSnapshotExpiresAt(archived)) return;
     merged[key] = {
       orderId: archived.orderId,
       orderName: archived.orderName,
@@ -1158,6 +1189,14 @@ app.post("/api/stop-status", (req, res) => {
     updated.deliveredAt = null;
   }
   state.stopStatus[stopId] = updated;
+  if (status === "delivered") {
+    const stop = [...ROUTES, ...B2B_ROUTES]
+      .flatMap((route) => route.stops)
+      .find((candidate) => candidate.id === stopId);
+    if (stop && !stop.isServiceStop) {
+      markArchivedStopDelivered(pickingKeyFor(stop.name), updated.deliveredAt || now);
+    }
+  }
   saveState(state);
   res.json({ ok: true, state });
 });

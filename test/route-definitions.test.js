@@ -72,6 +72,10 @@ test("keeps fulfilled orders visible as locked delivery and receiving snapshots"
   assert.match(server, /fulfillmentResults\.every\(\(result\) => result\.ok\)/);
   assert.match(server, /mergeRecentCompletedOrders\(activeByStopName, now\)/);
   assert.match(server, /COMPLETED_ORDER_RETENTION_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(server, /function completedSnapshotExpiresAt/);
+  assert.match(server, /completedHourET >= 12 \? 38 : 14/);
+  assert.match(server, /archived\.deliveryComplete \|\| now > completedSnapshotExpiresAt\(archived\)/);
+  assert.match(server, /markArchivedStopDelivered\(pickingKeyFor\(stop\.name\)/);
   assert.match(server, /retainedAfterFulfillment: true/);
   assert.match(server, /removedFromBoard: false/);
   assert.doesNotMatch(server, /delete ordersCache\.byStopName\[key\]/);

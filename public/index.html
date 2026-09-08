@@ -820,6 +820,18 @@
     return new Date(iso).toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' });
   }
 
+  function orderPlacedLabel(order){
+    if(!order || !order.createdAt) return '';
+    var placed = new Date(order.createdAt);
+    var now = new Date();
+    var dateFmt = new Intl.DateTimeFormat('en-CA', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' });
+    var placedDay = dateFmt.format(placed);
+    var today = dateFmt.format(now);
+    var yesterday = dateFmt.format(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    var dayLabel = placedDay === today ? 'Today' : placedDay === yesterday ? 'Yesterday' : placed.toLocaleDateString('en-US', { timeZone:'America/New_York', month:'short', day:'numeric' });
+    return ' · ' + dayLabel + ' ' + fmtTime(order.createdAt);
+  }
+
   function render(){
     var container = document.getElementById('routesContainer');
     container.innerHTML = '';
@@ -891,7 +903,7 @@
 
         var pillHtml;
         if(order){
-          pillHtml = '<a class="order-pill lit' + (orderJustArrived ? ' just-arrived' : '') + '" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener" data-tap-link>' + order.orderName + ' →</a>';
+          pillHtml = '<a class="order-pill lit' + (orderJustArrived ? ' just-arrived' : '') + '" href="/picking?stop=' + encodeURIComponent(stop.name) + '" target="_blank" rel="noopener" data-tap-link>' + order.orderName + orderPlacedLabel(order) + ' →</a>';
         } else if(!isScheduled){
           pillHtml = '<span class="order-pill not-scheduled">No delivery today</span>';
         } else {
