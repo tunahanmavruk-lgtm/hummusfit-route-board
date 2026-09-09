@@ -805,15 +805,18 @@
   function vanLiveHtml(vanName){
     if(!vanName) return '';
     var v = findVanStatus(vanName);
+    var imei = (v && v.imei) || fleetVehicleIds[vanName] || '';
+    var trackingUrl = FLEET_TRACKER_URL + (imei ? '/?imei=' + encodeURIComponent(imei) : '');
     if(!v){
-      return '<a class="van-live offline" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>No live data</a>';
+      return '<a class="van-live offline" href="' + trackingUrl + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>No live data</a>';
     }
     var cls = v.speed > 1 ? '' : (v.isRunning ? 'idle' : 'offline');
     var label = v.speed > 1 ? Math.round(v.speed) + ' mph' : (v.isRunning ? 'Idling' : 'Parked');
-    return '<a class="van-live ' + cls + '" href="' + FLEET_TRACKER_URL + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>' + label + '</a>';
+    return '<a class="van-live ' + cls + '" href="' + trackingUrl + '" target="_blank" rel="noopener" data-tap-link><span class="dot"></span>' + label + '</a>';
   }
 
-  var FLEET_TRACKER_URL = 'https://hummusfit-fleet-tracker-production.up.railway.app';
+  var FLEET_TRACKER_URL = 'https://fleet.myhummusfit.com';
+  var fleetVehicleIds = {};
 
   function fmtTime(iso){
     if(!iso) return '';
@@ -1187,6 +1190,7 @@
     ]).then(function(results){
       routesData = results[0].routes;
       fleetData = results[0].fleet;
+      fleetVehicleIds = results[0].fleetVehicleIds || {};
       driversData = results[0].drivers || [];
       hqData = results[0].hq || { name: 'HQ', address: '' };
       stateData = results[1];

@@ -71,10 +71,11 @@ test("keeps fulfilled orders visible as locked delivery and receiving snapshots"
   assert.match(server, /ord\.displayFulfillmentStatus === "FULFILLED"/);
   assert.match(server, /fulfillmentResults\.every\(\(result\) => result\.ok\)/);
   assert.match(server, /mergeRecentCompletedOrders\(activeByStopName, now\)/);
-  assert.match(server, /COMPLETED_ORDER_RETENTION_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(server, /b2bOrderExpiresAt\(archived\.createdAt, deliveryDays, completed\)/);
+  assert.match(server, /through 8 PM ET on their scheduled delivery day/);
   assert.match(server, /function completedSnapshotExpiresAt/);
   assert.match(server, /completedHourET >= 12 \? 38 : 14/);
-  assert.match(server, /archived\.deliveryComplete \|\| now > completedSnapshotExpiresAt\(archived\)/);
+  assert.match(server, /archived\.deliveryComplete \|\| now > completedSnapshotExpiresAt\(archived, key\)/);
   assert.match(server, /markArchivedStopDelivered\(pickingKeyFor\(stop\.name\)/);
   assert.match(server, /retainedAfterFulfillment: true/);
   assert.match(server, /removedFromBoard: false/);
@@ -92,4 +93,7 @@ test("uses Bouncie names plus the API-omitted #5 as the ten-vehicle fleet source
   assert.match(outOfStateBoard, /fetch\('\/api\/van-status'\)/);
   assert.match(localBoard, /liveNames\.concat\(fleetData\)/);
   assert.match(outOfStateBoard, /liveNames\.concat\(fleetData\)/);
+  assert.match(outOfStateBoard, /\?imei=/);
+  assert.match(localBoard, /\?imei=/);
+  assert.match(server, /fleetVehicleIds: VAN_TO_BOUNCIE_IMEI/);
 });

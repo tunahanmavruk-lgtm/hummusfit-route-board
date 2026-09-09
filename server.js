@@ -5,6 +5,11 @@ const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
+const {
+  b2bOrderExpiresAt,
+  hasB2BSignal,
+  normalizeOrderTags,
+} = require("./order-lifecycle.js");
 const webpush = require("web-push");
 
 // Railway rebuilds this service's container fresh on every deploy — any
@@ -177,18 +182,20 @@ function markArchivedOrderFulfilled(stopKey, orderId) {
 
 // Shopify's unfulfilled feed is authoritative while an order is being picked.
 // After auto-fulfillment the same order still has an operational job to do: it
-// must remain visible to the driver and receiving store. B2B deliveries can run
-// several days after picking, so they keep the seven-day safety window. Local
+// must remain visible to the driver and receiving store. B2B snapshots remain
+// through 8 PM ET on their scheduled delivery day, even after scanning and
+// Shopify fulfillment, then leave the board at that hard cutoff. Local
 // orders only need to survive through their next delivery shift: an afternoon/
 // evening pick expires at 2 PM ET the following day, while an overnight/morning
 // pick expires at 2 PM ET that same day. A new live unfulfilled order always
 // wins, and a driver-completed stop closes its snapshot immediately.
-const COMPLETED_ORDER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-
-function completedSnapshotExpiresAt(archived) {
+function completedSnapshotExpiresAt(archived, stopKey) {
   const completed = new Date(archived.archivedAt || archived.completedAt);
   if (!Number.isFinite(completed.getTime())) return 0;
-  if (archived.isB2B) return completed.getTime() + COMPLETED_ORDER_RETENTION_MS;
+  if (archived.isB2B) {
+    const deliveryDays = VALID_STOP_NAMES.get(stopKey)?.deliveryDays || [];
+    return b2bOrderExpiresAt(archived.createdAt, deliveryDays, completed);
+  }
 
   const startOfCompletedDayET = getStartOfDayEastern(completed);
   const completedHourET = Number(
@@ -217,7 +224,7 @@ function mergeRecentCompletedOrders(activeByStopName, now = Date.now()) {
   const merged = { ...activeByStopName };
   Object.entries(archive).forEach(([key, archived]) => {
     if (merged[key] || !archived || !archived.completedAt || !Array.isArray(archived.lineItems)) return;
-    if (archived.deliveryComplete || now > completedSnapshotExpiresAt(archived)) return;
+    if (archived.deliveryComplete || now > completedSnapshotExpiresAt(archived, key)) return;
     merged[key] = {
       orderId: archived.orderId,
       orderName: archived.orderName,
@@ -572,14 +579,18 @@ const B2B_ROUTES = [
 // metadata — right now just whether it's an out-of-state/B2B stop, which
 // the picking screen uses to flip into a completely different visual
 // theme so pickers can't mistake one for a local order.
-const VALID_STOP_NAMES = new Map(
-  ROUTES.concat(B2B_ROUTES).flatMap((route) =>
-    route.stops.filter((s) => !s.isServiceStop).map((s) => [
-      s.name.toLowerCase(),
-      { isB2B: Boolean(s.isB2B) || Boolean(route.day !== undefined), deliveryDays: s.deliveryDays || null },
-    ])
-  )
-);
+const VALID_STOP_NAMES = new Map();
+ROUTES.concat(B2B_ROUTES).forEach((route) => {
+  route.stops.filter((s) => !s.isServiceStop).forEach((s) => {
+    const key = s.name.toLowerCase();
+    const existing = VALID_STOP_NAMES.get(key);
+    const isB2B = Boolean(s.isB2B) || route.day !== undefined;
+    const deliveryDays = isB2B
+      ? Array.from(new Set([...(existing?.deliveryDays || []), route.day])).sort()
+      : s.deliveryDays || null;
+    VALID_STOP_NAMES.set(key, { isB2B, deliveryDays });
+  });
+});
 
 // order objects only carry the Shopify order name (like "#123"), not the
 // stop's real display name — this maps the lowercase key used internally
@@ -701,7 +712,7 @@ function firstNameOf(fullName) {
   return fullName.split(/\s+/)[0];
 }
 
-const FLEET_TRACKER_URL = "https://hummusfit-fleet-tracker-production.up.railway.app";
+const FLEET_TRACKER_URL = "https://fleet.myhummusfit.com";
 
 // How long a driver realistically needs to unload at each stop before
 // continuing to the next one — used to make ETAs actually accurate
@@ -1100,7 +1111,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
 });
 
 app.get("/api/routes", (req, res) => {
-  res.json({ routes: ROUTES, fleet: FLEET, drivers: DRIVERS, hq: HQ });
+  res.json({ routes: ROUTES, fleet: FLEET, fleetVehicleIds: VAN_TO_BOUNCIE_IMEI, drivers: DRIVERS, hq: HQ });
 });
 // Minimal, non-operational identity feed for Shipping OS. It deliberately
 // contains no orders, customer details, drivers, assignments, or route state.
@@ -1154,6 +1165,7 @@ app.get("/api/b2b-routes-today", (req, res) => {
     // label) was the only thing shown, with no way to record which real
     // physical vehicle is actually running the route. fleet fixes that.
     fleet: FLEET,
+    fleetVehicleIds: VAN_TO_BOUNCIE_IMEI,
     hq: HQ,
     todayDow,
   });
@@ -1454,8 +1466,8 @@ B2B_ROUTES.forEach((route) => {
 });
 
 const B2B_LOOKBACK_DAYS = 21;
-async function fetchB2BStopOrders() {
-  const lookbackStart = new Date(Date.now() - B2B_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+async function fetchB2BStopOrders(now = Date.now()) {
+  const lookbackStart = new Date(now - B2B_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   let orders = [];
   let cursor = null;
   let hasNextPage = true;
@@ -1511,13 +1523,15 @@ async function fetchB2BStopOrders() {
     // customer's — this is what lets PWRBLD's one shared account place
     // orders for 3 different locations and still have each order route
     // to the correct one, by tagging the individual order.
-    const tags = (order.tags || []).concat(order.customer?.tags || []).map((t) => t.trim());
-    let matchedAny = false;
-    tags.forEach((tag) => {
-      const key = tag.toLowerCase();
+    const tags = normalizeOrderTags(order);
+    const matchedKeys = new Set();
+    tags.forEach((key) => {
       const stopMeta = VALID_STOP_NAMES.get(key);
       if (!stopMeta || !stopMeta.isB2B) return;
-      matchedAny = true;
+      if (now > b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) return;
+      matchedKeys.add(key);
+    });
+    matchedKeys.forEach((key) => {
       if (!groupedByStop[key]) groupedByStop[key] = [];
       groupedByStop[key].push(order);
     });
@@ -1527,10 +1541,11 @@ async function fetchB2BStopOrders() {
     // real shipping address already on it: the package has to go to
     // the right place regardless, so that address is a reliable way to
     // auto-identify which known stop this order is actually for.
-    if (!matchedAny) {
+    if (!matchedKeys.size && hasB2BSignal(tags)) {
       const zip = order.shippingAddress?.zip;
       const fallbackKey = zip ? B2B_ZIP_TO_STOP.get(zip) : null;
-      if (fallbackKey) {
+      const stopMeta = fallbackKey ? VALID_STOP_NAMES.get(fallbackKey) : null;
+      if (fallbackKey && stopMeta && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) {
         if (!groupedByStop[fallbackKey]) groupedByStop[fallbackKey] = [];
         groupedByStop[fallbackKey].push(order);
       }
@@ -3158,6 +3173,7 @@ app.get("/api/van-status", async (req, res) => {
         nickName = [v.model.year, v.model.make, v.model.name].filter(Boolean).join(" ");
       }
       return {
+        imei: String(v.imei || VAN_TO_BOUNCIE_IMEI[canonicalVehicleName(nickName)] || ""),
         nickName: nickName || "",
         speed: (v.stats && v.stats.speed) || 0,
         isRunning: !!(v.stats && v.stats.isRunning),
