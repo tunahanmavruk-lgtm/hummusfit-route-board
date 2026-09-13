@@ -40,6 +40,9 @@ test('retains scanner, crate, picking, and finish controls', () => {
   assert.match(html, /Shopify has not confirmed fulfillment yet/);
   assert.match(html, /Zebra 4×3 ready/);
   assert.match(html, /\/api\/crate-label-test\.pdf/);
+  assert.match(html, /same Wi-Fi network/);
+  assert.match(html, /Bluetooth Classic/);
+  assert.doesNotMatch(html, /Connect by USB/);
 });
 
 test('never renders undefined route metadata on the out-of-state board', () => {

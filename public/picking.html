@@ -900,9 +900,9 @@
   <span class="fab-count" id="crateFabCount">1</span>
 </button>
 
-<!-- Zebra desktop printers use the operating-system driver. Keeping the
-     label as a true 4x3 PDF makes the same workflow reliable over USB or
-     Ethernet on both the ZD421 and the legacy ZD620. -->
+<!-- Zebra desktop printers use the operating-system or Android Zebra Print
+     service. Keeping the label as a true 4x3 PDF makes the same workflow
+     reliable over Wi-Fi or Bluetooth Classic on the ZD421 and ZD620. -->
 <div id="btPrinterStatus" class="bt-status connected">🖨️ Zebra 4×3 ready</div>
 
 <script>
@@ -1386,8 +1386,8 @@
   // system finds which line item it matches.
   var hwScanInputEl = document.getElementById('hwScanInput');
 
-  // Zebra desktop printers are connected through the operating-system
-  // driver. This status control opens setup and calibration guidance.
+  // Zebra desktop printers are connected through the operating-system or
+  // Android Zebra Print service. This status control opens setup guidance.
   function btStatusEl(){ return document.getElementById('btPrinterStatus'); }
 
   // The single entry point every crate-label print goes through. It uses
@@ -1395,9 +1395,9 @@
   // printer status instead of the web page guessing a device protocol.
   async function printCrateLabel(stopName, crateNumber){
     // Zebra ZD421/ZD620: the PDF itself is exactly 4x3 inches. The Zebra
-    // desktop driver handles USB or Ethernet transport consistently,
-    // avoiding the proprietary Bluetooth protocol that caused dropped
-    // and clipped jobs with the previous mobile printer.
+    // print service handles Wi-Fi or Bluetooth Classic consistently,
+    // avoiding raw browser Bluetooth commands that caused dropped and
+    // clipped jobs with the previous mobile printer.
     printPdfInPlace('/api/crate-label/' + encodeURIComponent(stopName) + '/' + crateNumber);
   }
 
@@ -1985,10 +1985,12 @@
           '<div style="padding:0 20px 18px;line-height:1.55;color:var(--dim);font-size:13px;">' +
             '<b style="display:block;color:var(--ink);margin-bottom:8px;">Recommended: Zebra ZD421, 203 dpi, direct thermal</b>' +
             '<div>1. Load 4-inch-wide × 3-inch-long gap labels.</div>' +
-            '<div>2. Connect by USB and install the Zebra driver.</div>' +
-            '<div>3. Run SmartCal: hold Pause + Cancel for two seconds.</div>' +
-            '<div>4. Set paper to 4 × 3 in, landscape, Actual size / 100%.</div>' +
-            '<div>5. Print the calibration label before a live crate.</div>' +
+            '<div>2. Recommended: connect the printer and picking device to the same Wi-Fi network. Use Bluetooth Classic as a fallback.</div>' +
+            '<div>3. Android: install Zebra Print and add the printer by Wi-Fi/IP or Bluetooth Classic.</div>' +
+            '<div>4. Windows/Mac: add it as a network printer using its IP address and the Zebra driver.</div>' +
+            '<div>5. Run SmartCal: hold Pause + Cancel for two seconds.</div>' +
+            '<div>6. Set paper to 4 × 3 in, landscape, Actual size / 100%.</div>' +
+            '<div>7. Print the calibration label before a live crate.</div>' +
           '</div>' +
           '<div class="modal-actions">' +
             '<div class="modal-btn" id="printerSetupCloseBtn">Close</div>' +

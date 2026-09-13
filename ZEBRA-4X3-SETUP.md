@@ -6,24 +6,31 @@ Use the **Zebra ZD421, 203 dpi, direct-thermal configuration** as the primary cr
 
 The ZD421 is the current, supported model and is easier to keep in service. The ZD620 is faster and includes Ethernet on standard configurations, but Zebra discontinued North American sales in 2021 and ended standard service and support in 2024. Keep the ZD620 as a spare.
 
-## One-time workstation setup
+## Wireless requirement
 
-Use a dedicated Windows 11 or macOS workstation with Chrome. USB is the simplest and most predictable connection.
+Use the **ZD421 wireless model with the factory-installed Wi-Fi and Bluetooth Classic radio**. Wireless is an optional hardware configuration on the ZD421; software cannot add it to a USB-only unit. Print the printer/network configuration report and confirm that Wi-Fi or Bluetooth Classic is listed before rollout.
 
-1. **Before connecting the USB cable**, install the current ZD421 printer driver from Zebra Support. On Windows, install Zebra Printer Driver v10 and Zebra Setup Utilities.
-2. Connect the printer to power and the workstation by USB, then turn it on.
-3. Load **4-inch-wide × 3-inch-long direct-thermal gap labels**. The printable face should point upward as it passes over the platen. Keep the gap sensor in its normal centered web/gap position.
-4. Close the printer and wait for a solid green Status light.
-5. Hold **Pause + Cancel** together for two seconds, then release. The printer will feed several labels and return to solid green when SmartCal finishes.
-6. In the operating-system printer settings, set:
+Use **Wi-Fi as the primary connection**. It lets multiple authorized picking devices share the printer, reconnects without pairing each session, and is easier to support. Keep Bluetooth Classic as the fallback for one nearby Android device. Bluetooth Low Energy is for setup and discovery and is not supported for Zebra Print label jobs.
+
+## One-time wireless setup
+
+1. Load **4-inch-wide × 3-inch-long direct-thermal gap labels**. The printable face should point upward as it passes over the platen. Keep the gap sensor in its normal centered web/gap position.
+2. Close the printer and wait for a solid green Status light.
+3. Hold **Pause + Cancel** together for two seconds, then release. The printer will feed several labels and return to solid green when SmartCal finishes.
+4. Use Zebra Setup Utilities on Android, iOS, Windows, or macOS to join the ZD421 to the same Wi-Fi network used by the picking devices. Record the printer IP address and reserve it in the router so it does not change.
+5. Configure the printer settings:
    - Paper size: **4 × 3 inches**
    - Orientation: **Landscape**
    - Scale: **Actual size / 100%**
    - Media type: **Labels with gaps / web sensing**
    - Print method: **Direct thermal**
    - Resolution: **203 dpi**
+6. Configure each picking device:
+   - **Android (recommended for tablets/phones):** install Zebra Print, add the printer using **Wi-Fi and Ethernet Network**, select the discovered ZD421 or enter its reserved IP address, then finish setup. The printer will appear in Android's normal print dialog.
+   - **Windows/macOS:** install the Zebra driver and add the ZD421 as a network printer using its reserved IP address. The Logistics app continues to use the normal browser print dialog.
+   - **Bluetooth fallback on Android:** pair through Zebra Print using **Bluetooth Classic**. Do not select a BLE-only connection.
 7. In HF Logistics, open **Order Picking** and tap **Zebra 4×3 ready**.
-8. Tap **Test 4×3 Label**, then Print. Select the ZD421 and confirm 4 × 3, landscape, and 100% scale.
+8. Tap **Test 4×3 Label**, then Print. Select the wireless ZD421 and confirm 4 × 3, landscape, and 100% scale.
 
 ## Acceptance check
 
@@ -39,4 +46,12 @@ If the printer skips labels or the starting position moves, rerun SmartCal. If t
 
 ## Daily operation
 
-Leave the ZD421 connected to the same workstation. Pickers use the existing crate workflow; every automatic or manual crate-label action opens the exact-size preview. They select the ZD421 and print. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
+Leave the ZD421 powered on and connected to the staff Wi-Fi network. Pickers use the existing crate workflow; every automatic or manual crate-label action opens the exact-size preview. They select the ZD421 and print. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
+
+## Wireless troubleshooting
+
+- **Printer is missing:** confirm the picking device and printer are on the same Wi-Fi network and that guest/client isolation is disabled. In Zebra Print, add it directly by the reserved IP address.
+- **Printer IP keeps changing:** create a DHCP reservation for the printer in the router and re-add it once using that address.
+- **Bluetooth print fails:** confirm the device uses Bluetooth Classic, exit Zebra Print's Printer Settings screen, and retry from the PDF print dialog.
+- **Job is clipped or scaled:** select 4 × 3 inches, landscape, and Actual size / 100%; disable Fit to page.
+- **Labels skip or drift:** rerun SmartCal by holding Pause + Cancel for two seconds.
