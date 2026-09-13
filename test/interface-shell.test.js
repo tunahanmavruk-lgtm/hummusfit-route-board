@@ -38,6 +38,8 @@ test('retains scanner, crate, picking, and finish controls', () => {
     assert.ok(html.includes(hook), `picking page must retain ${hook}`);
   }
   assert.match(html, /Shopify has not confirmed fulfillment yet/);
+  assert.match(html, /Zebra 4×3 ready/);
+  assert.match(html, /\/api\/crate-label-test\.pdf/);
 });
 
 test('never renders undefined route metadata on the out-of-state board', () => {

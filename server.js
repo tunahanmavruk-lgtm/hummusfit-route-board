@@ -4,6 +4,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
+const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const {
   b2bOrderExpiresAt,
@@ -2779,11 +2780,8 @@ app.post("/api/picking-reset-order", async (req, res) => {
 // store name (big, this is what stops a driver from dropping the wrong
 // crate at the wrong store), order number, crate number, and only the
 // items actually packed into THAT crate.
-// Shared by both the PDF label endpoint and the Bluetooth-print JSON
-// endpoint below — one place that decides what goes on a crate label,
-// so the PDF version (browser print) and the direct-to-M260 version
-// (Web Bluetooth from the picking screen) can never silently drift out
-// of sync with each other.
+// Shared by the Zebra-ready PDF label endpoint and the picking screen's
+// label preview. One place decides what belongs to a physical crate.
 async function getCrateLabelData(stopNameRaw, crateNumber) {
   const cache = await fetchTodaysStopOrders();
   const key = pickingKeyFor(decodeURIComponent(stopNameRaw));
@@ -2842,148 +2840,33 @@ app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
     const data = await getCrateLabelData(req.params.stopName, crateNumber);
     if (!data) return res.status(404).send("No order found for this stop.");
     if (data.empty) return res.status(404).send("No items found in this crate.");
-    const { orderName, pickedBy, routeName, stopNameUpper, identity, crateItems } = data;
-    const record = { pickedBy };
-    const order = { orderName };
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `inline; filename="${order.orderName}-crate${crateNumber}-label.pdf"`
+      `inline; filename="${data.orderName}-crate${crateNumber}-label.pdf"`
     );
-
-    // 70mm x 80mm die-cut label stock for the Phomemo M260 (the actual
-    // roll loaded, confirmed 8/12/2026) — NOT the old 4x6" shipping
-    // label size. 70mm=198.43pt, 80mm=226.77pt. This is a real, much
-    // smaller physical card (2.76" x 3.15"), so this whole layout is
-    // rebuilt at these proportions rather than just scaled down —
-    // scaling the old 4x6 layout down uniformly made the item rows
-    // unreadably small well before the header/footer earned their
-    // space back.
-    const PAGE_W = 198;
-    const PAGE_H = 227;
-    const doc = new PDFDocument({ size: [PAGE_W, PAGE_H], margin: 0 });
-    doc.pipe(res);
-
-    const M = 9; // inner margin
-    const usableWidth = PAGE_W - M * 2;
-
-    // Border frame — thinner than the old 4x6 version so it doesn't eat
-    // into the much smaller usable area.
-    doc.rect(4, 4, PAGE_W - 8, PAGE_H - 8).lineWidth(1).strokeColor("#111111").stroke();
-
-    // Pattern band trimmed to a thin strip — still gives the at-a-glance
-    // per-store fingerprint, just doesn't cost as much vertical space as
-    // it did on the bigger label.
-    drawPattern(doc, identity.pattern, 4, 4, PAGE_W - 8, 8);
-    doc.moveTo(4, 12).lineTo(PAGE_W - 4, 12).strokeColor("#111111").lineWidth(0.75).stroke();
-
-    // Header row: small monogram badge + route abbreviation on the
-    // left, no full logo image — at this size a 66pt-wide logo would
-    // eat over a third of the usable width for pure branding. The
-    // monogram badge already carries the brand mark.
-    const headerY = 12 + 6;
-    const badgeCenterX = M + 8;
-    const badgeCenterY = headerY + 8;
-    doc.circle(badgeCenterX, badgeCenterY, 8).fill("#111111");
-    const monogramSize = identity.monogram.length > 1 ? 6.5 : 8.5;
-    doc.font("Helvetica-Bold").fontSize(monogramSize).fillColor("#FFFFFF");
-    const monoWidth = doc.widthOfString(identity.monogram);
-    doc.text(identity.monogram, badgeCenterX - monoWidth / 2, badgeCenterY - monogramSize / 2 + 1);
-    doc.font("Helvetica-Bold").fontSize(7).fillColor("#666666")
-      .text((routeName || "HUMMUS FIT").toUpperCase(), badgeCenterX + 13, badgeCenterY - 3.5, { width: usableWidth - 30 });
-
-    // STORE NAME — still the dominant full-width element, just scaled
-    // to a range that actually fits real store names at this width
-    // (tested against all 16 real names). Sized up from the first draft
-    // now that the QR/branding footer is gone (8/12/2026 — Tony wants
-    // store name, crate number, and contents only, nothing else fighting
-    // for space on a label this small).
-    doc.y = headerY + 20;
-    const stopFontSize = fitTextFontSize(doc, stopNameUpper, usableWidth, 24, 13);
-    doc.font("Helvetica-Bold").fontSize(stopFontSize).fillColor("#111111").text(stopNameUpper, M, doc.y, { width: usableWidth });
-    doc.moveDown(0.25);
-
-    // CRATE number — still the single biggest thing on the label
-    doc.font("Helvetica-Bold").fontSize(26).fillColor("#111111").text(`CRATE ${crateNumber}`, M, doc.y, { width: usableWidth });
-    const orderLineY = doc.y;
-    doc.font("Helvetica").fontSize(6.5).fillColor("#666666").text(`Order: ${order.orderName}`, M, orderLineY, { width: usableWidth });
-
-    if (record.pickedBy) {
-      doc.font("Helvetica").fontSize(6).fillColor("#999999")
-        .text("Picked by " + firstNameOf(record.pickedBy), M, orderLineY, { width: usableWidth, align: "right" });
-    }
-
-    doc.moveDown(0.5);
-    doc.moveTo(M, doc.y).lineTo(PAGE_W - M, doc.y).strokeColor("#222222").lineWidth(0.75).stroke();
-    doc.moveDown(0.35);
-
-    doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#8A8580").text("CONTENTS", { align: "left" });
-    doc.moveDown(0.25);
-
-    const qtyColX = M;
-    const titleColX = M + 16;
-    const titleColWidth = PAGE_W - M - titleColX;
-
-    // Same overflow-safety principle as before, retuned for this much
-    // tighter card: a label is one physical sticker, it can never
-    // legitimately spill onto a second page. Try row sizes from most
-    // readable down to tightest, use the first tier that fits everyone.
-    // No QR/footer to reserve space for anymore (dropped 8/12/2026 —
-    // Tony wants store name, crate number, and contents only) — just
-    // the bottom margin, so contents get materially more room and can
-    // run at a bigger, more legible tier than the first draft.
-    const FOOTER_RESERVE = 6;
-    const availableForItems = (PAGE_H - 4) - doc.y - FOOTER_RESERVE;
-    const ROW_TIERS = [
-      { itemFontSize: 9, rowHeight: 14, rowGap: 3.5 },
-      { itemFontSize: 7.5, rowHeight: 12, rowGap: 3 },
-      { itemFontSize: 6.5, rowHeight: 10, rowGap: 2 },
-      { itemFontSize: 5.5, rowHeight: 8, rowGap: 1.5 },
-      { itemFontSize: 5, rowHeight: 7, rowGap: 1 },
-    ];
-    let tier = ROW_TIERS[ROW_TIERS.length - 1];
-    for (const candidate of ROW_TIERS) {
-      if (crateItems.length * (candidate.rowHeight + candidate.rowGap) <= availableForItems) {
-        tier = candidate;
-        break;
-      }
-    }
-    const { itemFontSize, rowHeight, rowGap } = tier;
-
-    let displayItems = crateItems;
-    let truncatedCount = 0;
-    const maxRowsThatFit = Math.max(1, Math.floor(availableForItems / (rowHeight + rowGap)));
-    if (crateItems.length > maxRowsThatFit) {
-      truncatedCount = crateItems.length - (maxRowsThatFit - 1);
-      displayItems = crateItems.slice(0, maxRowsThatFit - 1);
-    }
-
-    displayItems.forEach((item, idx) => {
-      const rowY = doc.y;
-      doc.font("Helvetica-Bold").fontSize(itemFontSize).fillColor("#111111");
-      doc.text(String(item.quantity), qtyColX, rowY, { width: 14 });
-      doc.text(item.title, titleColX, rowY, { width: titleColWidth });
-      const afterY = doc.y;
-      doc.y = Math.max(afterY, rowY + rowHeight) + rowGap;
-      if (idx < displayItems.length - 1 || truncatedCount > 0) {
-        doc.moveTo(M, doc.y - rowGap / 2).lineTo(PAGE_W - M, doc.y - rowGap / 2).strokeColor("#E5E3DF").lineWidth(0.4).stroke();
-      }
-    });
-    if (truncatedCount > 0) {
-      doc.font("Helvetica-BoldOblique").fontSize(Math.max(itemFontSize - 1, 5)).fillColor("#8A8580")
-        .text(`+ ${truncatedCount} more — see packing slip`, M, doc.y, { width: usableWidth });
-      doc.moveDown(0.15);
-    }
-
-    // No QR code, no branding footer — dropped per Tony 8/12/2026. This
-    // label's only job now is store name, crate number, and exactly
-    // what's inside it, as clearly as the card allows. It just ends
-    // where the contents list ends.
-    doc.end();
+    renderCrateLabelPdf(res, data, crateNumber);
   } catch (err) {
     res.status(500).send("Error generating crate label: " + err.message);
   }
+});
+
+app.get("/api/crate-label-test.pdf", (req, res) => {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", 'inline; filename="zebra-4x3-test-label.pdf"');
+  renderCrateLabelPdf(res, {
+    routeName: "HF LOGISTICS · ZEBRA ZD421",
+    stopNameUpper: "TEST STORE",
+    orderName: "4X3-CALIBRATION",
+    pickedBy: "Warehouse",
+    crateItems: [
+      { quantity: 12, title: "Chicken Bowl" },
+      { quantity: 8, title: "Steak Bowl" },
+      { quantity: 6, title: "Falafel Bowl" },
+      { quantity: 4, title: "Hummus Cups" },
+    ],
+  }, 1, { testLabel: true });
 });
 
 app.get("/api/missing-items-pdf/:stopName", async (req, res) => {
