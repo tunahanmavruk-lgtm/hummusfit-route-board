@@ -21,7 +21,8 @@ const board = fs.readFileSync(path.join(__dirname, "..", "public", "index.html")
 test("keeps the current Long Island routes grouped in delivery order", () => {
   assert.match(server, /name: "Route #1"[\s\S]*?Deer Park[\s\S]*?Lindenhurst[\s\S]*?Islip/);
   assert.match(server, /name: "Route #2"[\s\S]*?Lynbrook[\s\S]*?Island Park[\s\S]*?Bellmore[\s\S]*?Ozone Park/);
-  assert.match(server, /name: "Route #3"[\s\S]*?time: "8:00 AM"[\s\S]*?Woodbury[\s\S]*?Huntington[\s\S]*?Farmingdale[\s\S]*?Hicksville/);
+  assert.match(server, /name: "Route #3"[\s\S]*?time: "8:00 AM"[\s\S]*?Woodbury[\s\S]*?Total Nutrition Syosset[\s\S]*?Huntington[\s\S]*?Farmingdale[\s\S]*?Hicksville/);
+  assert.match(server, /name: "Total Nutrition Syosset"[^\n]*deliveryDays: \[2, 4\]/);
 });
 
 test("keeps Route #4's Lake Grove visit as a van-swap checkpoint only", () => {

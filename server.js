@@ -387,6 +387,7 @@ const ROUTES = [
     vanSize: "Small",
     stops: [
       { id: "r3-woodbury-v2", name: "Woodbury", address: "150 Woodbury Road, Woodbury, NY" },
+      { id: "r3-total-nutrition-syosset", name: "Total Nutrition Syosset", address: "235 Robbins Ln, Syosset, NY 11791", deliveryDays: [2, 4] },
       { id: "r3-huntington-v2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
       { id: "r3-farmingdale-v2", name: "Farmingdale", address: "101 Fulton Street, Farmingdale, NY" },
       { id: "r3-hicksville-v2", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
