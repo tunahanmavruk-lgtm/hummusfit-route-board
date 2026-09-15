@@ -1521,37 +1521,41 @@ async function fetchB2BStopOrders(now = Date.now()) {
   // "how many total," not an order-by-order breakdown.
   const groupedByStop = {};
   orders.forEach((order) => {
-    // Same as local: check the order's own tags too, not just the
-    // customer's — this is what lets PWRBLD's one shared account place
-    // orders for 3 different locations and still have each order route
-    // to the correct one, by tagging the individual order.
-    const tags = normalizeOrderTags(order);
+    // Location precedence matters for shared wholesale accounts. An exact
+    // tag on the individual order is authoritative. Otherwise use the
+    // shipping ZIP before considering a customer-level location tag; this
+    // prevents a stale location tag on a shared Ares/PWRBLD login from
+    // routing every location's orders to the same stop.
+    const orderTags = normalizeOrderTags({ tags: order.tags });
+    const customerTags = normalizeOrderTags({ tags: order.customer?.tags });
+    const tags = orderTags.concat(customerTags);
     const matchedKeys = new Set();
-    tags.forEach((key) => {
+    orderTags.forEach((key) => {
       const stopMeta = VALID_STOP_NAMES.get(key);
       if (!stopMeta || !stopMeta.isB2B) return;
       if (now > b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) return;
       matchedKeys.add(key);
     });
+    if (!matchedKeys.size && hasB2BSignal(tags)) {
+      const zip = String(order.shippingAddress?.zip || "").match(/\d{5}/)?.[0];
+      const fallbackKey = zip ? B2B_ZIP_TO_STOP.get(zip) : null;
+      const stopMeta = fallbackKey ? VALID_STOP_NAMES.get(fallbackKey) : null;
+      if (fallbackKey && stopMeta && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) {
+        matchedKeys.add(fallbackKey);
+      }
+    }
+    if (!matchedKeys.size) {
+      customerTags.forEach((key) => {
+        const stopMeta = VALID_STOP_NAMES.get(key);
+        if (!stopMeta || !stopMeta.isB2B) return;
+        if (now > b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) return;
+        matchedKeys.add(key);
+      });
+    }
     matchedKeys.forEach((key) => {
       if (!groupedByStop[key]) groupedByStop[key] = [];
       groupedByStop[key].push(order);
     });
-    // No tag identified a real stop — this is exactly the shared-account
-    // situation (PWRBLD, Ares) where the order wasn't individually
-    // tagged. Rather than lose the order entirely, fall back to the
-    // real shipping address already on it: the package has to go to
-    // the right place regardless, so that address is a reliable way to
-    // auto-identify which known stop this order is actually for.
-    if (!matchedKeys.size && hasB2BSignal(tags)) {
-      const zip = order.shippingAddress?.zip;
-      const fallbackKey = zip ? B2B_ZIP_TO_STOP.get(zip) : null;
-      const stopMeta = fallbackKey ? VALID_STOP_NAMES.get(fallbackKey) : null;
-      if (fallbackKey && stopMeta && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) {
-        if (!groupedByStop[fallbackKey]) groupedByStop[fallbackKey] = [];
-        groupedByStop[fallbackKey].push(order);
-      }
-    }
   });
 
   const byStopName = {};

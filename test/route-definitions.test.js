@@ -64,6 +64,15 @@ test("shows Monday out-of-state work from Friday through delivery day", () => {
   assert.match(server, /dayLabel: "Tomorrow — " \+ dayNames\[tomorrowDow\]/);
 });
 
+test("routes shared B2B accounts by order tag, then shipping ZIP, before customer location tags", () => {
+  const orderTagCheck = server.indexOf("orderTags.forEach((key) =>");
+  const zipFallbackCheck = server.indexOf("B2B_ZIP_TO_STOP.get(zip)", orderTagCheck);
+  const customerTagCheck = server.indexOf("customerTags.forEach((key) =>", zipFallbackCheck);
+  assert.ok(orderTagCheck >= 0, "missing individual-order location match");
+  assert.ok(zipFallbackCheck > orderTagCheck, "shipping ZIP must follow individual-order tags");
+  assert.ok(customerTagCheck > zipFallbackCheck, "customer location tags must be the final fallback");
+});
+
 test("keeps fulfilled orders visible as locked delivery and receiving snapshots", () => {
   assert.match(server, /const LOCAL_LOOKBACK_DAYS = 21/);
   assert.match(server, /created_at:>='\$\{localLookbackStart\}' fulfillment_status:unfulfilled status:any -status:cancelled/);
