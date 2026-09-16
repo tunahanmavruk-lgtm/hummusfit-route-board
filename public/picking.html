@@ -65,27 +65,31 @@
   @page{ size:4in 3in; margin:0; }
   @media print{
     body > *{ display:none!important; }
-    html,body{ width:4in!important; height:3in!important; min-height:0!important; margin:0!important; padding:0!important; background:#fff!important; }
+    html,body{ width:4in!important; height:auto!important; min-height:0!important; margin:0!important; padding:0!important; background:#fff!important; }
     body::before{ display:none!important; }
     #cratePrintSheet{
-      display:block!important; position:absolute!important; top:0!important; left:0!important;
-      width:4in!important; height:3in!important; box-sizing:border-box!important;
-      padding:.1in!important; color:#111!important; background:#fff!important;
+      display:block!important; position:static!important;
+      width:4in!important; height:auto!important; box-sizing:border-box!important;
+      padding:0!important; color:#111!important; background:#fff!important;
       font-family:Arial,sans-serif!important;
     }
     #cratePrintSheet *{ box-sizing:border-box!important; }
-    .crate-print-border{ width:3.8in; height:2.8in; border:2px solid #111; padding:.1in; overflow:hidden; }
-    .crate-print-route{ font-size:8px; font-weight:700; letter-spacing:.5px; white-space:nowrap; overflow:hidden; }
-    .crate-print-heading{ display:flex; justify-content:space-between; gap:6px; margin-top:5px; align-items:baseline; }
-    .crate-print-stop{ font-size:24px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
-    .crate-print-number{ font-size:24px; font-weight:800; white-space:nowrap; flex-shrink:0; }
-    .crate-print-meta{ display:flex; justify-content:space-between; gap:5px; margin-top:5px; font-size:9px; white-space:nowrap; overflow:hidden; }
-    .crate-print-meta span{ overflow:hidden; text-overflow:ellipsis; }
-    .crate-print-title{ border-top:1px solid #111; margin-top:7px; padding-top:4px; font-size:8px; font-weight:700; letter-spacing:.5px; }
-    .crate-print-items{ display:grid; grid-auto-flow:column; grid-template-rows:repeat(var(--crate-rows), var(--crate-row-height)); grid-template-columns:repeat(var(--crate-columns), minmax(0,1fr)); column-gap:8px; }
-    .crate-print-item{ display:flex; gap:4px; min-width:0; border-bottom:1px solid #ddd; align-items:center; font-size:var(--crate-font-size); white-space:nowrap; overflow:hidden; }
-    .crate-print-qty{ flex:none; width:18px; font-weight:700; }
-    .crate-print-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+    .crate-label-page{ width:4in; height:3in; position:relative; break-after:page; page-break-after:always; overflow:hidden; background:white; }
+    .crate-label-page:last-child{ break-after:auto; page-break-after:auto; }
+    .crate-label-frame{ position:absolute; inset:.06in; border:2px solid #111; }
+    .crate-label-bar{ position:absolute; left:.07in; right:.07in; top:.07in; height:.305in; background:#111; color:white; display:flex; align-items:center; justify-content:space-between; padding:0 .08in; font-size:.135in; font-weight:800; overflow:hidden; white-space:nowrap; }
+    .crate-label-pattern{ position:absolute; left:.15in; top:.45in; width:.11in; height:.78in; background:repeating-linear-gradient(145deg,#111 0 3px,#fff 3px 10px); border-right:1px solid #111; }
+    .crate-label-pattern.dots{ background:radial-gradient(circle,#111 30%,white 32%) 0 0/9px 9px; }
+    .crate-label-pattern.chevron{ background:repeating-linear-gradient(135deg,#111 0 2px,#fff 2px 10px); }
+    .crate-label-store{ position:absolute; left:.36in; top:.56in; width:2.45in; height:.55in; display:flex; align-items:center; font-weight:900; line-height:1; overflow-wrap:anywhere; }
+    .crate-label-crate{ position:absolute; left:2.88in; top:.45in; width:.96in; height:.79in; border:3px solid #111; text-align:center; font-weight:900; }
+    .crate-label-crate small{ display:block; font-size:.14in; margin-top:.03in; }
+    .crate-label-crate strong{ display:block; font-size:.44in; line-height:1; margin-top:.08in; }
+    .crate-label-meta{ position:absolute; left:.15in; right:.15in; top:1.29in; height:.29in; border-top:2px solid #111; border-bottom:1px solid #111; display:flex; justify-content:space-between; align-items:center; font-size:.105in; font-weight:700; }
+    .crate-label-contents{ position:absolute; left:.15in; right:.15in; top:1.59in; display:flex; justify-content:space-between; font-size:.09in; font-weight:800; }
+    .crate-label-item{ position:absolute; white-space:normal; line-height:1.08; font-weight:700; overflow:hidden; }
+    .crate-label-item b{ float:left; width:.23in; }
+    .crate-label-item span{ display:block; margin-left:.2in; }
   }
 
   header{
@@ -922,6 +926,7 @@
      Other devices retain Android's normal print dialog. -->
 <div id="btPrinterStatus" class="bt-status connected">🖨️ Zebra 4×3 ready</div>
 
+<script src="/crate-label-layout.js"></script>
 <script src="/crate-label-zpl.js"></script>
 <script>
 (function(){
@@ -1439,21 +1444,23 @@
       var data = await response.json();
       if(!response.ok || data.error) throw new Error(data.error || 'Could not load crate label.');
       if(await autoPrintAvailable()){
-        var zpl = createCrateLabelZpl(data, crateNumber);
+        var labelPages = createCrateLabelZpl.pages(data, crateNumber);
         var jobId = String(stopName) + '/' + crateNumber + '/' + Date.now() + '/' + Math.random().toString(36).slice(2);
-        var sent;
-        try{
-          sent = await bridgeRequest('/print', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
-            body:JSON.stringify({ jobId:jobId, zpl:zpl })
-          }, 8000);
-        }catch(bridgeError){
-          throw new Error('NETUM print companion did not confirm the job. Check its notification and use Reprint if no label came out.');
+        for(var pageIndex = 0; pageIndex < labelPages.length; pageIndex++){
+          var sent;
+          try{
+            sent = await bridgeRequest('/print', {
+              method:'POST',
+              headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
+              body:JSON.stringify({ jobId:jobId + '/' + (pageIndex + 1), zpl:labelPages[pageIndex] })
+            }, 8000);
+          }catch(bridgeError){
+            throw new Error('NETUM did not confirm label ' + (pageIndex + 1) + '/' + labelPages.length + '. Check its notification and use Reprint if needed.');
+          }
+          var result = await sent.json();
+          if(!sent.ok || !result.ok) throw new Error('Label ' + (pageIndex + 1) + '/' + labelPages.length + ': ' + (result.message || 'Zebra did not accept it.'));
         }
-        var result = await sent.json();
-        if(!sent.ok || !result.ok) throw new Error(result.message || 'Zebra did not accept the label.');
-        btStatusEl().textContent = '🖨️ Crate ' + crateNumber + ' sent to Zebra';
+        btStatusEl().textContent = '🖨️ Crate ' + crateNumber + ': ' + labelPages.length + ' label' + (labelPages.length === 1 ? '' : 's') + ' sent to Zebra';
         setTimeout(function(){ btStatusEl().textContent = '🖨️ Auto Print ready'; }, 4000);
         return;
       }
@@ -1471,29 +1478,29 @@
       sheet.id = 'cratePrintSheet';
       document.body.appendChild(sheet);
     }
-    var items = Array.isArray(data.crateItems) ? data.crateItems : [];
-    var columns = items.length > 7 ? 2 : 1;
-    var rows = columns === 2 ? 11 : 9;
-    var capacity = columns * rows;
-    var shown = items.slice(0, capacity);
-    if(items.length > capacity){
-      shown = shown.slice(0, -1).concat([{ quantity:'+', title:(items.length - capacity + 1) + ' more — see packing slip' }]);
-    }
-    var compact = columns === 2 || shown.length > 7;
-    sheet.style.setProperty('--crate-columns', columns);
-    sheet.style.setProperty('--crate-rows', rows);
-    sheet.style.setProperty('--crate-row-height', compact ? '14px' : '18px');
-    sheet.style.setProperty('--crate-font-size', compact ? '9px' : '11px');
-    sheet.innerHTML =
-      '<div class="crate-print-border">' +
-        '<div class="crate-print-route">' + escapeHtml((data.routeName || 'HUMMUS FIT').toUpperCase()) + '</div>' +
-        '<div class="crate-print-heading"><span class="crate-print-stop" style="font-size:' + (String(data.stopNameUpper || '').length > 28 ? 13 : String(data.stopNameUpper || '').length > 18 ? 16 : 24) + 'px">' + escapeHtml(data.stopNameUpper || '') + '</span><span class="crate-print-number">CRATE ' + escapeHtml(crateNumber) + '</span></div>' +
-        '<div class="crate-print-meta"><span>Order: ' + escapeHtml(data.orderName || '') + '</span><span>' + (data.pickedBy ? 'Picked by ' + escapeHtml(String(data.pickedBy).split(',')[0].trim().split(/\s+/)[0]) : '') + '</span></div>' +
-        '<div class="crate-print-title">CONTENTS</div>' +
-        '<div class="crate-print-items">' + shown.map(function(item){
-          return '<div class="crate-print-item"><span class="crate-print-qty">' + escapeHtml(item.quantity) + '</span><span class="crate-print-name">' + escapeHtml(item.title) + '</span></div>';
-        }).join('') + '</div>' +
+    var pages = buildCrateLabelPages(data);
+    var stop = String(data.stopNameUpper || '').toUpperCase();
+    var code = String(data.identity && data.identity.monogram || stop.replace(/[^A-Z]/g, '').slice(0, 3));
+    var patternName = String(data.identity && data.identity.pattern || 'diagonal');
+    function inch(dot){ return (dot / 203).toFixed(3) + 'in'; }
+    sheet.innerHTML = pages.map(function(page){
+      var stopSize = stop.length > 24 ? 19 : stop.length > 15 ? 23 : stop.length > 10 ? 28 : 39;
+      return '<div class="crate-label-page">' +
+        '<div class="crate-label-frame"></div>' +
+        '<div class="crate-label-bar"><span>' + escapeHtml((data.routeName || 'HUMMUS FIT').toUpperCase()) + '</span><span>' + escapeHtml(code) + '</span></div>' +
+        '<div class="crate-label-pattern ' + escapeHtml(patternName) + '"></div>' +
+        '<div class="crate-label-store" style="font-size:' + inch(stopSize * 2.1) + '">' + escapeHtml(stop) + '</div>' +
+        '<div class="crate-label-crate"><small>CRATE</small><strong>' + escapeHtml(crateNumber) + '</strong></div>' +
+        '<div class="crate-label-meta"><span>ORDER ' + escapeHtml(data.orderName || '') + '</span><span>' + (data.pickedBy ? 'PICKED BY ' + escapeHtml(String(data.pickedBy).split(',')[0].trim().split(/\s+/)[0].toUpperCase()) : '') + '</span></div>' +
+        '<div class="crate-label-contents"><span>CONTENTS</span><span>' + (page.total > 1 ? 'LABEL ' + page.number + '/' + page.total : '') + '</span></div>' +
+        page.entries.map(function(entry){
+          var x = entry.column ? 416 : 30;
+          var width = page.columns === 2 ? 356 : 749;
+          return '<div class="crate-label-item" style="left:' + inch(x) + ';top:' + inch(entry.y) + ';width:' + inch(width) + ';height:' + inch(entry.height) + ';font-size:' + inch(page.font) + '">' +
+            '<b>' + escapeHtml(entry.quantity) + '</b><span>' + entry.lines.map(escapeHtml).join('<br>') + '</span></div>';
+        }).join('') +
       '</div>';
+    }).join('');
   }
 
   function focusHwScanInput(){

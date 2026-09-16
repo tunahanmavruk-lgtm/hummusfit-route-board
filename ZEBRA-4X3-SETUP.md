@@ -50,6 +50,8 @@ If the printer skips labels or the starting position moves, rerun SmartCal. If t
 
 Leave the ZD421 powered on and connected to the staff Wi-Fi network. On a configured NETUM, **New Crate** saves the crate and sends its label automatically. **Confirm & Finish** does the same for the final crate if it contains items. Reprint sends a fresh label automatically. If HF Auto Print is unavailable, the picking page falls back to Android's print dialog. If the companion responds but cannot reach the printer, the page shows an error; use Reprint after correcting the connection. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
 
+Each label emphasizes the store name, its unique destination code/pattern, and a large crate number. The store address is omitted. A crowded crate prints numbered continuation labels for the same crate so every product remains visible. Keep all labels for that crate together. The NETUM sends each numbered label as a separate confirmed job; if one fails, use Reprint after checking which labels physically came out.
+
 ## Wireless troubleshooting
 
 - **Printer is missing:** confirm the picking device and printer are on the same Wi-Fi network and that guest/client isolation is disabled. In Zebra Print, add it directly by the reserved IP address.

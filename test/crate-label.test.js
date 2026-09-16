@@ -37,11 +37,11 @@ test("renders a single landscape 4x3-inch Zebra label", async () => {
   assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1);
 });
 
-test("keeps a crowded crate on one physical label", async () => {
+test("prints a crowded crate on numbered continuation labels", async () => {
   const items = Array.from({ length: 30 }, (_, index) => ({
     quantity: index + 1,
     title: `Long prepared meal name ${index + 1}`,
   }));
   const pdf = await render(items);
-  assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1);
+  assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 2);
 });

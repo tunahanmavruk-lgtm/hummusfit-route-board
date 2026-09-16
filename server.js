@@ -1999,53 +1999,34 @@ function routeInfoForStop(stopName) {
 
 // Every real stop across every route, in a fixed order — this is the
 // full known universe of stores we ever print labels for.
-const ALL_STOP_NAMES = ROUTES.flatMap((route) => route.stops.map((s) => s.name));
+const ALL_STOP_NAMES = [...new Map(
+  ROUTES.concat(B2B_ROUTES).flatMap((route) => route.stops)
+    .filter((stop) => !stop.isServiceStop)
+    .map((stop) => [stop.name.toLowerCase(), stop.name])
+).values()];
 
 const CRATE_PATTERN_TYPES = ["diagonal", "dots", "crosshatch", "chevron", "vertical", "horizontal", "brick", "waves"];
 
-// Builds a genuinely unique visual identity (a monogram + a fill pattern)
-// for every store, guaranteed never to collide — two stores sharing a
-// first letter automatically get a two-letter monogram instead, and if
-// that ever collides too, a number gets appended. This is what makes
-// every store's crate label look different at a glance, not just have
-// different text.
+// Stable, unique destination code plus a secondary monochrome pattern.
+// Include B2B stops as well as Long Island stops; Meriden, Brookfield and
+// Fishkill must remain distinct even when two destinations share an address.
 function buildStoreIdentities(allStopNames) {
   const identities = {};
-  const firstLetterCount = {};
-  allStopNames.forEach((name) => {
-    const letter = name.trim().charAt(0).toUpperCase();
-    firstLetterCount[letter] = (firstLetterCount[letter] || 0) + 1;
-  });
-
+  const usedCodes = new Set();
   allStopNames.forEach((name, idx) => {
-    const trimmed = name.trim();
-    const firstLetter = trimmed.charAt(0).toUpperCase();
-    let monogram;
-    if (firstLetterCount[firstLetter] === 1) {
-      monogram = firstLetter;
-    } else {
-      const words = trimmed.split(/\s+/);
-      monogram =
-        words.length > 1
-          ? (words[0].charAt(0) + words[1].charAt(0)).toUpperCase()
-          : trimmed.slice(0, 2).toUpperCase();
-    }
+    const letters = name.toUpperCase().replace(/[^A-Z]/g, "");
+    const base = letters.slice(0, 3) || "STO";
+    let monogram = base;
+    let suffix = 2;
+    while (usedCodes.has(monogram)) monogram = base + suffix++;
+    usedCodes.add(monogram);
+    const specialPatterns = { meriden: "diagonal", brookfield: "dots", fishkill: "chevron" };
     identities[name.toLowerCase()] = {
       monogram,
-      pattern: CRATE_PATTERN_TYPES[idx % CRATE_PATTERN_TYPES.length],
+      pattern: specialPatterns[name.toLowerCase()] || CRATE_PATTERN_TYPES[idx % CRATE_PATTERN_TYPES.length],
       index: idx,
     };
   });
-
-  const seenMonograms = {};
-  Object.keys(identities).forEach((key) => {
-    const id = identities[key];
-    if (seenMonograms[id.monogram]) {
-      id.monogram = id.monogram + (id.index + 1);
-    }
-    seenMonograms[id.monogram] = true;
-  });
-
   return identities;
 }
 
@@ -2054,7 +2035,7 @@ const STORE_IDENTITIES = buildStoreIdentities(ALL_STOP_NAMES);
 function storeIdentityFor(stopName) {
   return (
     STORE_IDENTITIES[stopName.toLowerCase()] || {
-      monogram: stopName.trim().charAt(0).toUpperCase(),
+      monogram: stopName.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3),
       pattern: "diagonal",
     }
   );
