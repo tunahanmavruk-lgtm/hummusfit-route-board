@@ -25,6 +25,12 @@ test("keeps the current Long Island routes grouped in delivery order", () => {
   assert.match(server, /name: "Total Nutrition Syosset"[^\n]*deliveryDays: \[2, 4\]/);
 });
 
+test("crate labels identify out-of-state routes", () => {
+  assert.match(server, /const b2bRoutes = B2B_ROUTES\.filter/);
+  assert.match(server, /routeName: `Out of State · \$\{b2bRoutes\[0\]\.name\}`/);
+  assert.match(server, /routeName: "Out of State"/);
+});
+
 test("keeps Route #4's Lake Grove visit as a van-swap checkpoint only", () => {
   assert.match(server, /responsibleDriver: "Berke or Hazar"/);
   assert.match(server, /name: "Lake Grove — Van Swap"[^\n]*isServiceStop: true/);

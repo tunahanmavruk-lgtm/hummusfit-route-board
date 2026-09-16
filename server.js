@@ -1993,6 +1993,15 @@ function routeInfoForStop(stopName) {
       return { routeName: route.name, routeTime: route.time };
     }
   }
+  const b2bRoutes = B2B_ROUTES.filter((route) =>
+    route.stops.some((s) => s.name.toLowerCase() === key)
+  );
+  if (b2bRoutes.length === 1) {
+    return { routeName: `Out of State · ${b2bRoutes[0].name}`, routeTime: "" };
+  }
+  if (b2bRoutes.length > 1) {
+    return { routeName: "Out of State", routeTime: "" };
+  }
   return { routeName: "", routeTime: "" };
 }
 
