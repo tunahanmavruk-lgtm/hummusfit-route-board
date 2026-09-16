@@ -39,7 +39,9 @@ test('retains scanner, crate, picking, and finish controls', () => {
   }
   assert.match(html, /Shopify has not confirmed fulfillment yet/);
   assert.match(html, /Zebra 4×3 ready/);
-  assert.match(html, /\/api\/crate-label-test\.pdf/);
+  assert.match(html, /\/api\/crate-label-data\//);
+  assert.match(html, /renderCratePrintSheet\(data, crateNumber\);\s*window\.print\(\)/);
+  assert.match(html, /@page\{ size:4in 3in; margin:0; \}/);
   assert.match(html, /same Wi-Fi network/);
   assert.match(html, /Bluetooth Classic/);
   assert.doesNotMatch(html, /Connect by USB/);

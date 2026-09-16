@@ -20,8 +20,9 @@ Use **Wi-Fi as the primary connection**. It lets multiple authorized picking dev
 4. Use Zebra Setup Utilities on Android, iOS, Windows, or macOS to join the ZD421 to the same Wi-Fi network used by the picking devices. Record the printer IP address and reserve it in the router so it does not change.
 5. Configure the printer settings:
    - Paper size: **4 × 3 inches**
-   - Orientation: **Landscape**
-   - Scale: **Actual size / 100%**
+   - Label dimensions: **4 inches across the printer × 3 inches in the feed direction**
+   - Zebra Print rotation: **0°**
+   - Zebra Print Fit To Page: **off**
    - Media type: **Labels with gaps / web sensing**
    - Print method: **Direct thermal**
    - Resolution: **203 dpi**
@@ -30,7 +31,7 @@ Use **Wi-Fi as the primary connection**. It lets multiple authorized picking dev
    - **Windows/macOS:** install the Zebra driver and add the ZD421 as a network printer using its reserved IP address. The Logistics app continues to use the normal browser print dialog.
    - **Bluetooth fallback on Android:** pair through Zebra Print using **Bluetooth Classic**. Do not select a BLE-only connection.
 7. In HF Logistics, open **Order Picking** and tap **Zebra 4×3 ready**.
-8. Tap **Test 4×3 Label**, then Print. Select the wireless ZD421 and confirm 4 × 3, landscape, and 100% scale.
+8. Tap **Test 4×3 Label**. Android's print dialog should open directly; select the wireless ZD421, confirm the 4 × 3-inch media, and tap the print icon.
 
 ## Acceptance check
 
@@ -46,12 +47,12 @@ If the printer skips labels or the starting position moves, rerun SmartCal. If t
 
 ## Daily operation
 
-Leave the ZD421 powered on and connected to the staff Wi-Fi network. Pickers use the existing crate workflow; every automatic or manual crate-label action opens the exact-size preview. They select the ZD421 and print. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
+Leave the ZD421 powered on and connected to the staff Wi-Fi network. When a picker taps **New Crate**, the app saves that crate and opens Android's print dialog for its label. **Confirm & Finish** opens the dialog for the final crate if that crate contains items. Reprint uses the same path. The picker taps Android's print icon to send each label; a browser cannot send it silently. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
 
 ## Wireless troubleshooting
 
 - **Printer is missing:** confirm the picking device and printer are on the same Wi-Fi network and that guest/client isolation is disabled. In Zebra Print, add it directly by the reserved IP address.
 - **Printer IP keeps changing:** create a DHCP reservation for the printer in the router and re-add it once using that address.
-- **Bluetooth print fails:** confirm the device uses Bluetooth Classic, exit Zebra Print's Printer Settings screen, and retry from the PDF print dialog.
-- **Job is clipped or scaled:** select 4 × 3 inches, landscape, and Actual size / 100%; disable Fit to page.
+- **Bluetooth print fails:** confirm the device uses Bluetooth Classic, exit Zebra Print's Printer Settings screen, and retry from the picking page's print dialog.
+- **Job is clipped or scaled:** select 4 × 3-inch media, Rotation 0°, and disable Fit To Page in Zebra Print.
 - **Labels skip or drift:** rerun SmartCal by holding Pause + Cancel for two seconds.

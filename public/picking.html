@@ -61,6 +61,33 @@
   }
   ::selection{ background: var(--orange); color:#fff; }
 
+  #cratePrintSheet{ display:none; }
+  @page{ size:4in 3in; margin:0; }
+  @media print{
+    body > *{ display:none!important; }
+    html,body{ width:4in!important; height:3in!important; min-height:0!important; margin:0!important; padding:0!important; background:#fff!important; }
+    body::before{ display:none!important; }
+    #cratePrintSheet{
+      display:block!important; position:absolute!important; top:0!important; left:0!important;
+      width:4in!important; height:3in!important; box-sizing:border-box!important;
+      padding:.1in!important; color:#111!important; background:#fff!important;
+      font-family:Arial,sans-serif!important;
+    }
+    #cratePrintSheet *{ box-sizing:border-box!important; }
+    .crate-print-border{ width:3.8in; height:2.8in; border:2px solid #111; padding:.1in; overflow:hidden; }
+    .crate-print-route{ font-size:8px; font-weight:700; letter-spacing:.5px; white-space:nowrap; overflow:hidden; }
+    .crate-print-heading{ display:flex; justify-content:space-between; gap:6px; margin-top:5px; align-items:baseline; }
+    .crate-print-stop{ font-size:24px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+    .crate-print-number{ font-size:24px; font-weight:800; white-space:nowrap; flex-shrink:0; }
+    .crate-print-meta{ display:flex; justify-content:space-between; gap:5px; margin-top:5px; font-size:9px; white-space:nowrap; overflow:hidden; }
+    .crate-print-meta span{ overflow:hidden; text-overflow:ellipsis; }
+    .crate-print-title{ border-top:1px solid #111; margin-top:7px; padding-top:4px; font-size:8px; font-weight:700; letter-spacing:.5px; }
+    .crate-print-items{ display:grid; grid-auto-flow:column; grid-template-rows:repeat(var(--crate-rows), var(--crate-row-height)); grid-template-columns:repeat(var(--crate-columns), minmax(0,1fr)); column-gap:8px; }
+    .crate-print-item{ display:flex; gap:4px; min-width:0; border-bottom:1px solid #ddd; align-items:center; font-size:var(--crate-font-size); white-space:nowrap; overflow:hidden; }
+    .crate-print-qty{ flex:none; width:18px; font-weight:700; }
+    .crate-print-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  }
+
   header{
     padding: max(20px, env(safe-area-inset-top)) 5vw 20px;
     border-bottom: 1.5px solid var(--ink);
@@ -580,15 +607,6 @@
   }
   .print-modal-box{
     max-width: 420px;
-  }
-  .print-preview-frame{
-    width: 100%;
-    height: 50vh;
-    min-height: 320px;
-    border: 1.5px solid var(--line);
-    border-radius: 10px;
-    margin: 14px 0;
-    background: #fff;
   }
   .modal-title{
     font-family:'Bebas Neue', sans-serif;
@@ -1390,57 +1408,51 @@
   // Android Zebra Print service. This status control opens setup guidance.
   function btStatusEl(){ return document.getElementById('btPrinterStatus'); }
 
-  // The single entry point every crate-label print goes through. It uses
-  // an exact-size PDF so the Zebra desktop driver owns transport and
-  // printer status instead of the web page guessing a device protocol.
+  // Chrome on the NETUM sends page printing straight to Android's Zebra
+  // print service. Printing a PDF iframe instead opens a PDF viewer and
+  // requires several extra taps; it also clipped the 4x3 test label.
   async function printCrateLabel(stopName, crateNumber){
-    // Zebra ZD421/ZD620: the PDF itself is exactly 4x3 inches. The Zebra
-    // print service handles Wi-Fi or Bluetooth Classic consistently,
-    // avoiding raw browser Bluetooth commands that caused dropped and
-    // clipped jobs with the previous mobile printer.
-    printPdfInPlace('/api/crate-label/' + encodeURIComponent(stopName) + '/' + crateNumber);
+    try{
+      var response = await fetch('/api/crate-label-data/' + encodeURIComponent(stopName) + '/' + encodeURIComponent(crateNumber), { cache:'no-store' });
+      var data = await response.json();
+      if(!response.ok || data.error) throw new Error(data.error || 'Could not load crate label.');
+      renderCratePrintSheet(data, crateNumber);
+      window.print();
+    }catch(err){
+      alert('Crate was saved, but its label could not open for printing: ' + err.message + '\nUse Reprint on this crate to try again.');
+    }
   }
 
-  // Prints a PDF (a crate label) directly from the current screen —
-  // no new tab, no navigating away. Loads it into a hidden iframe and
-  // triggers the browser's native print dialog right on top of
-  // whatever the picker's already looking at; once they tap Print (or
-  // cancel), they're right back where they left off, mid-order.
-  function printPdfInPlace(url){
-    var html =
-      '<div class="modal-overlay" id="printModalOverlay">' +
-        '<div class="modal-box print-modal-box">' +
-          '<div class="modal-title">Ready to Print</div>' +
-          '<iframe id="printPreviewFrame" class="print-preview-frame" src="' + url + '"></iframe>' +
-          '<div class="modal-actions">' +
-            '<div class="modal-btn" id="printModalCloseBtn">Close</div>' +
-            '<div class="modal-btn confirm" id="printModalPrintBtn">Print</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.getElementById('modalContainer').innerHTML = html;
-
-    function closePrintModal(){
-      document.getElementById('modalContainer').innerHTML = '';
+  function renderCratePrintSheet(data, crateNumber){
+    var sheet = document.getElementById('cratePrintSheet');
+    if(!sheet){
+      sheet = document.createElement('div');
+      sheet.id = 'cratePrintSheet';
+      document.body.appendChild(sheet);
     }
-
-    document.getElementById('printModalCloseBtn').addEventListener('click', closePrintModal);
-    document.getElementById('printModalOverlay').addEventListener('click', function(e){
-      if(e.target.id === 'printModalOverlay') closePrintModal();
-    });
-    document.getElementById('printModalPrintBtn').addEventListener('click', function(){
-      // By this point the picker has actually seen the label rendered
-      // on screen, so the PDF has genuinely finished loading — that's
-      // what was causing blank pages before, calling print() before
-      // the PDF viewer had actually painted anything yet.
-      var frame = document.getElementById('printPreviewFrame');
-      try{
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      } catch(e){
-        window.open(url, '_blank');
-      }
-    });
+    var items = Array.isArray(data.crateItems) ? data.crateItems : [];
+    var columns = items.length > 7 ? 2 : 1;
+    var rows = columns === 2 ? 11 : 9;
+    var capacity = columns * rows;
+    var shown = items.slice(0, capacity);
+    if(items.length > capacity){
+      shown = shown.slice(0, -1).concat([{ quantity:'+', title:(items.length - capacity + 1) + ' more — see packing slip' }]);
+    }
+    var compact = columns === 2 || shown.length > 7;
+    sheet.style.setProperty('--crate-columns', columns);
+    sheet.style.setProperty('--crate-rows', rows);
+    sheet.style.setProperty('--crate-row-height', compact ? '14px' : '18px');
+    sheet.style.setProperty('--crate-font-size', compact ? '9px' : '11px');
+    sheet.innerHTML =
+      '<div class="crate-print-border">' +
+        '<div class="crate-print-route">' + escapeHtml((data.routeName || 'HUMMUS FIT').toUpperCase()) + '</div>' +
+        '<div class="crate-print-heading"><span class="crate-print-stop" style="font-size:' + (String(data.stopNameUpper || '').length > 28 ? 13 : String(data.stopNameUpper || '').length > 18 ? 16 : 24) + 'px">' + escapeHtml(data.stopNameUpper || '') + '</span><span class="crate-print-number">CRATE ' + escapeHtml(crateNumber) + '</span></div>' +
+        '<div class="crate-print-meta"><span>Order: ' + escapeHtml(data.orderName || '') + '</span><span>' + (data.pickedBy ? 'Picked by ' + escapeHtml(String(data.pickedBy).split(',')[0].trim().split(/\s+/)[0]) : '') + '</span></div>' +
+        '<div class="crate-print-title">CONTENTS</div>' +
+        '<div class="crate-print-items">' + shown.map(function(item){
+          return '<div class="crate-print-item"><span class="crate-print-qty">' + escapeHtml(item.quantity) + '</span><span class="crate-print-name">' + escapeHtml(item.title) + '</span></div>';
+        }).join('') + '</div>' +
+      '</div>';
   }
 
   function focusHwScanInput(){
@@ -1755,9 +1767,7 @@
       });
     }
 
-    // Reprint an already-closed crate's label. Goes through the same
-    // printCrateLabel() path as a fresh crate — Bluetooth if connected,
-    // PDF fallback otherwise — nothing special about a reprint.
+    // Reprints use the same print path as newly closed crates.
     document.querySelectorAll('.crate-reprint-link').forEach(function(el){
       el.addEventListener('click', function(){
         printCrateLabel(orderDetail.stopName, el.dataset.crate);
@@ -1976,7 +1986,7 @@
   }
 
   // Zebra setup and calibration are available from the persistent print
-  // status control. Live jobs always use the same exact-size PDF path.
+  // status control. The calibration job uses the same path as live crates.
   btStatusEl().addEventListener('click', function(){
     var html =
       '<div class="modal-overlay" id="printerSetupOverlay">' +
@@ -1989,7 +1999,7 @@
             '<div>3. Android: install Zebra Print and add the printer by Wi-Fi/IP or Bluetooth Classic.</div>' +
             '<div>4. Windows/Mac: add it as a network printer using its IP address and the Zebra driver.</div>' +
             '<div>5. Run SmartCal: hold Pause + Cancel for two seconds.</div>' +
-            '<div>6. Set paper to 4 × 3 in, landscape, Actual size / 100%.</div>' +
+            '<div>6. In Zebra Print use 4 × 3 in media, Rotation 0°, and Fit To Page off.</div>' +
             '<div>7. Print the calibration label before a live crate.</div>' +
           '</div>' +
           '<div class="modal-actions">' +
@@ -2003,7 +2013,16 @@
       document.getElementById('modalContainer').innerHTML = '';
     });
     document.getElementById('printerSetupTestBtn').addEventListener('click', function(){
-      printPdfInPlace('/api/crate-label-test.pdf');
+      document.getElementById('modalContainer').innerHTML = '';
+      renderCratePrintSheet({
+        routeName:'HF LOGISTICS · ZEBRA TEST', stopNameUpper:'TEST STORE',
+        orderName:'4X3-CALIBRATION', pickedBy:'Warehouse',
+        crateItems:[
+          { quantity:12, title:'Chicken Bowl' }, { quantity:8, title:'Steak Bowl' },
+          { quantity:6, title:'Falafel Bowl' }, { quantity:4, title:'Hummus Cups' }
+        ]
+      }, 1);
+      window.print();
     });
   });
 
