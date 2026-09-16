@@ -10,6 +10,7 @@ const {
   b2bOrderExpiresAt,
   hasB2BSignal,
   normalizeOrderTags,
+  selectB2BStop,
 } = require("./order-lifecycle.js");
 const webpush = require("web-push");
 
@@ -1453,17 +1454,18 @@ async function refreshOrdersCache() {
 // one merged pick list instead of keeping only the first.
 // A shared customer account (like PWRBLD or Ares, which order for
 // several different physical locations from one account) can't be told
-// apart by customer-level tags alone — but the order's own shipping
-// address already has to be correct for the package to actually reach
-// the right place. So build a zip-code lookup from every known B2B
-// stop's address, and use it to auto-identify which location an
-// untagged shared-account order is actually for, removing the need to
-// manually tag every single order by hand.
+// apart by customer-level tags alone. A unique shipping ZIP can identify
+// an untagged order, but multiple stops may share one physical drop
+// (Brookfield/Fishkill), so retain every stop for each ZIP and require a
+// specific order or customer tag when the ZIP is ambiguous.
 const B2B_ZIP_TO_STOP = new Map();
 B2B_ROUTES.forEach((route) => {
   route.stops.forEach((s) => {
     const zipMatch = (s.address || "").match(/\b(\d{5})\b(?!.*\d{5})/);
-    if (zipMatch) B2B_ZIP_TO_STOP.set(zipMatch[1], s.name.toLowerCase());
+    if (zipMatch) {
+      if (!B2B_ZIP_TO_STOP.has(zipMatch[1])) B2B_ZIP_TO_STOP.set(zipMatch[1], new Set());
+      B2B_ZIP_TO_STOP.get(zipMatch[1]).add(s.name.toLowerCase());
+    }
   });
 });
 
@@ -1523,39 +1525,29 @@ async function fetchB2BStopOrders(now = Date.now()) {
   orders.forEach((order) => {
     // Location precedence matters for shared wholesale accounts. An exact
     // tag on the individual order is authoritative. Otherwise use the
-    // shipping ZIP before considering a customer-level location tag; this
-    // prevents a stale location tag on a shared Ares/PWRBLD login from
-    // routing every location's orders to the same stop.
+    // unique shipping ZIP before a customer-level location tag; this prevents
+    // a stale tag on a shared Ares/PWRBLD login from overriding a distinct
+    // destination. For a shared ZIP, only one matching customer tag can decide.
     const orderTags = normalizeOrderTags({ tags: order.tags });
     const customerTags = normalizeOrderTags({ tags: order.customer?.tags });
     const tags = orderTags.concat(customerTags);
-    const matchedKeys = new Set();
-    orderTags.forEach((key) => {
-      const stopMeta = VALID_STOP_NAMES.get(key);
-      if (!stopMeta || !stopMeta.isB2B) return;
-      if (now > b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) return;
-      matchedKeys.add(key);
-    });
-    if (!matchedKeys.size && hasB2BSignal(tags)) {
-      const zip = String(order.shippingAddress?.zip || "").match(/\d{5}/)?.[0];
-      const fallbackKey = zip ? B2B_ZIP_TO_STOP.get(zip) : null;
-      const stopMeta = fallbackKey ? VALID_STOP_NAMES.get(fallbackKey) : null;
-      if (fallbackKey && stopMeta && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) {
-        matchedKeys.add(fallbackKey);
-      }
-    }
-    if (!matchedKeys.size) {
-      customerTags.forEach((key) => {
+    const zip = String(order.shippingAddress?.zip || "").match(/\d{5}/)?.[0];
+    const key = selectB2BStop({
+      orderTags,
+      customerTags,
+      zipCandidates: zip ? B2B_ZIP_TO_STOP.get(zip) : [],
+      useZip: hasB2BSignal(tags),
+      isEligible: (key) => {
         const stopMeta = VALID_STOP_NAMES.get(key);
-        if (!stopMeta || !stopMeta.isB2B) return;
-        if (now > b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays)) return;
-        matchedKeys.add(key);
-      });
-    }
-    matchedKeys.forEach((key) => {
-      if (!groupedByStop[key]) groupedByStop[key] = [];
-      groupedByStop[key].push(order);
+        return Boolean(stopMeta?.isB2B && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays));
+      },
     });
+    if (!key) {
+      if (hasB2BSignal(tags)) console.warn(`B2B order ${order.name} has no unambiguous stop tag; not assigning by ZIP ${zip || "unknown"}`);
+      return;
+    }
+    if (!groupedByStop[key]) groupedByStop[key] = [];
+    groupedByStop[key].push(order);
   });
 
   const byStopName = {};

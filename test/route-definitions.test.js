@@ -70,13 +70,11 @@ test("shows Monday out-of-state work from Friday through delivery day", () => {
   assert.match(server, /dayLabel: "Tomorrow — " \+ dayNames\[tomorrowDow\]/);
 });
 
-test("routes shared B2B accounts by order tag, then shipping ZIP, before customer location tags", () => {
-  const orderTagCheck = server.indexOf("orderTags.forEach((key) =>");
-  const zipFallbackCheck = server.indexOf("B2B_ZIP_TO_STOP.get(zip)", orderTagCheck);
-  const customerTagCheck = server.indexOf("customerTags.forEach((key) =>", zipFallbackCheck);
-  assert.ok(orderTagCheck >= 0, "missing individual-order location match");
-  assert.ok(zipFallbackCheck > orderTagCheck, "shipping ZIP must follow individual-order tags");
-  assert.ok(customerTagCheck > zipFallbackCheck, "customer location tags must be the final fallback");
+test("routes B2B orders with all shared-ZIP stops preserved", () => {
+  const zipFallbackCheck = server.indexOf("B2B_ZIP_TO_STOP.get(zip)", server.indexOf("selectB2BStop({"));
+  assert.match(server, /selectB2BStop\(\{[\s\S]*?orderTags,[\s\S]*?customerTags,[\s\S]*?zipCandidates:/);
+  assert.ok(zipFallbackCheck >= 0, "shipping ZIP candidates must be passed to the resolver");
+  assert.match(server, /B2B_ZIP_TO_STOP\.set\(zipMatch\[1\], new Set\(\)\)/);
 });
 
 test("keeps fulfilled orders visible as locked delivery and receiving snapshots", () => {

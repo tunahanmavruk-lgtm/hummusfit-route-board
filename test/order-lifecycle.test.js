@@ -6,7 +6,42 @@ const {
   hasB2BSignal,
   nextB2BBoardCutoff,
   normalizeOrderTags,
+  selectB2BStop,
 } = require("../order-lifecycle.js");
+
+const chooseStop = ({ orderTags = [], customerTags = [], zipCandidates = [], useZip = true }) =>
+  selectB2BStop({
+    orderTags,
+    customerTags,
+    zipCandidates,
+    useZip,
+    isEligible: (key) => ["brookfield", "fishkill", "ares", "pwrbld kop"].includes(key),
+  });
+
+test("routes Brookfield and Fishkill separately despite their shared ZIP", () => {
+  const sharedZip = new Set(["brookfield", "fishkill"]);
+  assert.equal(chooseStop({ customerTags: ["brookfield", "wholesale"], zipCandidates: sharedZip }), "brookfield");
+  assert.equal(chooseStop({ customerTags: ["fishkill", "wholesale"], zipCandidates: sharedZip }), "fishkill");
+  assert.equal(chooseStop({ orderTags: ["brookfield"], customerTags: ["fishkill"], zipCandidates: sharedZip }), "brookfield");
+});
+
+test("never guesses or duplicates a shared-address order with ambiguous tags", () => {
+  const sharedZip = new Set(["brookfield", "fishkill"]);
+  assert.equal(chooseStop({ zipCandidates: sharedZip }), null);
+  assert.equal(chooseStop({ customerTags: ["brookfield", "fishkill"], zipCandidates: sharedZip }), null);
+  assert.equal(chooseStop({ orderTags: ["brookfield", "fishkill"], zipCandidates: sharedZip }), null);
+});
+
+test("unique destination ZIP beats stale shared-account customer tags", () => {
+  assert.equal(chooseStop({ customerTags: ["ares"], zipCandidates: new Set(["pwrbld kop"]) }), "pwrbld kop");
+});
+
+test("an expired stop does not make a shared ZIP look unique", () => {
+  assert.equal(selectB2BStop({
+    orderTags: [], customerTags: [], zipCandidates: new Set(["brookfield", "fishkill"]),
+    useZip: true, isEligible: (key) => key === "fishkill",
+  }), null);
+});
 
 test("expires a B2B order at 8 PM ET on its next scheduled delivery day", () => {
   // Saturday order for a Monday/Thursday stop belongs to Monday's route.
