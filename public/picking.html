@@ -918,11 +918,11 @@
   <span class="fab-count" id="crateFabCount">1</span>
 </button>
 
-<!-- Zebra desktop printers use the operating-system or Android Zebra Print
-     service. Keeping the label as a true 4x3 PDF makes the same workflow
-     reliable over Wi-Fi or Bluetooth Classic on the ZD421 and ZD620. -->
+<!-- The NETUM print companion sends ZPL automatically over Wi-Fi.
+     Other devices retain Android's normal print dialog. -->
 <div id="btPrinterStatus" class="bt-status connected">🖨️ Zebra 4×3 ready</div>
 
+<script src="/crate-label-zpl.js"></script>
 <script>
 (function(){
   function fmtTime(iso){
@@ -1408,18 +1408,59 @@
   // Android Zebra Print service. This status control opens setup guidance.
   function btStatusEl(){ return document.getElementById('btPrinterStatus'); }
 
-  // Chrome on the NETUM sends page printing straight to Android's Zebra
-  // print service. Printing a PDF iframe instead opens a PDF viewer and
-  // requires several extra taps; it also clipped the 4x3 test label.
+  async function bridgeRequest(path, options, timeoutMs){
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
+    try{
+      return await fetch('http://127.0.0.1:8877' + path, Object.assign({}, options || {}, { signal:controller.signal, cache:'no-store' }));
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  async function autoPrintAvailable(){
+    if(typeof createCrateLabelZpl !== 'function') return false;
+    try{
+      var response = await bridgeRequest('/status', {}, 1500);
+      if(response.ok){
+        btStatusEl().textContent = '🖨️ Auto Print ready';
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
+  // On a NETUM with HF Auto Print, the crate goes straight to the Zebra
+  // without an Android dialog. Devices without the companion retain the
+  // tested 4x3 system-print path so no saved crate loses its label.
   async function printCrateLabel(stopName, crateNumber){
     try{
       var response = await fetch('/api/crate-label-data/' + encodeURIComponent(stopName) + '/' + encodeURIComponent(crateNumber), { cache:'no-store' });
       var data = await response.json();
       if(!response.ok || data.error) throw new Error(data.error || 'Could not load crate label.');
+      if(await autoPrintAvailable()){
+        var zpl = createCrateLabelZpl(data, crateNumber);
+        var jobId = String(stopName) + '/' + crateNumber + '/' + Date.now() + '/' + Math.random().toString(36).slice(2);
+        var sent;
+        try{
+          sent = await bridgeRequest('/print', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
+            body:JSON.stringify({ jobId:jobId, zpl:zpl })
+          }, 8000);
+        }catch(bridgeError){
+          throw new Error('NETUM print companion did not confirm the job. Check its notification and use Reprint if no label came out.');
+        }
+        var result = await sent.json();
+        if(!sent.ok || !result.ok) throw new Error(result.message || 'Zebra did not accept the label.');
+        btStatusEl().textContent = '🖨️ Crate ' + crateNumber + ' sent to Zebra';
+        setTimeout(function(){ btStatusEl().textContent = '🖨️ Auto Print ready'; }, 4000);
+        return;
+      }
       renderCratePrintSheet(data, crateNumber);
       window.print();
     }catch(err){
-      alert('Crate was saved, but its label could not open for printing: ' + err.message + '\nUse Reprint on this crate to try again.');
+      alert('Crate was saved, but its label was not confirmed: ' + err.message + '\nUse Reprint on this crate to try again.');
     }
   }
 
@@ -1996,11 +2037,11 @@
             '<b style="display:block;color:var(--ink);margin-bottom:8px;">Recommended: Zebra ZD421, 203 dpi, direct thermal</b>' +
             '<div>1. Load 4-inch-wide × 3-inch-long gap labels.</div>' +
             '<div>2. Recommended: connect the printer and picking device to the same Wi-Fi network. Use Bluetooth Classic as a fallback.</div>' +
-            '<div>3. Android: install Zebra Print and add the printer by Wi-Fi/IP or Bluetooth Classic.</div>' +
+            '<div>3. NETUM: open HF Auto Print once and save the Zebra IP for automatic labels.</div>' +
             '<div>4. Windows/Mac: add it as a network printer using its IP address and the Zebra driver.</div>' +
             '<div>5. Run SmartCal: hold Pause + Cancel for two seconds.</div>' +
             '<div>6. In Zebra Print use 4 × 3 in media, Rotation 0°, and Fit To Page off.</div>' +
-            '<div>7. Print the calibration label before a live crate.</div>' +
+            '<div>7. Test 4×3 Label prints automatically on a configured NETUM; other devices show their print dialog.</div>' +
           '</div>' +
           '<div class="modal-actions">' +
             '<div class="modal-btn" id="printerSetupCloseBtn">Close</div>' +
@@ -2012,19 +2053,34 @@
     document.getElementById('printerSetupCloseBtn').addEventListener('click', function(){
       document.getElementById('modalContainer').innerHTML = '';
     });
-    document.getElementById('printerSetupTestBtn').addEventListener('click', function(){
+    document.getElementById('printerSetupTestBtn').addEventListener('click', async function(){
       document.getElementById('modalContainer').innerHTML = '';
-      renderCratePrintSheet({
+      var data = {
         routeName:'HF LOGISTICS · ZEBRA TEST', stopNameUpper:'TEST STORE',
         orderName:'4X3-CALIBRATION', pickedBy:'Warehouse',
         crateItems:[
           { quantity:12, title:'Chicken Bowl' }, { quantity:8, title:'Steak Bowl' },
           { quantity:6, title:'Falafel Bowl' }, { quantity:4, title:'Hummus Cups' }
         ]
-      }, 1);
-      window.print();
+      };
+      if(await autoPrintAvailable()){
+        try{
+          var sent = await bridgeRequest('/print', {
+            method:'POST', headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
+            body:JSON.stringify({ jobId:'test/' + Date.now(), zpl:createCrateLabelZpl(data, 1) })
+          }, 8000);
+          var result = await sent.json();
+          if(!sent.ok || !result.ok) throw new Error(result.message || 'Printer rejected the test.');
+          btStatusEl().textContent = '🖨️ Test sent to Zebra';
+        }catch(err){ alert('Test label failed: ' + err.message); }
+      }else{
+        renderCratePrintSheet(data, 1);
+        window.print();
+      }
     });
   });
+
+  autoPrintAvailable();
 
   // Support deep-linking straight into a specific order, e.g.
   // /picking?stop=Lindenhurst — used by the "order number" link on the

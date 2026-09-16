@@ -40,6 +40,9 @@ test('retains scanner, crate, picking, and finish controls', () => {
   assert.match(html, /Shopify has not confirmed fulfillment yet/);
   assert.match(html, /Zebra 4×3 ready/);
   assert.match(html, /\/api\/crate-label-data\//);
+  assert.match(html, /<script src="\/crate-label-zpl\.js"><\/script>/);
+  assert.match(html, /bridgeRequest\('\/print'/);
+  assert.match(html, /createCrateLabelZpl\(data, crateNumber\)/);
   assert.match(html, /renderCratePrintSheet\(data, crateNumber\);\s*window\.print\(\)/);
   assert.match(html, /@page\{ size:4in 3in; margin:0; \}/);
   assert.match(html, /same Wi-Fi network/);

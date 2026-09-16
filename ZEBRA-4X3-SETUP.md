@@ -27,11 +27,12 @@ Use **Wi-Fi as the primary connection**. It lets multiple authorized picking dev
    - Print method: **Direct thermal**
    - Resolution: **203 dpi**
 6. Configure each picking device:
-   - **Android (recommended for tablets/phones):** install Zebra Print, add the printer using **Wi-Fi and Ethernet Network**, select the discovered ZD421 or enter its reserved IP address, then finish setup. The printer will appear in Android's normal print dialog.
+   - **NETUM Q900 for automatic crate labels:** install `android-print-bridge/build/hf-auto-print.apk`, open **HF Auto Print**, and save the ZD421's Wi-Fi IP address. Keep its ongoing notification enabled. The companion listens only on the NETUM's loopback address and sends Zebra commands directly to the printer when the picking page closes a crate.
+   - **Other Android devices:** install Zebra Print, add the printer using **Wi-Fi and Ethernet Network**, select the discovered ZD421 or enter its reserved IP address, then finish setup. These devices use Android's normal print dialog.
    - **Windows/macOS:** install the Zebra driver and add the ZD421 as a network printer using its reserved IP address. The Logistics app continues to use the normal browser print dialog.
    - **Bluetooth fallback on Android:** pair through Zebra Print using **Bluetooth Classic**. Do not select a BLE-only connection.
 7. In HF Logistics, open **Order Picking** and tap **Zebra 4×3 ready**.
-8. Tap **Test 4×3 Label**. Android's print dialog should open directly; select the wireless ZD421, confirm the 4 × 3-inch media, and tap the print icon.
+8. Tap **Test 4×3 Label**. On a NETUM with HF Auto Print running, one label should print automatically with no dialog. On other devices, select the wireless ZD421 in Android's print dialog and tap the print icon.
 
 ## Acceptance check
 
@@ -47,12 +48,13 @@ If the printer skips labels or the starting position moves, rerun SmartCal. If t
 
 ## Daily operation
 
-Leave the ZD421 powered on and connected to the staff Wi-Fi network. When a picker taps **New Crate**, the app saves that crate and opens Android's print dialog for its label. **Confirm & Finish** opens the dialog for the final crate if that crate contains items. Reprint uses the same path. The picker taps Android's print icon to send each label; a browser cannot send it silently. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
+Leave the ZD421 powered on and connected to the staff Wi-Fi network. On a configured NETUM, **New Crate** saves the crate and sends its label automatically. **Confirm & Finish** does the same for the final crate if it contains items. Reprint sends a fresh label automatically. If HF Auto Print is unavailable, the picking page falls back to Android's print dialog. If the companion responds but cannot reach the printer, the page shows an error; use Reprint after correcting the connection. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
 
 ## Wireless troubleshooting
 
 - **Printer is missing:** confirm the picking device and printer are on the same Wi-Fi network and that guest/client isolation is disabled. In Zebra Print, add it directly by the reserved IP address.
 - **Printer IP keeps changing:** create a DHCP reservation for the printer in the router and re-add it once using that address.
+- **Auto Print not ready on the NETUM:** open HF Auto Print, check its ongoing notification, save the current Zebra IP, and keep the NETUM on the printer's Wi-Fi network. Run the in-app test label before using a live crate.
 - **Bluetooth print fails:** confirm the device uses Bluetooth Classic, exit Zebra Print's Printer Settings screen, and retry from the picking page's print dialog.
 - **Job is clipped or scaled:** select 4 × 3-inch media, Rotation 0°, and disable Fit To Page in Zebra Print.
 - **Labels skip or drift:** rerun SmartCal by holding Pause + Cancel for two seconds.
