@@ -37,6 +37,7 @@ test('retains scanner, crate, picking, and finish controls', () => {
   for (const hook of ['hwScanInput', 'scannerOverlay', 'crateFab', 'pickerSelect', 'finishBtn', 'btPrinterStatus']) {
     assert.ok(html.includes(hook), `picking page must retain ${hook}`);
   }
+  assert.match(html, /id="hwScanInput" inputmode="none"/, 'hardware scanner focus must not open the Android keyboard');
   assert.match(html, /Shopify has not confirmed fulfillment yet/);
   assert.match(html, /Zebra 4×3 ready/);
   assert.match(html, /\/api\/crate-label-data\//);
