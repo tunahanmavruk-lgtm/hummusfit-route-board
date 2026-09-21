@@ -11,6 +11,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -174,6 +177,20 @@ public class MainActivity extends Activity {
       super.onDestroy();
     }
 
+    private void bindToWifi(Socket socket) throws Exception {
+      ConnectivityManager connectivity =
+          (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+      if (connectivity == null) throw new Exception("Network service unavailable");
+      for (Network network : connectivity.getAllNetworks()) {
+        NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
+        if (capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+          network.bindSocket(socket);
+          return;
+        }
+      }
+      throw new Exception("NETUM is not connected to Wi-Fi");
+    }
+
     private void serve() {
       try {
         server = new ServerSocket(BRIDGE_PORT, 8, InetAddress.getByName("127.0.0.1"));
@@ -282,12 +299,26 @@ public class MainActivity extends Activity {
           return;
         }
         try (Socket printer = new Socket()) {
+          // Q900 handhelds may keep a cellular route alongside warehouse
+          // Wi-Fi. Bind the private-address printer connection to Wi-Fi so
+          // Android cannot send it through the wrong interface.
+          bindToWifi(printer);
           printer.connect(new InetSocketAddress(ip, 9100), 3500);
           printer.setSoTimeout(3500);
-          printer.getOutputStream().write(zpl.getBytes(StandardCharsets.US_ASCII));
-          printer.getOutputStream().flush();
+          OutputStream printerOut = printer.getOutputStream();
+          // Ask for host status on the same connection after the label. Waiting
+          // for the first status byte proves the Zebra received and parsed the
+          // stream before Android closes the socket. Some Q900 units otherwise
+          // complete close() quickly enough that the printer sees an empty job.
+          printerOut.write(zpl.getBytes(StandardCharsets.US_ASCII));
+          printerOut.write("\r\n~HS\r\n".getBytes(StandardCharsets.US_ASCII));
+          printerOut.flush();
+          if (printer.getInputStream().read() < 0) {
+            throw new Exception("Zebra closed without acknowledging the job");
+          }
         } catch (Exception e) {
-          respond(out, 503, json(false, "Cannot reach Zebra at " + ip), true);
+          android.util.Log.e("HFAutoPrint", "Zebra job failed", e);
+          respond(out, 503, json(false, "Zebra did not accept the job at " + ip + ": " + e.getClass().getSimpleName() + " " + String.valueOf(e.getMessage())), true);
           return;
         }
         synchronized (completedJobs) { completedJobs.put(jobId, true); }
