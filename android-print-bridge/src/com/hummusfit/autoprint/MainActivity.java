@@ -306,16 +306,12 @@ public class MainActivity extends Activity {
           printer.connect(new InetSocketAddress(ip, 9100), 3500);
           printer.setSoTimeout(3500);
           OutputStream printerOut = printer.getOutputStream();
-          // Ask for host status on the same connection after the label. Waiting
-          // for the first status byte proves the Zebra received and parsed the
-          // stream before Android closes the socket. Some Q900 units otherwise
-          // complete close() quickly enough that the printer sees an empty job.
+          // Send only the requested label format. Appending a Zebra status
+          // command after ^XZ makes some ZD421 firmware/media combinations
+          // advance one additional blank label after every printed label.
           printerOut.write(zpl.getBytes(StandardCharsets.US_ASCII));
-          printerOut.write("\r\n~HS\r\n".getBytes(StandardCharsets.US_ASCII));
           printerOut.flush();
-          if (printer.getInputStream().read() < 0) {
-            throw new Exception("Zebra closed without acknowledging the job");
-          }
+          printer.shutdownOutput();
         } catch (Exception e) {
           android.util.Log.e("HFAutoPrint", "Zebra job failed", e);
           respond(out, 503, json(false, "Zebra did not accept the job at " + ip + ": " + e.getClass().getSimpleName() + " " + String.valueOf(e.getMessage())), true);
