@@ -8,7 +8,7 @@ test('builds one 4x3 Zebra job with crate-specific items', () => {
     orderName: '#1234', pickedBy: 'Warehouse',
     crateItems: [{ quantity: 8, title: 'Chicken Bowl' }, { quantity: 2, title: 'Steak Bowl' }],
   }, 2);
-  assert.match(zpl, /\^PW812\n\^LL617/);
+  assert.match(zpl, /\^PW812\n\^LL646\n\^LH0,18/);
   assert.match(zpl, /\^FDCRATE\^FS/);
   assert.match(zpl, /\^FD2\^FS/);
   assert.match(zpl, /\^FDChicken Bowl\^FS/);

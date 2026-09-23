@@ -52,7 +52,11 @@
     var code = safe(data.identity && data.identity.monogram || name.replace(/[^A-Z]/g, '').slice(0, 3)).toUpperCase();
     var crate = safe(crateNumber);
     var zpl = [
-      '^XA', '^CI0', '^PW812', '^LL617', '^LH0,0', '^LS0',
+      // The ZD421 calibrates this 4 x 3 stock at a 646-dot pitch once the
+      // inter-label gap is included. Matching that pitch prevents an empty
+      // label from being advanced between jobs. The 18-dot origin offset
+      // keeps the dark header inside the printable top edge.
+      '^XA', '^CI0', '^PW812', '^LL646', '^LH0,18', '^LS0',
       '^FO12,12^GB788,593,2^FS',
       '^FO14,14^GB784,62,62^FS',
       field(30, 26, route.length > 26 ? 20 : 28, route, true),
