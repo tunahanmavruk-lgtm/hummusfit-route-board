@@ -1,4 +1,5 @@
 const express = require("express");
+const { barcodeVariants } = require("./barcode");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -2334,19 +2335,11 @@ app.post("/api/picking-scan", async (req, res) => {
     }
 
     const code = scannedCode.trim();
-    // A scanned barcode sometimes carries a leading "0" that the SKU
-    // stored in Shopify doesn't (EAN-13 padding on what's really a
-    // UPC-A code), or the reverse — same physical product, different
-    // digit count. Try the scanned code as-is first, then with a
-    // leading zero added/removed, so a barcode format mismatch doesn't
-    // block a correct scan. (Not what caused the 8/6/2026 Texas Queso
-    // Steak Bowl miss, in the end — that SKU was just wrong in Shopify
-    // and has since been corrected there. Keeping this tolerance anyway
-    // since a real leading-zero mismatch is a distinct, plausible future
-    // failure mode and this costs nothing to guard against.)
-    const codeVariants = new Set([code]);
-    if (/^0\d+$/.test(code)) codeVariants.add(code.replace(/^0/, ""));
-    if (/^\d+$/.test(code)) codeVariants.add("0" + code);
+    // Normalize only deterministic UPC/EAN representation differences:
+    // NETUM may omit UPC-A's check digit, while either the scanner or
+    // Shopify may include an EAN-13 leading zero. Matching below still
+    // requires an exact resulting value from the active order.
+    const codeVariants = barcodeVariants(code);
 
     let matchIdx = -1;
     for (let i = 0; i < order.lineItems.length; i++) {
