@@ -112,6 +112,9 @@ test('requires a physical Bouncie van before route start and expires store track
   const server = read('server.js');
   assert.match(server, /Select the actual Bouncie van before starting this route/);
   assert.match(server, /STORE_TRACKING_GRACE_MS = 20 \* 1000/);
+  assert.match(server, /findRouteAndStopByName\(stopName, state\)/);
+  assert.match(server, /meta && meta\.startedAt \? 2000 : 0/);
+  assert.match(server, /route\.day === todayDow \? 1000 : 0/);
   assert.match(server, /trackingAvailable/);
   assert.match(server, /trackingEndsAt/);
 });

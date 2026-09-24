@@ -3104,13 +3104,32 @@ function getRouteById(routeId) {
 // on their picklist, find which route/van they're on and their real
 // position in it (used below to compute a live ETA once that route has
 // actually been started for the day).
-function findRouteAndStopByName(stopName) {
+function findRouteAndStopByName(stopName, state) {
   const target = String(stopName || "").trim().toLowerCase();
+  const matches = [];
   for (const route of [...ROUTES, ...B2B_ROUTES]) {
     const stop = route.stops.find((s) => s.name.toLowerCase() === target);
-    if (stop) return { route, stop };
+    if (stop) matches.push({ route, stop });
   }
-  return null;
+  if (!matches.length) return null;
+  const todayDow = getEasternWeekday(new Date());
+  const score = ({ route, stop }) => {
+    const meta = state && state.routeMeta && state.routeMeta[route.id];
+    const assignment = state && state.assignments && state.assignments[route.id];
+    const stopStatus = state && state.stopStatus && state.stopStatus[stop.id];
+    return (meta && meta.startedAt ? 2000 : 0)
+      + (route.day === todayDow ? 1000 : 0)
+      + (assignment && assignment.van ? 100 : 0)
+      + (stopStatus && stopStatus.status && stopStatus.status !== "not_started" ? 25 : 0);
+  };
+  matches.sort((a, b) => {
+    const scoreDifference = score(b) - score(a);
+    if (scoreDifference) return scoreDifference;
+    const aStarted = state && state.routeMeta && state.routeMeta[a.route.id] && state.routeMeta[a.route.id].startedAt || "";
+    const bStarted = state && state.routeMeta && state.routeMeta[b.route.id] && state.routeMeta[b.route.id].startedAt || "";
+    return String(bStarted).localeCompare(String(aStarted));
+  });
+  return matches[0];
 }
 
 // Live ETA for one store's delivery, shown on their picklist page (the
@@ -3121,7 +3140,7 @@ function findRouteAndStopByName(stopName) {
 // scheduled time slot) if the route hasn't been started yet today, since
 // there's nothing live to show until a driver actually leaves HQ.
 function computeEtaForStop(state, stopName) {
-  const found = findRouteAndStopByName(stopName);
+  const found = findRouteAndStopByName(stopName, state);
   if (!found) return null;
   const { route, stop } = found;
 
