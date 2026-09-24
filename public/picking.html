@@ -1148,19 +1148,21 @@
 
     var html = notifBanner;
     pickingList.forEach(function(stop){
-      var done = stop.pickedCount + stop.missingCount;
+      var done = stop.pickedUnits !== undefined ? stop.pickedUnits + stop.missingUnits : stop.pickedCount + stop.missingCount;
+      var total = stop.totalUnits !== undefined ? stop.totalUnits : stop.totalItems;
+      var progressNoun = stop.totalUnits !== undefined ? 'units' : 'items';
       var cardClass = 'stop-card' + (stop.isComplete ? ' complete' : '') + (stop.isB2B ? ' b2b' : '');
       html +=
         '<div class="' + cardClass + '" data-stop="' + stop.stopName + '">' +
           '<div class="stop-info">' +
             '<div class="stop-name">' + stop.stopName + '</div>' +
-            '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + stop.totalItems + ' items</div>' +
+            '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + total + ' ' + progressNoun + '</div>' +
             '<div class="stop-order-time" style="font-size:11px; color:var(--dim); margin-top:2px;">' + orderTimesLabel(stop) + '</div>' +
             (stop.isB2B ? '<div class="b2b-tag">Out of State</div>' : '') +
             (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Complete') + '</div>' : '') +
           '</div>' +
-          '<div class="stop-progress-ring">' + ringSvg(stop.pickedCount, stop.missingCount, stop.totalItems) +
-            '<div class="stop-progress-label">' + done + '/' + stop.totalItems + '</div>' +
+          '<div class="stop-progress-ring">' + ringSvg(stop.pickedUnits !== undefined ? stop.pickedUnits : stop.pickedCount, stop.missingUnits !== undefined ? stop.missingUnits : stop.missingCount, total) +
+            '<div class="stop-progress-label">' + done + '/' + total + '</div>' +
           '</div>' +
         '</div>';
     });
@@ -1825,8 +1827,18 @@
       else if(s === 'partial') partial++;
       else notPicked++;
     });
-    var total = orderDetail.lineItems.length;
-    var done = picked + missing + partial;
+    var rowTotal = orderDetail.lineItems.length;
+    var total = orderDetail.lineItems.reduce(function(sum, item){ return sum + (Number(item.quantity) || 0); }, 0);
+    var done = 0;
+    orderDetail.lineItems.forEach(function(item, idx){
+      var quantity = Number(item.quantity) || 0;
+      var status = orderDetail.itemStatus[idx] || 'not_picked';
+      if(status === 'picked' || status === 'missing' || status === 'partial'){
+        done += quantity;
+      } else {
+        done += Math.min(quantity, Number(orderDetail.itemScannedCount && orderDetail.itemScannedCount[idx]) || 0);
+      }
+    });
     var isLocked = Boolean(orderDetail.completedAt);
     var isFulfilledSnapshot = Boolean(orderDetail.retainedAfterFulfillment);
 
@@ -1854,7 +1866,7 @@
         '</div>' +
         '<div class="order-total-progress">' +
           '<div class="order-total-count">' + done + '/' + total + '</div>' +
-          '<div class="order-total-label">Reviewed</div>' +
+          '<div class="order-total-label">Units verified</div>' +
         '</div>' +
       '</div>';
 
@@ -1940,7 +1952,7 @@
     });
 
     var hasMissing = (missing + partial) > 0;
-    var canFinish = !isLocked && notPicked === 0 && total > 0;
+    var canFinish = !isLocked && notPicked === 0 && rowTotal > 0;
 
     if(!isLocked){
       var itemsInCurrentCrate = orderDetail.lineItems.filter(function(item, idx){
@@ -2039,7 +2051,7 @@
     var finishEl = document.getElementById('finishBtn');
     if(finishEl){
       finishEl.addEventListener('click', function(){
-        showFinishConfirmation(picked, missing, partial, total);
+        showFinishConfirmation(picked, missing, partial, rowTotal);
       });
     }
 

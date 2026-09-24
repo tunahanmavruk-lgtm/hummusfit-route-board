@@ -1938,6 +1938,33 @@ function toIndexKeyedDict(dict, lineItems) {
   return out;
 }
 
+// Physical-unit progress for the picker. A line item can represent dozens of
+// meals, so row completion alone can stay at 0 while the picker has already
+// verified real units. This count advances on every barcode scan and still
+// reaches 100% when missing/partial rows are reviewed.
+function pickingUnitProgress(record, lineItems) {
+  let pickedUnits = 0;
+  let missingUnits = 0;
+  let totalUnits = 0;
+  (lineItems || []).forEach((item, idx) => {
+    const quantity = Math.max(0, Number(item.quantity) || 0);
+    const status = readItemState(record.itemStatus, item, idx) || "not_picked";
+    totalUnits += quantity;
+    if (status === "picked") {
+      pickedUnits += quantity;
+    } else if (status === "missing") {
+      missingUnits += quantity;
+    } else if (status === "partial") {
+      const pickedQty = Math.max(0, Math.min(quantity, Number(readItemState(record.itemPickedQty, item, idx)) || 0));
+      pickedUnits += pickedQty;
+      missingUnits += quantity - pickedQty;
+    } else {
+      pickedUnits += Math.max(0, Math.min(quantity, Number(readItemState(record.itemScannedCount, item, idx)) || 0));
+    }
+  });
+  return { pickedUnits, missingUnits, totalUnits };
+}
+
 function getPickingRecord(state, stopName, order) {
   const key = pickingKeyFor(stopName);
   let existing = state.picking[key];
@@ -2161,6 +2188,7 @@ app.get("/api/picking-list", async (req, res) => {
       const pickedCount = statuses.filter((s) => s === "picked").length;
       const missingCount = statuses.filter((s) => s === "missing").length;
       const totalItems = order.lineItems.length;
+      const unitProgress = pickingUnitProgress(record, order.lineItems);
       return {
         stopName: key,
         orderName: order.orderName,
@@ -2170,6 +2198,7 @@ app.get("/api/picking-list", async (req, res) => {
         totalItems,
         pickedCount,
         missingCount,
+        ...unitProgress,
         isComplete: Boolean(record.completedAt),
         isB2B: Boolean(order.isB2B),
         pickedBy: record.pickedBy,
