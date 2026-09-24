@@ -685,6 +685,59 @@
     background: rgba(0,0,0,0.5);
   }
 
+  #wrongScanAlarm{
+    position:fixed;
+    inset:0;
+    z-index:10000;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    text-align:center;
+    color:#fff;
+    background:#c91515;
+    animation:wrong-scan-pulse .34s steps(2,end) infinite;
+  }
+  #wrongScanAlarm .alarm-icon{ font-size:78px; line-height:1; }
+  #wrongScanAlarm h2{
+    margin:18px 0 8px;
+    font-family:'Bebas Neue', sans-serif;
+    font-size:72px;
+    line-height:.9;
+    letter-spacing:2px;
+  }
+  #wrongScanAlarm p{
+    margin:0;
+    max-width:560px;
+    font-family:'Inter', sans-serif;
+    font-size:22px;
+    line-height:1.25;
+    font-weight:900;
+  }
+  #wrongScanCode{
+    margin-top:18px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:18px;
+    font-weight:800;
+  }
+  #wrongScanDismiss{
+    margin-top:34px;
+    min-width:240px;
+    padding:18px 24px;
+    border:3px solid #fff;
+    border-radius:16px;
+    background:#fff;
+    color:#9d0808;
+    font-family:'Inter', sans-serif;
+    font-size:20px;
+    font-weight:900;
+  }
+  @keyframes wrong-scan-pulse{
+    0%,100%{ background:#c91515; }
+    50%{ background:#720000; }
+  }
+
   .item-card{
     background: var(--card);
     border: 1.5px solid var(--line);
@@ -892,6 +945,14 @@
   </div>
   <div id="reader"></div>
   <div id="scanProgressLabel" class="scan-progress-label"></div>
+</div>
+
+<div id="wrongScanAlarm" role="alertdialog" aria-modal="true" aria-live="assertive">
+  <div class="alarm-icon" aria-hidden="true">⚠</div>
+  <h2>WRONG ITEM</h2>
+  <p id="wrongScanMessage">This barcode is not needed for the current order.</p>
+  <div id="wrongScanCode"></div>
+  <button id="wrongScanDismiss" type="button">STOP ALARM</button>
 </div>
 
 <!-- Invisible input that captures real Bluetooth scanner "keyboard"
@@ -1220,11 +1281,15 @@
   // quick bright tones) rather than a hosted audio file, so there's
   // nothing to fail to load on a bad warehouse wifi connection.
   var scanAudioCtx = null;
+  function scanAudioContext(){
+    if(!scanAudioCtx){ scanAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if(scanAudioCtx.state === 'suspended'){ scanAudioCtx.resume().catch(function(){}); }
+    return scanAudioCtx;
+  }
   function playScanFeedback(){
     if(navigator.vibrate){ navigator.vibrate(60); }
     try{
-      if(!scanAudioCtx){ scanAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-      var ctx = scanAudioCtx;
+      var ctx = scanAudioContext();
       var now = ctx.currentTime;
       [[1568, now, 0.09], [1976, now + 0.07, 0.16]].forEach(function(t){
         var osc = ctx.createOscillator();
@@ -1242,13 +1307,75 @@
     } catch(e){ /* audio unavailable — never block scanning over this */ }
   }
 
+  // A wrong product needs to stop the picker before it reaches the crate.
+  // Use a full-screen flashing red interruption, a repeating harsh two-tone
+  // alarm, and a long vibration pattern. Everything is generated locally so
+  // it still works if warehouse internet is slow or briefly unavailable.
+  function playWrongScanAlarm(){
+    if(navigator.vibrate){ navigator.vibrate([240,90,240,90,480,120,480]); }
+    try{
+      var ctx = scanAudioContext();
+      var now = ctx.currentTime;
+      for(var i = 0; i < 8; i++){
+        var start = now + i * 0.19;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = i % 2 ? 520 : 1040;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.7, start + 0.01);
+        gain.gain.setValueAtTime(0.7, start + 0.13);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.19);
+      }
+    }catch(e){ /* the red screen and vibration still provide the warning */ }
+  }
+
+  function showWrongScanAlarm(scannedCode, message){
+    document.getElementById('wrongScanMessage').textContent = message || 'This barcode is not needed for the current order.';
+    document.getElementById('wrongScanCode').textContent = scannedCode ? ('SCANNED: ' + scannedCode) : '';
+    document.getElementById('wrongScanAlarm').style.display = 'flex';
+    playWrongScanAlarm();
+    document.getElementById('wrongScanDismiss').focus();
+  }
+
+  function dismissWrongScanAlarm(){
+    document.getElementById('wrongScanAlarm').style.display = 'none';
+    if(navigator.vibrate){ navigator.vibrate(0); }
+    setTimeout(focusHwScanInput, 50);
+  }
+
+  document.getElementById('wrongScanDismiss').addEventListener('click', dismissWrongScanAlarm);
+
+  function clientBarcodeVariants(value){
+    var code = String(value || '').trim();
+    var variants = new Set([code]);
+    if(/^\d{11}$/.test(code)){
+      var sum = 0;
+      for(var i = 0; i < code.length; i++) sum += Number(code[i]) * (i % 2 === 0 ? 3 : 1);
+      variants.add(code + String((10 - (sum % 10)) % 10));
+    }
+    if(/^0\d+$/.test(code)) variants.add(code.replace(/^0/, ''));
+    if(/^\d+$/.test(code)) variants.add('0' + code);
+    return variants;
+  }
+
+  function itemMatchesScan(item, scannedCode){
+    var expected = String(item.scanCode || item.sku || '').trim();
+    if(!expected) return false;
+    return clientBarcodeVariants(scannedCode).has(expected) || clientBarcodeVariants(expected).has(String(scannedCode || '').trim());
+  }
+
   var lastScanTime = 0;
   var lastScanCode = null;
   function handleScanResult(scannedCode){
     if(scanningForIdx === null) return;
     var idx = scanningForIdx;
     var item = orderDetail.lineItems[idx];
-    var expectedSku = (item.sku || '').trim();
+    var expectedSku = (item.scanCode || item.sku || '').trim();
     var scanned = (scannedCode || '').trim();
 
     if(!expectedSku){
@@ -1265,11 +1392,11 @@
     var now = Date.now();
     if(scanned === lastScanCode && (now - lastScanTime) < 1500) return;
 
-    if(scanned !== expectedSku){
+    if(!itemMatchesScan(item, scanned)){
       // Wrong item — this is worth interrupting for, so close and alert
       // rather than silently ignoring a real mismatch.
       closeScanner();
-      alert('That barcode doesn\'t match "' + item.title + '". Double-check you grabbed the right item.');
+      showWrongScanAlarm(scanned, 'Expected "' + item.title + '". Put this product back and scan the correct item.');
       return;
     }
 
@@ -1520,6 +1647,10 @@
   hwScanInputEl.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){
       e.preventDefault();
+      // Enter from the physical scanner is a user gesture, so wake the
+      // AudioContext now. This guarantees the later wrong-item alarm is not
+      // suppressed by Android/Chrome autoplay rules after a network roundtrip.
+      try{ scanAudioContext(); }catch(audioError){}
       var code = hwScanInputEl.value.trim();
       hwScanInputEl.value = '';
       if(code){ handleHardwareScan(code); }
@@ -1552,6 +1683,13 @@
   function handleHardwareScan(scannedCode){
     if(!orderDetail) return;
     if(!requirePickerSelected()) return;
+    var matchesAnyOrderItem = orderDetail.lineItems.some(function(item){
+      return itemMatchesScan(item, scannedCode);
+    });
+    if(!matchesAnyOrderItem){
+      showWrongScanAlarm(scannedCode, 'This product is not needed for ' + orderDetail.stopName + '. Put it back before continuing.');
+      return;
+    }
     fetch('/api/picking-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1563,7 +1701,7 @@
         } else if(result.alreadyResolved){
           alert('That item is already fully accounted for.');
         } else {
-          alert('Scanned code doesn\'t match any item still needed in this order. Double-check you grabbed the right product.');
+          showWrongScanAlarm(scannedCode, 'This product is not needed for the current order. Put it back before continuing.');
         }
         focusHwScanInput();
         return;

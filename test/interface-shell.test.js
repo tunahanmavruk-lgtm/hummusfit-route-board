@@ -52,6 +52,24 @@ test('retains scanner, crate, picking, and finish controls', () => {
   assert.doesNotMatch(html, /Connect by USB/);
 });
 
+test('uses Shopify barcodes without changing saved picking keys and alarms on wrong scans', () => {
+  const html = read('public/picking.html');
+  const server = read('server.js');
+  for (const hook of ['wrongScanAlarm', 'wrongScanDismiss', 'playWrongScanAlarm', 'showWrongScanAlarm']) {
+    assert.ok(html.includes(hook), `picking page must retain ${hook}`);
+  }
+  assert.match(html, /background:#c91515/);
+  assert.match(html, /navigator\.vibrate\(\[240,90,240,90,480,120,480\]\)/);
+  assert.match(html, /osc\.type = 'square'/);
+  assert.match(html, /item\.scanCode \|\| item\.sku/);
+  assert.match(server, /variant \{ barcode image/);
+  assert.match(server, /scanCode: \(node\.variant\?\.barcode \|\| node\.sku \|\| ""\)\.trim\(\)/);
+  assert.match(server, /const sku = \(item\.scanCode \|\| item\.sku \|\| ""\)\.trim\(\)/);
+  const keyFunction = server.slice(server.indexOf('function lineItemKey'), server.indexOf('function readItemState'));
+  assert.match(keyFunction, /item\.title \+ "::" \+ \(item\.sku \|\| ""\)/);
+  assert.doesNotMatch(keyFunction, /scanCode/);
+});
+
 test('never renders undefined route metadata on the out-of-state board', () => {
   const html = read('public/out-of-state.html');
   assert.match(html, /route\.time \|\| '4:00 AM'/);

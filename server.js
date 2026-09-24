@@ -987,9 +987,9 @@ app.post("/api/push-send-manual", async (req, res) => {
   res.json({ ok: true, sentTo: subscriberCount });
 });
 
-// Walks the whole product catalog and flags every variant with a
-// blank SKU — since scanning depends entirely on that field matching
-// the real barcode, this is the exact list of products that would
+// Walks the whole product catalog and flags every variant with both a
+// blank barcode and blank SKU. A real Shopify barcode is preferred, with
+// SKU retained as the backwards-compatible fallback, so this is the list that
 // hit the "no barcode on file" fallback and need to be picked
 // manually instead of scanned.
 let skuCoverageCache = { fetchedAt: 0, missing: [], totalVariants: 0 };
@@ -1012,7 +1012,7 @@ async function fetchSkuCoverage() {
               title
               status
               variants(first: 20) {
-                edges { node { title sku } }
+                edges { node { title sku barcode } }
               }
             }
           }
@@ -1029,7 +1029,7 @@ async function fetchSkuCoverage() {
         totalVariants++;
         const variant = ve.node;
         const hasRealVariant = variant.title && variant.title.toLowerCase() !== "default title";
-        if (!variant.sku || !variant.sku.trim()) {
+        if (!(variant.sku || "").trim() && !(variant.barcode || "").trim()) {
           missing.push({
             title: hasRealVariant ? `${product.title} — ${variant.title}` : product.title,
           });
@@ -1385,7 +1385,7 @@ async function refreshOrdersCache() {
                     quantity
                     sku
                     variantTitle
-                    variant { image { url } product { featuredImage { url } } }
+                    variant { barcode image { url } product { featuredImage { url } } }
                   }
                 }
               }
@@ -1448,7 +1448,13 @@ async function refreshOrdersCache() {
         if (mergedItemsByKey[itemKey]) {
           mergedItemsByKey[itemKey].quantity += node.quantity;
         } else {
-          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku, imageUrl };
+          mergedItemsByKey[itemKey] = {
+            title,
+            quantity: node.quantity,
+            sku: node.sku,
+            scanCode: (node.variant?.barcode || node.sku || "").trim(),
+            imageUrl,
+          };
         }
       });
     });
@@ -1533,7 +1539,7 @@ async function fetchB2BStopOrders(now = Date.now()) {
                     quantity
                     sku
                     variantTitle
-                    variant { image { url } product { featuredImage { url } } }
+                    variant { barcode image { url } product { featuredImage { url } } }
                   }
                 }
               }
@@ -1602,7 +1608,13 @@ async function fetchB2BStopOrders(now = Date.now()) {
         if (mergedItemsByKey[itemKey]) {
           mergedItemsByKey[itemKey].quantity += node.quantity;
         } else {
-          mergedItemsByKey[itemKey] = { title, quantity: node.quantity, sku: node.sku, imageUrl };
+          mergedItemsByKey[itemKey] = {
+            title,
+            quantity: node.quantity,
+            sku: node.sku,
+            scanCode: (node.variant?.barcode || node.sku || "").trim(),
+            imageUrl,
+          };
         }
       });
     });
@@ -2344,7 +2356,7 @@ app.post("/api/picking-scan", async (req, res) => {
     let matchIdx = -1;
     for (let i = 0; i < order.lineItems.length; i++) {
       const item = order.lineItems[i];
-      const sku = (item.sku || "").trim();
+      const sku = (item.scanCode || item.sku || "").trim();
       const currentStatus = readItemState(record.itemStatus, item, i) || "not_picked";
       const scannedSoFar = readItemState(record.itemScannedCount, item, i) || 0;
       const alreadyResolved = currentStatus === "picked" || currentStatus === "missing" || currentStatus === "partial";
@@ -2356,7 +2368,7 @@ app.post("/api/picking-scan", async (req, res) => {
 
     if (matchIdx === -1) {
       const alreadyResolvedMatch = order.lineItems.some((item, i) => {
-        const sku = (item.sku || "").trim();
+        const sku = (item.scanCode || item.sku || "").trim();
         const s = readItemState(record.itemStatus, item, i) || "not_picked";
         return codeVariants.has(sku) && (s === "picked" || s === "missing" || s === "partial");
       });
@@ -2365,7 +2377,6 @@ app.post("/api/picking-scan", async (req, res) => {
       // vanishing silently — nothing shown to the picker, just something
       // we can look up after the fact if a scan keeps failing.
       console.log(`[picking-scan MISS] stop=${key} code=${JSON.stringify(code)} alreadyResolved=${alreadyResolvedMatch}`);
-      saveState(state);
       return res.json({ ok: true, matched: false, alreadyResolved: alreadyResolvedMatch });
     }
 
