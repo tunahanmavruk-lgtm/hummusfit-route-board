@@ -733,6 +733,36 @@
     font-size:20px;
     font-weight:900;
   }
+  #scanSuccessToast{
+    position:fixed;
+    left:18px;
+    right:18px;
+    top:18px;
+    z-index:9000;
+    display:none;
+    padding:18px 20px;
+    border:3px solid #fff;
+    border-radius:18px;
+    box-shadow:0 12px 36px rgba(0,0,0,.28);
+    color:#fff;
+    background:#11866f;
+    text-align:center;
+    font-family:'Inter', sans-serif;
+    font-weight:900;
+    pointer-events:none;
+  }
+  #scanSuccessToast .scan-success-title{
+    display:block;
+    font-size:20px;
+    line-height:1.15;
+  }
+  #scanSuccessToast .scan-success-count{
+    display:block;
+    margin-top:6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:28px;
+    line-height:1;
+  }
   @keyframes wrong-scan-pulse{
     0%,100%{ background:#c91515; }
     50%{ background:#720000; }
@@ -953,6 +983,10 @@
   <p id="wrongScanMessage">This barcode is not needed for the current order.</p>
   <div id="wrongScanCode"></div>
   <button id="wrongScanDismiss" type="button">STOP ALARM</button>
+</div>
+<div id="scanSuccessToast" role="status" aria-live="polite">
+  <span class="scan-success-title" id="scanSuccessTitle"></span>
+  <span class="scan-success-count" id="scanSuccessCount"></span>
 </div>
 
 <!-- Invisible input that captures real Bluetooth scanner "keyboard"
@@ -1350,6 +1384,16 @@
 
   document.getElementById('wrongScanDismiss').addEventListener('click', dismissWrongScanAlarm);
 
+  var scanSuccessTimer = null;
+  function showScanSuccess(title, scannedCount, totalQty){
+    var toast = document.getElementById('scanSuccessToast');
+    document.getElementById('scanSuccessTitle').textContent = '✓ ' + title;
+    document.getElementById('scanSuccessCount').textContent = scannedCount + ' / ' + totalQty + ' SCANNED';
+    toast.style.display = 'block';
+    if(scanSuccessTimer){ clearTimeout(scanSuccessTimer); }
+    scanSuccessTimer = setTimeout(function(){ toast.style.display = 'none'; }, 2200);
+  }
+
   function clientBarcodeVariants(value){
     var code = String(value || '').trim();
     var variants = new Set([code]);
@@ -1422,6 +1466,7 @@
       orderDetail.itemCrateNumber = result.itemCrateNumber;
       orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
+      showScanSuccess(result.itemTitle || item.title, result.scannedCount || result.itemScannedCount[idx], result.totalQty || item.quantity);
       var nowFullyPicked = result.itemStatus[idx] === 'picked';
       if(nowFullyPicked){
         // Fully accounted for — nothing left to scan for this item, so
@@ -1713,6 +1758,7 @@
       orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
       renderOrder();
+      showScanSuccess(result.itemTitle, result.scannedCount, result.totalQty);
     }).catch(function(err){
       alert('Could not reach the server: ' + err.message);
       focusHwScanInput();
