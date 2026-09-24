@@ -1704,10 +1704,10 @@
       try{ scanAudioContext(); }catch(audioError){}
       var code = hwScanInputEl.value.trim();
       hwScanInputEl.value = '';
-      // Once the companion's native scanner bridge is available, it is
-      // the single source of scanner input. Processing this keyboard copy
-      // too would count one physical scan twice on NETUM devices.
-      if(code && !nativeScannerAvailable){ handleIncomingHardwareScan(code); }
+      // Q900 production scans arrive through Android's scanner keyboard.
+      // Some firmware also emits the companion broadcast, so both paths
+      // feed the same short-window de-duplicator below.
+      if(code){ handleIncomingHardwareScan(code); }
     }
   });
 
@@ -1719,7 +1719,7 @@
     var code = String(scannedCode || '').replace(/[\r\n]/g, '').trim();
     if(!code) return;
     var now = Date.now();
-    if(code === lastHandledScanCode && now - lastHandledScanAt < 250) return;
+    if(code === lastHandledScanCode && now - lastHandledScanAt < 400) return;
     lastHandledScanCode = code;
     lastHandledScanAt = now;
     try{ scanAudioContext(); }catch(audioError){}
