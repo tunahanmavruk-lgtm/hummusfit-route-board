@@ -668,11 +668,11 @@
     return null;
   }
 
-  function vanLiveHtml(vanName){
+  function vanLiveHtml(vanName, routeId){
     if(!vanName) return '';
     var v = findVanStatus(vanName);
     var imei = (v && v.imei) || fleetVehicleIds[vanName] || '';
-    var trackingUrl = FLEET_TRACKER_URL + (imei ? '/?imei=' + encodeURIComponent(imei) : '');
+    var trackingUrl = '/api/driver-track/' + encodeURIComponent(routeId);
     if(!v){
       return '<a class="van-live offline" href="' + trackingUrl + '" target="_blank" rel="noopener"><span class="dot"></span>No live data</a>';
     }
@@ -893,6 +893,7 @@
             '<div class="assign-label">Driver</div>' +
             '<select data-route="' + route.id + '" class="driver-select">' + buildDriverOptions(assignment.driver) + '</select>' +
           '</div>' +
+          (assignment.van ? vanLiveHtml(assignment.van, route.id) : '') +
         '</div>' +
         '<div class="route-actions">' +
           optimizeBtn + startBtn + openMapsBtn + startedTimeBadge + etaSummary +

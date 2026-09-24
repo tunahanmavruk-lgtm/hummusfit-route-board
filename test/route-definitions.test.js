@@ -107,7 +107,7 @@ test("uses Bouncie names plus the API-omitted #5 as the ten-vehicle fleet source
   assert.match(outOfStateBoard, /fetch\('\/api\/van-status'\)/);
   assert.match(localBoard, /liveNames\.concat\(fleetData\)/);
   assert.match(outOfStateBoard, /liveNames\.concat\(fleetData\)/);
-  assert.match(outOfStateBoard, /\?imei=/);
-  assert.match(localBoard, /\?imei=/);
+  assert.match(outOfStateBoard, /\/api\/driver-track\//);
+  assert.match(localBoard, /\/api\/driver-track\//);
   assert.match(server, /fleetVehicleIds: VAN_TO_BOUNCIE_IMEI/);
 });

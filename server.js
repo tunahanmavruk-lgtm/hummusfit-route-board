@@ -716,13 +716,27 @@ function firstNameOf(fullName) {
 }
 
 const FLEET_TRACKER_URL = "https://fleet.myhummusfit.com";
+const STORE_TRACKING_SECRET = process.env.STORE_TRACKING_SECRET || "";
 
 // How long a driver realistically needs to unload at each stop before
 // continuing to the next one — used to make ETAs actually accurate
 // instead of just chaining raw drive times back to back. Adjust here if
 // 18 minutes isn't the right number for your stops.
 const UNLOAD_MINUTES_PER_STOP = 18;
-const STORE_TRACKING_GRACE_MS = 2 * 60 * 1000;
+const STORE_TRACKING_GRACE_MS = 20 * 1000;
+
+function signRouteTrackingToken(routeId, imei) {
+  if (!STORE_TRACKING_SECRET) return null;
+  const payloadPart = Buffer.from(JSON.stringify({
+    v: 1,
+    scope: "route.vehicle.track",
+    routeId,
+    imei,
+    exp: Math.floor(Date.now() / 1000) + (12 * 60 * 60),
+  }), "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", STORE_TRACKING_SECRET).update(payloadPart).digest("base64url");
+  return `${payloadPart}.${signature}`;
+}
 
 // ================= DAY / STATE PERSISTENCE =================
 function todayEasternFor(date) {
@@ -1175,6 +1189,28 @@ app.get("/api/b2b-routes-today", (req, res) => {
 });
 app.get("/api/state", (req, res) => {
   res.json(loadState());
+});
+app.get("/api/route-vehicle/:routeId", (req, res) => {
+  const route = getRouteById(req.params.routeId);
+  if (!route) return res.status(404).json({ error: "Route not found" });
+  const state = loadState();
+  const assignment = state.assignments[route.id] || {};
+  const van = assignment.van || null;
+  const vanImei = van ? VAN_TO_BOUNCIE_IMEI[van] || null : null;
+  res.set("Cache-Control", "no-store");
+  res.json({ routeId: route.id, assigned: Boolean(vanImei), van, vanImei });
+});
+app.get("/api/driver-track/:routeId", (req, res) => {
+  const route = getRouteById(req.params.routeId);
+  if (!route) return res.status(404).send("Route not found");
+  const state = loadState();
+  const van = state.assignments[route.id] && state.assignments[route.id].van;
+  const vanImei = van ? VAN_TO_BOUNCIE_IMEI[van] || null : null;
+  if (!vanImei) return res.status(409).send("Assign a van to this route before opening live tracking.");
+  const access = signRouteTrackingToken(route.id, vanImei);
+  if (!access) return res.status(503).send("Secure driver tracking is not configured.");
+  res.set("Cache-Control", "no-store");
+  res.redirect(`${FLEET_TRACKER_URL}/track.html?access=${encodeURIComponent(access)}`);
 });
 app.post("/api/assign", (req, res) => {
   const { routeId, van, driver } = req.body;
