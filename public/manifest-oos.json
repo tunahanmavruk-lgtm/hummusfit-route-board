@@ -3,6 +3,7 @@
   "short_name": "Out of State",
   "start_url": "/out-of-state",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#FFFFFF",
   "theme_color": "#6FA83C",
   "icons": [
