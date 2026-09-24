@@ -1580,6 +1580,9 @@
   // picker just scans whatever product is in their hand, and the
   // system finds which line item it matches.
   var hwScanInputEl = document.getElementById('hwScanInput');
+  var lastHandledScanCode = '';
+  var lastHandledScanAt = 0;
+  var nativeScanCursor = null;
 
   // Zebra desktop printers are connected through the operating-system or
   // Android Zebra Print service. This status control opens setup guidance.
@@ -1698,9 +1701,45 @@
       try{ scanAudioContext(); }catch(audioError){}
       var code = hwScanInputEl.value.trim();
       hwScanInputEl.value = '';
-      if(code){ handleHardwareScan(code); }
+      if(code){ handleIncomingHardwareScan(code); }
     }
   });
+
+  // NETUM's keyboard-emulation path can occasionally beep without delivering
+  // the barcode to Chrome. HF Auto Print also receives the scanner's native
+  // broadcast and exposes it over the device-only bridge, so every decoded
+  // scan reaches this page even when Android drops the synthetic keypresses.
+  function handleIncomingHardwareScan(scannedCode){
+    var code = String(scannedCode || '').replace(/[\r\n]/g, '').trim();
+    if(!code) return;
+    var now = Date.now();
+    if(code === lastHandledScanCode && now - lastHandledScanAt < 250) return;
+    lastHandledScanCode = code;
+    lastHandledScanAt = now;
+    try{ scanAudioContext(); }catch(audioError){}
+    handleHardwareScan(code);
+  }
+
+  async function pollNativeScanner(){
+    try{
+      var path = nativeScanCursor === null ? '/scan' : '/scan?after=' + encodeURIComponent(nativeScanCursor);
+      var response = await bridgeRequest(path, {}, 1200);
+      if(response.ok){
+        var result = await response.json();
+        if(nativeScanCursor === null) nativeScanCursor = Number(result.latestId || 0);
+        if(result.scan && Number(result.scan.id) > nativeScanCursor){
+          nativeScanCursor = Number(result.scan.id);
+          handleIncomingHardwareScan(result.scan.code);
+          // Drain another queued scan immediately; the normal timer resumes
+          // once the bridge has no newer event.
+          setTimeout(pollNativeScanner, 0);
+          return;
+        }
+      }
+    }catch(e){}
+    setTimeout(pollNativeScanner, 250);
+  }
+  pollNativeScanner();
 
   // iOS Safari can drop focus after alerts, taps elsewhere, or the app
   // being backgrounded — keep pulling it back so a physical scan works

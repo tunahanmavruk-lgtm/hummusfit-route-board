@@ -9,6 +9,7 @@ import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
@@ -35,6 +36,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -135,14 +137,31 @@ public class MainActivity extends Activity {
   }
 
   public static class PrintBridgeService extends Service {
+    private static final String SCANNER_ACTION = "com.android.hs.action.BARCODE_SEND";
+    private static final int MAX_SCAN_EVENTS = 32;
     private final ExecutorService workers = Executors.newFixedThreadPool(2);
     private final Map<String, Boolean> completedJobs = new LinkedHashMap<String, Boolean>(128, .75f, true) {
       @Override protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
         return size() > 128;
       }
     };
+    private final ArrayDeque<ScanEvent> scanEvents = new ArrayDeque<>();
+    private long nextScanId = 1;
+    private BroadcastReceiver scannerReceiver;
     private ServerSocket server;
     private Thread acceptThread;
+
+    private static class ScanEvent {
+      final long id;
+      final String code;
+      final long at;
+
+      ScanEvent(long id, String code, long at) {
+        this.id = id;
+        this.code = code;
+        this.at = at;
+      }
+    }
 
     @Override public void onCreate() {
       super.onCreate();
@@ -161,6 +180,25 @@ public class MainActivity extends Activity {
           .setOngoing(true)
           .build();
       startForeground(11, notification);
+      scannerReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+          if (intent == null || !SCANNER_ACTION.equals(intent.getAction())) return;
+          String code = intent.getStringExtra("scanner_result");
+          if (code == null || code.trim().isEmpty()) {
+            byte[] bytes = intent.getByteArrayExtra("scanner_result_byte");
+            if (bytes != null) code = new String(bytes, StandardCharsets.UTF_8);
+          }
+          if (code == null) return;
+          code = code.replace("\r", "").replace("\n", "").trim();
+          if (code.isEmpty()) return;
+          synchronized (scanEvents) {
+            scanEvents.addLast(new ScanEvent(nextScanId++, code, System.currentTimeMillis()));
+            while (scanEvents.size() > MAX_SCAN_EVENTS) scanEvents.removeFirst();
+          }
+          android.util.Log.i("HFAutoPrint", "Scanner event received (" + code.length() + " chars)");
+        }
+      };
+      registerReceiver(scannerReceiver, new IntentFilter(SCANNER_ACTION));
       acceptThread = new Thread(this::serve, "hf-print-listener");
       acceptThread.start();
     }
@@ -173,6 +211,7 @@ public class MainActivity extends Activity {
 
     @Override public void onDestroy() {
       try { if (server != null) server.close(); } catch (Exception ignored) {}
+      try { if (scannerReceiver != null) unregisterReceiver(scannerReceiver); } catch (Exception ignored) {}
       workers.shutdownNow();
       super.onDestroy();
     }
@@ -242,6 +281,10 @@ public class MainActivity extends Activity {
         OutputStream out = connection.getOutputStream();
         String[] request = line(in).split(" ");
         if (request.length < 2) return;
+        String requestTarget = request[1];
+        int queryStart = requestTarget.indexOf('?');
+        String requestPath = queryStart >= 0 ? requestTarget.substring(0, queryStart) : requestTarget;
+        String requestQuery = queryStart >= 0 ? requestTarget.substring(queryStart + 1) : "";
         Map<String, String> headers = new LinkedHashMap<>();
         for (int i = 0; i < 64; i++) {
           String text = line(in);
@@ -258,11 +301,33 @@ public class MainActivity extends Activity {
           respond(out, 204, json(true, "preflight"), true);
           return;
         }
-        if ("GET".equals(request[0]) && "/status".equals(request[1])) {
+        if ("GET".equals(request[0]) && "/status".equals(requestPath)) {
           respond(out, 200, json(true, "HF Auto Print ready").put("printerIp", prefs(this).getString(PRINTER_IP, DEFAULT_IP)), true);
           return;
         }
-        if (!"POST".equals(request[0]) || !"/print".equals(request[1]) ||
+        if ("GET".equals(request[0]) && "/scan".equals(requestPath)) {
+          long after = -1;
+          if (requestQuery.startsWith("after=")) {
+            try { after = Long.parseLong(requestQuery.substring(6)); }
+            catch (NumberFormatException ignored) { after = -1; }
+          }
+          JSONObject result = json(true, "Scanner ready");
+          synchronized (scanEvents) {
+            long latestId = nextScanId - 1;
+            result.put("latestId", latestId);
+            if (after >= 0) {
+              for (ScanEvent event : scanEvents) {
+                if (event.id > after) {
+                  result.put("scan", new JSONObject().put("id", event.id).put("code", event.code).put("at", event.at));
+                  break;
+                }
+              }
+            }
+          }
+          respond(out, 200, result, true);
+          return;
+        }
+        if (!"POST".equals(request[0]) || !"/print".equals(requestPath) ||
             !"1".equals(headers.get("x-hf-print")) ||
             !headers.getOrDefault("content-type", "").startsWith("application/json")) {
           respond(out, 400, json(false, "Invalid print request"), true);
