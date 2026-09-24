@@ -1583,6 +1583,7 @@
   var lastHandledScanCode = '';
   var lastHandledScanAt = 0;
   var nativeScanCursor = null;
+  var nativeScannerAvailable = false;
 
   // Zebra desktop printers are connected through the operating-system or
   // Android Zebra Print service. This status control opens setup guidance.
@@ -1701,7 +1702,10 @@
       try{ scanAudioContext(); }catch(audioError){}
       var code = hwScanInputEl.value.trim();
       hwScanInputEl.value = '';
-      if(code){ handleIncomingHardwareScan(code); }
+      // Once the companion's native scanner bridge is available, it is
+      // the single source of scanner input. Processing this keyboard copy
+      // too would count one physical scan twice on NETUM devices.
+      if(code && !nativeScannerAvailable){ handleIncomingHardwareScan(code); }
     }
   });
 
@@ -1725,6 +1729,7 @@
       var path = nativeScanCursor === null ? '/scan' : '/scan?after=' + encodeURIComponent(nativeScanCursor);
       var response = await bridgeRequest(path, {}, 1200);
       if(response.ok){
+        nativeScannerAvailable = true;
         var result = await response.json();
         if(nativeScanCursor === null) nativeScanCursor = Number(result.latestId || 0);
         if(result.scan && Number(result.scan.id) > nativeScanCursor){
