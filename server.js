@@ -1,5 +1,5 @@
 const express = require("express");
-const { barcodeVariants } = require("./barcode");
+const { barcodeCodesForProduct, barcodeMatches } = require("./barcode");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -1453,6 +1453,7 @@ async function refreshOrdersCache() {
             quantity: node.quantity,
             sku: node.sku,
             scanCode: (node.variant?.barcode || node.sku || "").trim(),
+            scanCodes: barcodeCodesForProduct(title, node.variant?.barcode, node.sku),
             imageUrl,
           };
         }
@@ -1613,6 +1614,7 @@ async function fetchB2BStopOrders(now = Date.now()) {
             quantity: node.quantity,
             sku: node.sku,
             scanCode: (node.variant?.barcode || node.sku || "").trim(),
+            scanCodes: barcodeCodesForProduct(title, node.variant?.barcode, node.sku),
             imageUrl,
           };
         }
@@ -2380,16 +2382,16 @@ app.post("/api/picking-scan", async (req, res) => {
     // NETUM may omit UPC-A's check digit, while either the scanner or
     // Shopify may include an EAN-13 leading zero. Matching below still
     // requires an exact resulting value from the active order.
-    const codeVariants = barcodeVariants(code);
-
     let matchIdx = -1;
     for (let i = 0; i < order.lineItems.length; i++) {
       const item = order.lineItems[i];
-      const sku = (item.scanCode || item.sku || "").trim();
+      const expectedCodes = Array.isArray(item.scanCodes) && item.scanCodes.length
+        ? item.scanCodes
+        : [(item.scanCode || item.sku || "").trim()];
       const currentStatus = readItemState(record.itemStatus, item, i) || "not_picked";
       const scannedSoFar = readItemState(record.itemScannedCount, item, i) || 0;
       const alreadyResolved = currentStatus === "picked" || currentStatus === "missing" || currentStatus === "partial";
-      if (sku && codeVariants.has(sku) && !alreadyResolved && scannedSoFar < item.quantity) {
+      if (barcodeMatches(code, expectedCodes) && !alreadyResolved && scannedSoFar < item.quantity) {
         matchIdx = i;
         break;
       }
@@ -2397,9 +2399,11 @@ app.post("/api/picking-scan", async (req, res) => {
 
     if (matchIdx === -1) {
       const alreadyResolvedMatch = order.lineItems.some((item, i) => {
-        const sku = (item.scanCode || item.sku || "").trim();
+        const expectedCodes = Array.isArray(item.scanCodes) && item.scanCodes.length
+          ? item.scanCodes
+          : [(item.scanCode || item.sku || "").trim()];
         const s = readItemState(record.itemStatus, item, i) || "not_picked";
-        return codeVariants.has(sku) && (s === "picked" || s === "missing" || s === "partial");
+        return barcodeMatches(code, expectedCodes) && (s === "picked" || s === "missing" || s === "partial");
       });
       // Log every miss so a real "this barcode doesn't match anything on
       // this order" case leaves a trace in the Railway logs instead of

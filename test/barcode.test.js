@@ -1,7 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { barcodeVariants, upcACheckDigit } = require("../barcode");
+const {
+  barcodeVariants,
+  upcACheckDigit,
+  barcodeCodesForProduct,
+  barcodeMatches,
+} = require("../barcode");
 
 test("calculates the UPC-A check digits omitted by the affected NETUM scanner", () => {
   assert.equal(upcACheckDigit("64183788454"), "0");
@@ -25,4 +30,17 @@ test("does not invent a check digit for nonnumeric or differently sized scans", 
 test("preserves existing leading-zero compatibility", () => {
   assert.ok(barcodeVariants("0123456789012").has("123456789012"));
   assert.ok(barcodeVariants("123456789012").has("0123456789012"));
+});
+
+test("accepts both Shopify and confirmed package barcodes for Basic Baddie", () => {
+  const codes = barcodeCodesForProduct(
+    "Basic Baddie Pumpkin Exclusive",
+    "641837885080",
+    "",
+  );
+  assert.deepEqual(codes, ["641837885080", "641837881303"]);
+  assert.ok(barcodeMatches("641837885080", codes));
+  assert.ok(barcodeMatches("64183788130", codes));
+  assert.ok(barcodeMatches("641837881303", codes));
+  assert.ok(!barcodeMatches("641837884540", codes));
 });

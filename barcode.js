@@ -29,4 +29,40 @@ function barcodeVariants(scannedCode) {
   return variants;
 }
 
-module.exports = { barcodeVariants, upcACheckDigit };
+// Physical packaging can remain in circulation after a Shopify variant's
+// primary barcode changes. Keep confirmed package codes as aliases so both
+// generations scan while old inventory is being used up.
+const PRODUCT_BARCODE_ALIASES = new Map([
+  ["basic baddie pumpkin exclusive", ["641837881303"]],
+]);
+
+function barcodeCodesForProduct(title, primaryCode, sku) {
+  const codes = new Set();
+  for (const value of [primaryCode, sku]) {
+    const code = String(value || "").trim();
+    if (code) codes.add(code);
+  }
+  const aliases = PRODUCT_BARCODE_ALIASES.get(String(title || "").trim().toLowerCase()) || [];
+  for (const alias of aliases) codes.add(alias);
+  return [...codes];
+}
+
+function barcodeMatches(scannedCode, expectedCodes) {
+  const scanned = String(scannedCode || "").trim();
+  if (!scanned) return false;
+  const scannedVariants = barcodeVariants(scanned);
+  return (expectedCodes || []).some((value) => {
+    const expected = String(value || "").trim();
+    return expected && (
+      scannedVariants.has(expected) ||
+      barcodeVariants(expected).has(scanned)
+    );
+  });
+}
+
+module.exports = {
+  barcodeVariants,
+  upcACheckDigit,
+  barcodeCodesForProduct,
+  barcodeMatches,
+};

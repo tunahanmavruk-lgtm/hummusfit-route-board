@@ -1410,9 +1410,18 @@
   }
 
   function itemMatchesScan(item, scannedCode){
-    var expected = String(item.scanCode || item.sku || '').trim();
-    if(!expected) return false;
-    return clientBarcodeVariants(scannedCode).has(expected) || clientBarcodeVariants(expected).has(String(scannedCode || '').trim());
+    var expectedCodes = Array.isArray(item.scanCodes) && item.scanCodes.length
+      ? item.scanCodes
+      : [item.scanCode || item.sku || ''];
+    var scanned = String(scannedCode || '').trim();
+    if(!scanned) return false;
+    return expectedCodes.some(function(value){
+      var expected = String(value || '').trim();
+      return expected && (
+        clientBarcodeVariants(scanned).has(expected) ||
+        clientBarcodeVariants(expected).has(scanned)
+      );
+    });
   }
 
   var lastScanTime = 0;
