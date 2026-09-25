@@ -66,5 +66,6 @@ app may temporarily rotate the Q900 to landscape.
 - `NT000026032100389`
 - `NT000026011300177`
 - `NT000026032100594`
+- `NT000026032100624`
 
 All verified units use Zebra `10.0.75.254` and the broadcast settings above.
