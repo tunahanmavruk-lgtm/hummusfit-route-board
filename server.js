@@ -7,6 +7,7 @@ const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
+const { buildEssentialsShadow } = require("./essentials-shadow.js");
 const {
   b2bOrderExpiresAt,
   hasB2BSignal,
@@ -3551,6 +3552,33 @@ app.get("/sku-coverage", (req, res) => {
 app.get("/essentials", (req, res) => {
   if (!ESSENTIALS_ROUTE_BOARD_ENABLED) return res.sendStatus(404);
   res.sendFile(path.join(ESSENTIALS_PREVIEW_DIR, "index.html"));
+});
+app.get("/api/essentials-shadow", async (req, res) => {
+  if (!ESSENTIALS_ROUTE_BOARD_ENABLED) return res.sendStatus(404);
+  try {
+    const cache = await fetchTodaysStopOrders();
+    // Intentionally bypass the normal state loader: it performs daily
+    // migrations and may persist them. Shadow mode must remain read-only.
+    let stateSnapshot = {};
+    try {
+      stateSnapshot = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    } catch (_) {}
+    const cards = buildEssentialsShadow(
+      cache.byStopName,
+      stateSnapshot.picking || {},
+      (stopName) => routeInfoForStop(stopName).routeName
+    );
+    res.set("Cache-Control", "no-store");
+    res.json({
+      mode: "shadow",
+      source: "regular-orders",
+      mutationsEnabled: false,
+      generatedAt: new Date().toISOString(),
+      cards,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, mode: "shadow", mutationsEnabled: false, cards: [] });
+  }
 });
 app.get("/essentials-preview/:asset", (req, res) => {
   if (!ESSENTIALS_ROUTE_BOARD_ENABLED) return res.sendStatus(404);

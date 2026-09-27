@@ -10,6 +10,7 @@ test('keeps the Essentials preview disabled unless explicitly enabled', () => {
   const server = read('server.js');
   assert.match(server, /process\.env\.ESSENTIALS_ROUTE_BOARD_ENABLED === "true"/);
   assert.match(server, /if \(!ESSENTIALS_ROUTE_BOARD_ENABLED\) return res\.sendStatus\(404\)/);
+  assert.match(server, /app\.get\("\/api\/essentials-shadow"/);
   assert.match(server, /ESSENTIALS_PREVIEW_DIR = path\.join\(__dirname, "essentials-preview"\)/);
   assert.doesNotMatch(read('public/index.html'), /href="\/essentials"/);
   assert.doesNotMatch(read('public/out-of-state.html'), /href="\/essentials"/);
@@ -24,14 +25,16 @@ test('keeps the preview outside the food order, scan, route, and print contracts
     '/api/today-orders', '/api/picking-', '/api/assign', '/api/stop-status',
     '/api/start-route', '/api/crate-label', '127.0.0.1:8877', 'window.print(',
   ]) assert.ok(!combined.includes(forbidden), `preview must not call ${forbidden}`);
-  assert.doesNotMatch(script, /fetch\s*\(/);
-  assert.match(html, /Preview · offline data/);
+  assert.match(script, /fetch\('\/api\/essentials-shadow'/);
+  assert.doesNotMatch(script, /method\s*:\s*['"]POST['"]/);
+  assert.match(html, /Shadow mode · read only/);
+  assert.match(combined, /disabled>Actions locked · Shadow mode/);
 });
 
 test('shows the approved simple Essentials-only warehouse workflow', () => {
   const html = read('essentials-preview/index.html');
   for (const text of [
-    'Essentials only — food orders never appear here.',
+    'This is a warehouse view. Essentials remain on their regular orders.',
     'Retail Essentials', 'Other Essentials', 'New Orders', 'Picking',
     'Labeled', 'Ready to Route', '3×1 Zebra label preview',
   ]) assert.ok(html.includes(text), `missing ${text}`);
@@ -40,4 +43,16 @@ test('shows the approved simple Essentials-only warehouse workflow', () => {
   assert.match(css, /--green:#3d8a83/);
   assert.match(css, /--orange:#df6437/);
   assert.doesNotMatch(css, /purple|#6f42c1|#7c3aed|#8b5cf6/i);
+});
+
+test('the shadow endpoint cannot call persistent state or current operational handlers', () => {
+  const server = read('server.js');
+  const start = server.indexOf('app.get("/api/essentials-shadow"');
+  const end = server.indexOf('app.get("/essentials-preview/:asset"', start);
+  const endpoint = server.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(endpoint, /fs\.readFileSync\(DATA_FILE/);
+  assert.match(endpoint, /mutationsEnabled: false/);
+  assert.doesNotMatch(endpoint, /loadState\(|saveState\(|getPickingRecord\(|shopifyGraphQL\(|fulfillShopifyOrder\(/);
+  assert.doesNotMatch(endpoint, /req\.body|app\.post/);
 });

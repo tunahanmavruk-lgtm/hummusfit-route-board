@@ -1,71 +1,82 @@
-const previewOrders = [
-  { id:'ES-1042', store:'Lynbrook', route:'Route #2 · Mon Oct 5', type:'retail', cases:4, stage:'new', progress:0, action:'Start Picking' },
-  { id:'ES-1047', store:'Huntington', route:'Route #3 · Mon Oct 5', type:'other', cases:3, stage:'new', progress:0, action:'Start Picking' },
-  { id:'ES-1038', store:'Farmingdale', route:'Route #3 · Mon Oct 5', type:'retail', cases:6, stage:'picking', progress:67, action:'Continue Picking' },
-  { id:'ES-1040', store:'Brookfield', route:'Monday · Van 1', type:'retail', cases:5, stage:'picking', progress:80, action:'Resolve Exception', exception:'Expected 5 cases · only 4 scanned' },
-  { id:'ES-1035', store:'Deer Park', route:'Route #1 · Mon Oct 5', type:'other', cases:2, stage:'labeled', progress:100, action:'Preview 3×1 Label' },
-  { id:'ES-1032', store:'Lake Grove', route:'Route #5 · Mon Oct 5', type:'retail', cases:4, stage:'ready', progress:100, action:'View Route' },
-  { id:'ES-1033', store:'Woodbury', route:'Route #3 · Mon Oct 5', type:'other', cases:2, stage:'ready', progress:100, action:'View Route' },
-];
-
+let shadowCards = [];
 let activeFilter = 'all';
-const stageNames = ['new','picking','labeled','ready'];
-const escapeHtml = value => String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const stageNames = ['new', 'picking', 'labeled', 'ready'];
+const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const displayStore = value => String(value || '').replace(/\b\w/g, letter => letter.toUpperCase());
 
-function card(order){
-  const typeName = order.type === 'retail' ? 'Retail Essentials' : 'Other Essentials';
-  const secondary = order.stage === 'labeled' ? '<button class="secondary" data-label="' + escapeHtml(order.id) + '">Reprint 3×1 Label</button>' : '';
-  return '<article class="order-card' + (order.exception ? ' exception' : '') + '" data-order="' + escapeHtml(order.id) + '">' +
-    '<div class="card-top"><span class="type-pill ' + (order.type === 'other' ? 'other' : '') + '">' + typeName + '</span><span class="order-id">' + escapeHtml(order.id) + '</span></div>' +
-    '<h3>' + escapeHtml(order.store) + '</h3><p class="route-line">' + escapeHtml(order.route) + '</p>' +
-    '<div class="case-count"><strong>' + order.cases + '</strong><span>cases</span></div>' +
-    (order.progress ? '<div class="progress" aria-label="' + order.progress + '% complete"><i style="width:' + order.progress + '%"></i></div>' : '') +
-    (order.exception ? '<p class="exception-note"><span>!</span><span>' + escapeHtml(order.exception) + '</span></p>' : '') +
-    '<div class="card-actions"><button class="primary" data-action="' + escapeHtml(order.id) + '">' + escapeHtml(order.action) + '</button>' + secondary + '</div></article>';
+function card(entry){
+  const typeName = entry.type === 'retail' ? 'Retail Essentials' : 'Other Essentials';
+  const items = entry.items.map(item => '<li><b>' + escapeHtml(item.quantity) + '</b><span>' + escapeHtml(item.title) + '</span></li>').join('');
+  return '<article class="order-card' + (entry.hasException ? ' exception' : '') + '">' +
+    '<div class="card-top"><span class="type-pill ' + (entry.type === 'other' ? 'other' : '') + '">' + typeName + '</span><span class="order-id">' + escapeHtml(entry.regularOrderName) + '</span></div>' +
+    '<h3>' + escapeHtml(displayStore(entry.store)) + '</h3><p class="route-line">' + escapeHtml(entry.routeName || 'Regular route') + '</p>' +
+    '<div class="case-count"><strong>' + escapeHtml(entry.caseCount) + '</strong><span>ordered qty</span></div><ul class="item-list">' + items + '</ul>' +
+    (entry.progress ? '<div class="progress" aria-label="' + entry.progress + '% reflected from regular picking"><i style="width:' + entry.progress + '%"></i></div>' : '') +
+    (entry.hasException ? '<p class="exception-note"><span>!</span><span>Missing or partial on the regular order. Resolve it in Order Picking.</span></p>' : '') +
+    '<div class="card-actions"><button class="secondary" data-label="' + escapeHtml(entry.id) + '">Preview 3×1 Label</button><button class="primary shadow-action" disabled>Actions locked · Shadow mode</button></div></article>';
+}
+
+function updateSummary(){
+  const retail = shadowCards.filter(card => card.type === 'retail').length;
+  const other = shadowCards.filter(card => card.type === 'other').length;
+  document.getElementById('allCount').textContent = shadowCards.length;
+  document.getElementById('retailCount').textContent = retail;
+  document.getElementById('otherCount').textContent = other;
+  document.getElementById('groupCount').textContent = shadowCards.length;
+  document.getElementById('caseCount').textContent = shadowCards.reduce((sum, card) => sum + Number(card.caseCount || 0), 0);
+  document.getElementById('readyCount').textContent = shadowCards.filter(card => card.stage === 'ready').reduce((sum, card) => sum + Number(card.caseCount || 0), 0);
+  document.getElementById('exceptionCount').textContent = shadowCards.filter(card => card.hasException).length;
 }
 
 function render(){
   const query = document.getElementById('searchInput').value.trim().toLowerCase();
-  const visible = previewOrders.filter(order => (activeFilter === 'all' || order.type === activeFilter) && (!query || (order.store + ' ' + order.id).toLowerCase().includes(query)));
+  const visible = shadowCards.filter(card => (activeFilter === 'all' || card.type === activeFilter) && (!query || (card.store + ' ' + card.regularOrderName).toLowerCase().includes(query)));
   stageNames.forEach(stage => {
-    const orders = visible.filter(order => order.stage === stage);
-    document.getElementById('stage-' + stage).innerHTML = orders.length ? orders.map(card).join('') : '<div class="empty-state">No matching Essentials orders</div>';
-    document.querySelector('[data-stage="' + stage + '"] header>b').textContent = orders.length;
+    const entries = visible.filter(card => card.stage === stage);
+    document.getElementById('stage-' + stage).innerHTML = entries.length ? entries.map(card).join('') : '<div class="empty-state">No matching Essentials lines</div>';
+    document.querySelector('[data-stage="' + stage + '"] header>b').textContent = entries.length;
   });
   document.querySelectorAll('[data-label]').forEach(button => button.addEventListener('click', () => openLabel(button.dataset.label)));
-  document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => handleAction(button.dataset.action)));
 }
 
 function openLabel(id){
-  const order = previewOrders.find(item => item.id === id);
-  if(!order) return;
-  document.getElementById('labelStore').textContent = order.store.toUpperCase();
-  document.getElementById('labelOrder').textContent = order.id;
-  document.getElementById('labelCases').textContent = order.cases + ' CASES';
-  document.getElementById('labelTitle').textContent = order.type === 'retail' ? 'Retail Essentials' : 'Other Essentials';
+  const entry = shadowCards.find(card => card.id === id);
+  if(!entry) return;
+  document.getElementById('labelStore').textContent = displayStore(entry.store).toUpperCase();
+  document.getElementById('labelOrder').textContent = entry.regularOrderName || 'REGULAR ORDER';
+  document.getElementById('labelCases').textContent = entry.caseCount + ' ORDERED';
+  document.getElementById('labelTitle').textContent = entry.type === 'retail' ? 'Retail Essentials' : 'Other Essentials';
   document.getElementById('labelModal').hidden = false;
 }
 
-function handleAction(id){
-  const order = previewOrders.find(item => item.id === id);
-  if(!order) return;
-  if(order.stage === 'labeled'){ openLabel(id); return; }
-  showToast('Preview only — no order, route, scan, or printer state changed.');
+function showError(message){
+  const loading = document.getElementById('loadingState');
+  loading.classList.add('error'); loading.textContent = message;
 }
 
-function showToast(message){
-  const toast = document.getElementById('toast');
-  toast.textContent = message; toast.classList.add('show');
-  clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+async function loadShadowQueue(){
+  try{
+    const response = await fetch('/api/essentials-shadow', { cache:'no-store', credentials:'same-origin' });
+    const result = await response.json();
+    if(!response.ok || result.error) throw new Error(result.error || 'Could not load Essentials shadow view.');
+    if(result.mode !== 'shadow' || result.mutationsEnabled !== false) throw new Error('Shadow-mode safety check failed.');
+    shadowCards = Array.isArray(result.cards) ? result.cards : [];
+    updateSummary(); render();
+    document.getElementById('loadingState').hidden = true;
+    document.getElementById('board').hidden = false;
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date(result.generatedAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+  }catch(error){
+    console.warn('Essentials shadow view unavailable:', error.message);
+    showError('Regular-order data is unavailable in this isolated local preview. No operational state was changed.');
+  }
 }
 
 document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => {
   activeFilter = button.dataset.filter;
-  document.querySelectorAll('.filter').forEach(item => item.classList.toggle('active', item === button));
-  render();
+  document.querySelectorAll('.filter').forEach(item => item.classList.toggle('active', item === button)); render();
 }));
 document.getElementById('searchInput').addEventListener('input', render);
 document.getElementById('closeModal').addEventListener('click', () => { document.getElementById('labelModal').hidden = true; });
-document.getElementById('confirmPreview').addEventListener('click', () => { document.getElementById('labelModal').hidden = true; showToast('3×1 label layout noted for review. Nothing was printed.'); });
+document.getElementById('confirmPreview').addEventListener('click', () => { document.getElementById('labelModal').hidden = true; });
 document.getElementById('labelModal').addEventListener('click', event => { if(event.target.id === 'labelModal') event.currentTarget.hidden = true; });
-render();
+loadShadowQueue();
