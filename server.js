@@ -40,6 +40,14 @@ const LOGO_BLACK_PATH = path.join(__dirname, "public", "assets", "logo-black.png
 const RECEIVING_APP_URL =
   process.env.RECEIVING_APP_URL || "https://hummusfit-receiving-production.up.railway.app";
 
+// Preview-only boundary for the future Essentials workflow. It remains
+// completely unreachable unless explicitly enabled in the environment;
+// production does not set this flag. Keep these files outside /public so
+// express.static cannot accidentally expose the preview around this gate.
+const ESSENTIALS_ROUTE_BOARD_ENABLED =
+  process.env.ESSENTIALS_ROUTE_BOARD_ENABLED === "true";
+const ESSENTIALS_PREVIEW_DIR = path.join(__dirname, "essentials-preview");
+
 // Non-fridge supply items (paper goods, plastic goods, spoons, garbage
 // bags, etc.) live on the other side of the building from the fridge/
 // backstock area and will never appear in the blueprint lane feed — they
@@ -3539,6 +3547,16 @@ app.get("/out-of-state", (req, res) => {
 });
 app.get("/sku-coverage", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "sku-coverage.html"));
+});
+app.get("/essentials", (req, res) => {
+  if (!ESSENTIALS_ROUTE_BOARD_ENABLED) return res.sendStatus(404);
+  res.sendFile(path.join(ESSENTIALS_PREVIEW_DIR, "index.html"));
+});
+app.get("/essentials-preview/:asset", (req, res) => {
+  if (!ESSENTIALS_ROUTE_BOARD_ENABLED) return res.sendStatus(404);
+  const allowedAssets = new Set(["styles.css", "app.js"]);
+  if (!allowedAssets.has(req.params.asset)) return res.sendStatus(404);
+  res.sendFile(path.join(ESSENTIALS_PREVIEW_DIR, req.params.asset));
 });
 // Standalone Web Bluetooth diagnostic for the Phomemo M260 — NOT wired
 // into the real picking/crate-label flow yet. Connects, enumerates

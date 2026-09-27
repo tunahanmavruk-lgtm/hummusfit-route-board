@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#245b57">
+  <title>Hummus Fit Essentials — Route Board Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/essentials-preview/styles.css">
+</head>
+<body>
+  <nav class="appbar" aria-label="HF Logistics navigation">
+    <a class="brand" href="https://logistics.myhummusfit.com/">
+      <span class="logo"><img src="/assets/logo.png" alt="Hummus Fit"></span>
+      <span><strong>HF Logistics</strong><small>Warehouse operations</small></span>
+    </a>
+    <div class="nav-tabs">
+      <span>Long Island</span>
+      <span>Out-of-state</span>
+      <span>Order picking</span>
+      <span class="active">Essentials</span>
+    </div>
+    <span class="preview-pill">Preview · offline data</span>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Hummus Fit Essentials</p>
+      <h1>Cases ready for the next route</h1>
+      <p class="subtitle">A separate warehouse lane for retail goods and store supplies.</p>
+    </div>
+    <div class="cycle-card" aria-label="Current ordering cycle">
+      <span>Current cycle</span>
+      <strong>Sep 21 – Oct 4</strong>
+      <small>Route week · Oct 5</small>
+    </div>
+  </header>
+
+  <main>
+    <section class="separation-banner" aria-label="Food-order separation notice">
+      <span class="shield" aria-hidden="true">✓</span>
+      <div>
+        <strong>Essentials only — food orders never appear here.</strong>
+        <p>This queue, its scans, and its 3×1 labels stay separate from meal picking and crate labels.</p>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="Queue controls">
+      <div class="filter-group" role="group" aria-label="Essentials type">
+        <button class="filter active" data-filter="all">All Essentials <b>7</b></button>
+        <button class="filter" data-filter="retail">Retail Essentials <b>4</b></button>
+        <button class="filter" data-filter="other">Other Essentials <b>3</b></button>
+      </div>
+      <label class="search">
+        <span>Search</span>
+        <input id="searchInput" type="search" placeholder="Store or order" autocomplete="off">
+      </label>
+    </section>
+
+    <section class="summary-grid" aria-label="Essentials overview">
+      <article><span>Open orders</span><strong>7</strong><small>Across 6 stores</small></article>
+      <article><span>Cases requested</span><strong>26</strong><small>18 retail · 8 supplies</small></article>
+      <article><span>Ready to route</span><strong>8</strong><small>Cases labeled and staged</small></article>
+      <article class="attention"><span>Needs attention</span><strong>1</strong><small>Case count exception</small></article>
+    </section>
+
+    <section class="board" aria-label="Essentials workflow board">
+      <div class="stage" data-stage="new">
+        <header><div><span class="stage-step">1</span><h2>New Orders</h2></div><b>2</b></header>
+        <div class="stage-list" id="stage-new"></div>
+      </div>
+      <div class="stage" data-stage="picking">
+        <header><div><span class="stage-step">2</span><h2>Picking</h2></div><b>2</b></header>
+        <div class="stage-list" id="stage-picking"></div>
+      </div>
+      <div class="stage" data-stage="labeled">
+        <header><div><span class="stage-step">3</span><h2>Labeled</h2></div><b>1</b></header>
+        <div class="stage-list" id="stage-labeled"></div>
+      </div>
+      <div class="stage" data-stage="ready">
+        <header><div><span class="stage-step">4</span><h2>Ready to Route</h2></div><b>2</b></header>
+        <div class="stage-list" id="stage-ready"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="labelModal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="labelTitle">
+      <button class="modal-close" id="closeModal" aria-label="Close">×</button>
+      <p class="eyebrow">3×1 Zebra label preview</p>
+      <h2 id="labelTitle">Retail Essentials</h2>
+      <div class="label-preview">
+        <div><small>HF ESSENTIALS</small><strong id="labelStore">LYNBROOK</strong></div>
+        <div class="label-meta"><span id="labelOrder">ES-1042</span><b id="labelCases">4 CASES</b></div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <p class="modal-note">Preview only. No printer request is sent from this isolated mockup.</p>
+      <button class="primary full" id="confirmPreview">Looks good</button>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/essentials-preview/app.js"></script>
+</body>
+</html>
