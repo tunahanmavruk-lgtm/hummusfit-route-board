@@ -31,6 +31,21 @@ test('normalizes exact Shopify collection handles and preserves explicit precede
   }), 'retail');
 });
 
+test('excludes apparel even when Shopify metadata is assigned incorrectly', () => {
+  for (const title of [
+    'Hummus Fit Crop Hoodie',
+    'Logo T-Shirt',
+    'Performance Hat',
+    'Training Leggings',
+  ]) {
+    assert.equal(essentialsTypeFor({
+      title,
+      productTags: ['Retail Essentials'],
+      productCollections: [{ title: 'Retail Essentials', handle: 'retail-essentials' }],
+    }), null, `${title} must never enter an Essentials catalog`);
+  }
+});
+
 test('builds a combined read-only shadow queue without removing or mutating regular lines', () => {
   const regularOrders = {
     lynbrook: {

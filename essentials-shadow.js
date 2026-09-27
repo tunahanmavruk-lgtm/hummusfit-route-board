@@ -1,4 +1,4 @@
-const LEGACY_RETAIL_ESSENTIALS = /\b(hoodie|apparel|gift card|crop hoodie|t-?shirt|sweatshirt|hat|cap)\b/i;
+const EXCLUDED_APPAREL = /\b(hoodie|apparel|clothing|crop hoodie|t-?shirt|tee|sweatshirt|sweater|hat|cap|beanie|jacket|shorts|pants|leggings|socks)\b/i;
 const LEGACY_OTHER_ESSENTIALS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|container|glove|sanitizer|soap|towel|cleaning)\b/i;
 
 function normalizeClassification(value) {
@@ -12,6 +12,13 @@ function normalizeClassification(value) {
 }
 
 function essentialsTypeFor(item) {
+  const searchable = `${item && item.title || ""} ${item && item.sku || ""}`;
+
+  // Apparel never belongs on the Essentials board. This guard takes
+  // precedence over Shopify tags/collections so an accidental catalog
+  // assignment cannot send clothing through the warehouse supply workflow.
+  if (EXCLUDED_APPAREL.test(searchable)) return null;
+
   const explicitClassifications = [
     ...(Array.isArray(item && item.productTags) ? item.productTags : []),
     ...(Array.isArray(item && item.productCollections)
@@ -31,8 +38,6 @@ function essentialsTypeFor(item) {
 
   // Compatibility only for the small set of legacy supplies that were
   // already recognized before Shopify classification metadata was available.
-  const searchable = `${item && item.title || ""} ${item && item.sku || ""}`;
-  if (LEGACY_RETAIL_ESSENTIALS.test(searchable)) return "retail";
   if (LEGACY_OTHER_ESSENTIALS.test(searchable)) return "other";
   return null;
 }
