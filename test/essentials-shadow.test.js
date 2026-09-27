@@ -48,12 +48,17 @@ test('builds a combined read-only shadow queue without removing or mutating regu
 
   assert.deepEqual(regularOrders, before, 'regular orders and every line must remain byte-for-byte equivalent');
   assert.equal(regularOrders.lynbrook.lineItems.length, 3, 'food and Essentials lines stay together on the regular order');
-  assert.equal(cards.length, 2);
-  assert.deepEqual(cards.map(card => card.type).sort(), ['other', 'retail']);
-  assert.equal(cards.reduce((sum, card) => sum + card.caseCount, 0), 5);
-  assert.ok(cards.every(card => card.stage === 'new'));
-  const sourceEssential = regularOrders.lynbrook.lineItems.find(item => item.sku === cards[0].items[0].sku);
-  assert.notEqual(cards[0].items[0], sourceEssential, 'shadow results must be copies, never live line references');
+  assert.equal(cards.length, 1, 'one regular store/order must yield one combined Essentials card');
+  const [card] = cards;
+  assert.equal(card.regularOrderId, 'gid://shopify/Order/1');
+  assert.equal(card.regularOrderName, '#1001');
+  assert.deepEqual(card.types.sort(), ['other', 'retail']);
+  assert.deepEqual(card.items.map(item => item.type).sort(), ['other', 'retail']);
+  assert.equal(card.items.some(item => item.sku === 'FOOD-1'), false, 'food is excluded only from the derived view');
+  assert.equal(card.caseCount, 5, 'Retail and Other quantities are combined on one operational card');
+  assert.equal(card.stage, 'new');
+  const sourceEssential = regularOrders.lynbrook.lineItems.find(item => item.sku === card.items[0].sku);
+  assert.notEqual(card.items[0], sourceEssential, 'shadow results must be copies, never live line references');
 });
 
 test('derives stages and exceptions from a read-only picking snapshot', () => {
@@ -61,15 +66,19 @@ test('derives stages and exceptions from a read-only picking snapshot', () => {
     farmingdale: {
       orderId: 'gid://shopify/Order/2',
       orderName: '#1002',
-      lineItems: [{ title: 'Paper Cups — Case', sku: 'SUP-2', quantity: 4 }],
+      lineItems: [
+        { title: 'Protein Cold Brew', sku: 'DRINK-2', quantity: 2, productTags: ['Retail Essentials'] },
+        { title: 'Paper Cups — Case', sku: 'SUP-2', quantity: 4, productTags: ['Other Essentials'] },
+      ],
     },
   };
-  const itemKey = 'Paper Cups — Case::SUP-2';
+  const retailKey = 'Protein Cold Brew::DRINK-2';
+  const otherKey = 'Paper Cups — Case::SUP-2';
   const picking = {
     farmingdale: {
-      itemStatus: { [itemKey]: 'partial' },
-      itemPickedQty: { [itemKey]: 3 },
-      itemCrateNumber: { [itemKey]: 1 },
+      itemStatus: { [retailKey]: 'picked', [otherKey]: 'partial' },
+      itemPickedQty: { [otherKey]: 3 },
+      itemCrateNumber: { [retailKey]: 1, [otherKey]: 1 },
       closedCrates: [1],
     },
   };
@@ -77,6 +86,7 @@ test('derives stages and exceptions from a read-only picking snapshot', () => {
   const [card] = buildEssentialsShadow(orders, picking);
   assert.deepEqual(picking, before);
   assert.equal(card.stage, 'labeled');
-  assert.equal(card.progress, 75);
+  assert.equal(card.progress, 83, 'progress is combined across Retail and Other Essentials');
   assert.equal(card.hasException, true);
+  assert.deepEqual(card.types.sort(), ['other', 'retail']);
 });

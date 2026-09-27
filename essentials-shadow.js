@@ -93,34 +93,32 @@ function progressForItems(record, indexedItems) {
 function buildEssentialsShadow(byStopName, pickingByStop = {}, routeNameForStop = () => "") {
   const cards = [];
   Object.entries(byStopName || {}).forEach(([stopKey, order]) => {
-    const grouped = { retail: [], other: [] };
+    const indexedItems = [];
     (order.lineItems || []).forEach((item, index) => {
       const type = essentialsTypeFor(item);
-      if (type) grouped[type].push({ item, index });
+      if (type) indexedItems.push({ item, index, type });
     });
-    ["retail", "other"].forEach((type) => {
-      const indexedItems = grouped[type];
-      if (!indexedItems.length) return;
-      const record = pickingByStop[stopKey] || {};
-      const { progress, hasException } = progressForItems(record, indexedItems);
-      cards.push({
-        id: `${order.orderId || order.orderName || stopKey}::${type}`,
-        stopKey,
-        store: stopKey,
-        routeName: routeNameForStop(stopKey) || "Regular route",
-        regularOrderId: order.orderId,
-        regularOrderName: order.orderName,
+    if (!indexedItems.length) return;
+    const record = pickingByStop[stopKey] || {};
+    const { progress, hasException } = progressForItems(record, indexedItems);
+    cards.push({
+      id: order.orderId || order.orderName || stopKey,
+      stopKey,
+      store: stopKey,
+      routeName: routeNameForStop(stopKey) || "Regular route",
+      regularOrderId: order.orderId,
+      regularOrderName: order.orderName,
+      types: [...new Set(indexedItems.map((entry) => entry.type))],
+      caseCount: indexedItems.reduce((sum, entry) => sum + (Number(entry.item.quantity) || 0), 0),
+      stage: stageForItems(record, indexedItems),
+      progress,
+      hasException,
+      items: indexedItems.map(({ item, type }) => ({
+        title: item.title,
+        quantity: item.quantity,
+        sku: item.sku || "",
         type,
-        caseCount: indexedItems.reduce((sum, entry) => sum + (Number(entry.item.quantity) || 0), 0),
-        stage: stageForItems(record, indexedItems),
-        progress,
-        hasException,
-        items: indexedItems.map(({ item }) => ({
-          title: item.title,
-          quantity: item.quantity,
-          sku: item.sku || "",
-        })),
-      });
+      })),
     });
   });
   return cards;

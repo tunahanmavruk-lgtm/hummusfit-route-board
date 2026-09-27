@@ -26,9 +26,18 @@ test('keeps the preview outside the food order, scan, route, and print contracts
     '/api/start-route', '/api/crate-label', '127.0.0.1:8877', 'window.print(',
   ]) assert.ok(!combined.includes(forbidden), `preview must not call ${forbidden}`);
   assert.match(script, /fetch\('\/api\/essentials-shadow'/);
+  assert.equal((script.match(/fetch\s*\(/g) || []).length, 1, 'filters must not make additional server requests');
   assert.doesNotMatch(script, /method\s*:\s*['"]POST['"]/);
   assert.match(html, /Shadow mode · read only/);
   assert.match(combined, /disabled>Actions locked · Shadow mode/);
+});
+
+test('category filters narrow copied item rows without creating operational cards', () => {
+  const script = read('essentials-preview/app.js');
+  assert.match(script, /visibleItemsFor = entry => activeFilter === 'all' \? entry\.items : entry\.items\.filter/);
+  assert.match(script, /card\.items\.some\(item => item\.type === activeFilter\)/);
+  assert.match(script, /filtered ordered qty/);
+  assert.doesNotMatch(script, /\/api\/essentials-shadow\?/);
 });
 
 test('shows the approved simple Essentials-only warehouse workflow', () => {
