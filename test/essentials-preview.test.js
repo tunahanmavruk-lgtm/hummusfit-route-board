@@ -56,3 +56,12 @@ test('the shadow endpoint cannot call persistent state or current operational ha
   assert.doesNotMatch(endpoint, /loadState\(|saveState\(|getPickingRecord\(|shopifyGraphQL\(|fulfillShopifyOrder\(/);
   assert.doesNotMatch(endpoint, /req\.body|app\.post/);
 });
+
+test('both local and B2B Shopify order queries carry explicit Essentials metadata', () => {
+  const server = read('server.js');
+  const queryShape = /product\s*\{\s*tags\s*collections\(first: 10\)\s*\{\s*nodes\s*\{\s*title handle\s*\}\s*\}\s*featuredImage\s*\{\s*url\s*\}\s*\}/g;
+  const queryMatches = server.match(queryShape) || [];
+  assert.equal(queryMatches.length, 2, 'local and B2B order queries must both fetch tags and collections');
+  assert.equal((server.match(/productTags: \[\.\.\.\(node\.variant\?\.product\?\.tags \|\| \[\]\)\]/g) || []).length, 2);
+  assert.equal((server.match(/productCollections: \(node\.variant\?\.product\?\.collections\?\.nodes \|\| \[\]\)/g) || []).length, 2);
+});

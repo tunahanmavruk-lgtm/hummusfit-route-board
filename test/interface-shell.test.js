@@ -63,7 +63,7 @@ test('uses Shopify barcodes without changing saved picking keys and alarms on wr
   assert.match(html, /osc\.type = 'square'/);
   assert.match(html, /item\.scanCode \|\| item\.sku/);
   assert.match(html, /item\.scanCodes/);
-  assert.match(server, /variant \{ barcode image/);
+  assert.match(server, /variant\s*\{\s*barcode\s*image\s*\{\s*url\s*\}/);
   assert.match(server, /scanCode: \(node\.variant\?\.barcode \|\| node\.sku \|\| ""\)\.trim\(\)/);
   assert.match(server, /scanCodes: barcodeCodesForProduct\(title, node\.variant\?\.barcode, node\.sku\)/);
   assert.match(server, /barcodeMatches\(code, expectedCodes\)/);

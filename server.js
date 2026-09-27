@@ -1394,7 +1394,15 @@ async function refreshOrdersCache() {
                     quantity
                     sku
                     variantTitle
-                    variant { barcode image { url } product { featuredImage { url } } }
+                    variant {
+                      barcode
+                      image { url }
+                      product {
+                        tags
+                        collections(first: 10) { nodes { title handle } }
+                        featuredImage { url }
+                      }
+                    }
                   }
                 }
               }
@@ -1463,6 +1471,11 @@ async function refreshOrdersCache() {
             sku: node.sku,
             scanCode: (node.variant?.barcode || node.sku || "").trim(),
             scanCodes: barcodeCodesForProduct(title, node.variant?.barcode, node.sku),
+            productTags: [...(node.variant?.product?.tags || [])],
+            productCollections: (node.variant?.product?.collections?.nodes || []).map((collection) => ({
+              title: collection.title,
+              handle: collection.handle,
+            })),
             imageUrl,
           };
         }
@@ -1549,7 +1562,15 @@ async function fetchB2BStopOrders(now = Date.now()) {
                     quantity
                     sku
                     variantTitle
-                    variant { barcode image { url } product { featuredImage { url } } }
+                    variant {
+                      barcode
+                      image { url }
+                      product {
+                        tags
+                        collections(first: 10) { nodes { title handle } }
+                        featuredImage { url }
+                      }
+                    }
                   }
                 }
               }
@@ -1624,6 +1645,11 @@ async function fetchB2BStopOrders(now = Date.now()) {
             sku: node.sku,
             scanCode: (node.variant?.barcode || node.sku || "").trim(),
             scanCodes: barcodeCodesForProduct(title, node.variant?.barcode, node.sku),
+            productTags: [...(node.variant?.product?.tags || [])],
+            productCollections: (node.variant?.product?.collections?.nodes || []).map((collection) => ({
+              title: collection.title,
+              handle: collection.handle,
+            })),
             imageUrl,
           };
         }

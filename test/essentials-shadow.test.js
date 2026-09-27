@@ -3,10 +3,32 @@ const assert = require('node:assert/strict');
 
 const { buildEssentialsShadow, essentialsTypeFor } = require('../essentials-shadow');
 
-test('classifies Retail and Other Essentials while leaving food out of the shadow view', () => {
-  assert.equal(essentialsTypeFor({ title: 'Hummus Fit Crop Hoodie' }), 'retail');
-  assert.equal(essentialsTypeFor({ title: 'Black Plastic Forks — Case' }), 'other');
+test('uses exact Shopify classifications for drinks, snacks, and store supplies', () => {
+  assert.equal(essentialsTypeFor({
+    title: 'Protein Cold Brew',
+    productCollections: [{ title: 'Retail Essentials', handle: 'retail-essentials' }],
+  }), 'retail');
+  assert.equal(essentialsTypeFor({
+    title: 'Chocolate Protein Crisps',
+    productTags: ['featured', 'Retail Essentials'],
+  }), 'retail');
+  assert.equal(essentialsTypeFor({
+    title: 'Straws and Cups — Case',
+    productCollections: [{ title: 'Other Essentials', handle: 'other-essentials' }],
+  }), 'other');
   assert.equal(essentialsTypeFor({ title: 'Chicken Stir Fry' }), null);
+  assert.equal(essentialsTypeFor({ title: 'Retail-Style Frozen Chicken Bowl' }), null, 'generic retail wording must not opt food into Essentials');
+});
+
+test('normalizes exact Shopify collection handles and preserves explicit precedence', () => {
+  assert.equal(essentialsTypeFor({
+    title: 'Uninformative Product Name',
+    productCollections: [{ title: 'Seasonal', handle: 'retail_essentials' }],
+  }), 'retail');
+  assert.equal(essentialsTypeFor({
+    title: 'Paper Cups',
+    productTags: ['Other Essentials', 'Retail Essentials'],
+  }), 'retail');
 });
 
 test('builds a combined read-only shadow queue without removing or mutating regular lines', () => {
@@ -16,8 +38,8 @@ test('builds a combined read-only shadow queue without removing or mutating regu
       orderName: '#1001',
       lineItems: [
         { title: 'Chicken Stir Fry', sku: 'FOOD-1', quantity: 12 },
-        { title: 'Hummus Fit Crop Hoodie', sku: 'RET-1', quantity: 2 },
-        { title: 'Black Plastic Forks — Case', sku: 'SUP-1', quantity: 3 },
+        { title: 'Protein Cold Brew', sku: 'DRINK-1', quantity: 2, productCollections: [{ title: 'Retail Essentials', handle: 'retail-essentials' }] },
+        { title: 'Black Plastic Forks — Case', sku: 'SUP-1', quantity: 3, productTags: ['Other Essentials'] },
       ],
     },
   };
@@ -30,7 +52,8 @@ test('builds a combined read-only shadow queue without removing or mutating regu
   assert.deepEqual(cards.map(card => card.type).sort(), ['other', 'retail']);
   assert.equal(cards.reduce((sum, card) => sum + card.caseCount, 0), 5);
   assert.ok(cards.every(card => card.stage === 'new'));
-  assert.notEqual(cards[0].items[0], regularOrders.lynbrook.lineItems[1], 'shadow results must be copies, never live line references');
+  const sourceEssential = regularOrders.lynbrook.lineItems.find(item => item.sku === cards[0].items[0].sku);
+  assert.notEqual(cards[0].items[0], sourceEssential, 'shadow results must be copies, never live line references');
 });
 
 test('derives stages and exceptions from a read-only picking snapshot', () => {

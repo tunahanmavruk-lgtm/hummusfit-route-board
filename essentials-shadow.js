@@ -1,10 +1,39 @@
-const RETAIL_ESSENTIALS = /\b(hoodie|apparel|gift card|crop hoodie|t-?shirt|sweatshirt|hat|cap|shaker|tote|retail)\b/i;
-const OTHER_ESSENTIALS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|container|glove|sanitizer|soap|towel|cleaning)\b/i;
+const LEGACY_RETAIL_ESSENTIALS = /\b(hoodie|apparel|gift card|crop hoodie|t-?shirt|sweatshirt|hat|cap)\b/i;
+const LEGACY_OTHER_ESSENTIALS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|container|glove|sanitizer|soap|towel|cleaning)\b/i;
+
+function normalizeClassification(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function essentialsTypeFor(item) {
+  const explicitClassifications = [
+    ...(Array.isArray(item && item.productTags) ? item.productTags : []),
+    ...(Array.isArray(item && item.productCollections)
+      ? item.productCollections.flatMap((collection) =>
+          typeof collection === "string"
+            ? [collection]
+            : [collection && collection.title, collection && collection.handle]
+        )
+      : []),
+  ].map(normalizeClassification);
+
+  // Shopify classification is authoritative. Exact normalized matches keep
+  // ordinary drinks, snacks, and frozen items out unless merchandising has
+  // explicitly placed them in an Essentials collection or added the tag.
+  if (explicitClassifications.includes("retail essentials")) return "retail";
+  if (explicitClassifications.includes("other essentials")) return "other";
+
+  // Compatibility only for the small set of legacy supplies that were
+  // already recognized before Shopify classification metadata was available.
   const searchable = `${item && item.title || ""} ${item && item.sku || ""}`;
-  if (RETAIL_ESSENTIALS.test(searchable)) return "retail";
-  if (OTHER_ESSENTIALS.test(searchable)) return "other";
+  if (LEGACY_RETAIL_ESSENTIALS.test(searchable)) return "retail";
+  if (LEGACY_OTHER_ESSENTIALS.test(searchable)) return "other";
   return null;
 }
 
