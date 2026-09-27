@@ -12,9 +12,9 @@ test('keeps the Essentials preview disabled unless explicitly enabled', () => {
   assert.match(server, /if \(!ESSENTIALS_ROUTE_BOARD_ENABLED\) return res\.sendStatus\(404\)/);
   assert.match(server, /app\.get\("\/api\/essentials-shadow"/);
   assert.match(server, /ESSENTIALS_PREVIEW_DIR = path\.join\(__dirname, "essentials-preview"\)/);
-  assert.doesNotMatch(read('public/index.html'), /href="\/essentials"/);
-  assert.doesNotMatch(read('public/out-of-state.html'), /href="\/essentials"/);
-  assert.doesNotMatch(read('public/picking.html'), /href="\/essentials"/);
+  for (const file of ['public/index.html', 'public/out-of-state.html', 'public/picking.html']) {
+    assert.match(read(file), /href="\/essentials" data-essentials-nav hidden/);
+  }
 });
 
 test('keeps the preview outside the food order, scan, route, and print contracts', () => {

@@ -23,6 +23,19 @@ test('uses one HF Logistics shell across driver and picker interfaces', () => {
   }
 });
 
+test('reveals the Essentials navigation only when its feature-gated route is live', () => {
+  const navScript = read('public/essentials-nav.js');
+  for (const file of ['public/index.html', 'public/out-of-state.html', 'public/picking.html']) {
+    const html = read(file);
+    assert.match(html, /<a href="\/essentials" data-essentials-nav hidden>Essentials<\/a>/);
+    assert.match(html, /<script defer src="\/essentials-nav\.js"><\/script>/);
+  }
+  assert.match(navScript, /fetch\('\/essentials', \{ method: 'HEAD'/);
+  assert.match(navScript, /if \(!response\.ok\) return/);
+  assert.match(navScript, /link\.hidden = false/);
+  assert.doesNotMatch(navScript, /method:\s*['"]POST/);
+});
+
 test('retains the operational route-board hooks after the visual refactor', () => {
   for (const file of ['public/index.html', 'public/out-of-state.html']) {
     const html = read(file);
