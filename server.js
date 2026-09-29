@@ -641,11 +641,9 @@ const BOUNCIE_FLEET = [
   { name: "#8 2016 Ford Transit", imei: "866016061363304" },
   { name: "#4 Mercedes Orange", imei: "866392061981985" },
   { name: "Ram", imei: "866392062048891" },
-  // This device is still present in the Bouncie account, but the current
-  // OAuth authorization does not include it in GET /v1/vehicles. Keep its
-  // stable IMEI in the dispatch fleet so a partial Bouncie response can
-  // never make the van disappear from either route selector.
-  { name: "#5 White Ford Transit", imei: "865612072360866" },
+  // Keep the stable live Bouncie identifier in the dispatch fallback so a
+  // temporary API failure cannot make this van disappear from route selectors.
+  { name: "#5 White Ford Transit", imei: "865612075691275" },
 ];
 
 const FLEET = BOUNCIE_FLEET.map((vehicle) => vehicle.name);

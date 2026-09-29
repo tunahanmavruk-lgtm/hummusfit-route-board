@@ -96,13 +96,15 @@ test("keeps fulfilled orders visible as locked delivery and receiving snapshots"
   assert.doesNotMatch(server, /delete ordersCache\.byStopName\[key\]/);
 });
 
-test("uses Bouncie names plus the API-omitted #5 as the ten-vehicle fleet source of truth", () => {
+test("uses current Bouncie names and identifiers as the ten-vehicle fleet source of truth", () => {
   for (const name of [
     "#1 Mercedes Blue", "#3 Mercedes Small2", "#2 Mercedes Small",
     "#6 Black Ford", "#9 Transit 350 - (1)", "#7 White Mercedes",
     "#8 2016 Ford Transit", "#4 Mercedes Orange", "Ram", "#5 White Ford Transit",
   ]) assert.ok(server.includes(`name: "${name}"`), `missing ${name}`);
   assert.match(server, /"Darian — Ford Transit": "#5 White Ford Transit"/);
+  assert.match(server, /name: "#5 White Ford Transit", imei: "865612075691275"/);
+  assert.doesNotMatch(server, /865612072360866/);
   assert.match(localBoard, /syncFleetFromBouncie/);
   assert.match(outOfStateBoard, /fetch\('\/api\/van-status'\)/);
   assert.match(localBoard, /liveNames\.concat\(fleetData\)/);
