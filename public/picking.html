@@ -428,6 +428,23 @@
     color: var(--dim);
   }
   .scan-btn:active{ transform: scale(0.9); }
+  .case-add-btn{
+    display:block;
+    width:100%;
+    margin-top:9px;
+    padding:11px 12px;
+    border:0;
+    border-radius:10px;
+    background:var(--orange);
+    color:#fff;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .case-add-btn:disabled{ opacity:.35; cursor:default; }
 
   .finish-btn{
     width:100%;
@@ -2005,8 +2022,8 @@
       if(status === 'picked'){ label = 'Picked'; }
       else if(status === 'missing'){ label = 'Missing'; }
       else if(status === 'partial'){ label = 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked'; }
-      else if(scannedSoFar > 0){ label = 'Scanned ' + scannedSoFar + ' of ' + item.quantity + ' — keep scanning'; }
-      else { label = 'Tap when picked'; }
+      else if(scannedSoFar > 0){ label = (pickingWorkflow === 'essentials' ? 'Cases labeled ' : 'Scanned ') + scannedSoFar + ' of ' + item.quantity + (pickingWorkflow === 'essentials' ? '' : ' — keep scanning'); }
+      else { label = pickingWorkflow === 'essentials' ? 'Tap below for each physical case' : 'Tap when picked'; }
       var isScanInProgress = status === 'not_picked' && scannedSoFar > 0;
       var qtyDisplay = (status === 'partial' && pickedQty !== null) ? (pickedQty + '/' + item.quantity)
         : (isScanInProgress ? (scannedSoFar + '/' + item.quantity) : item.quantity);
@@ -2019,10 +2036,12 @@
           '<div class="item-info">' +
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
-            (isLocked ? '' : '<div class="partial-link" data-partial-idx="' + idx + '">Only had some? Enter partial quantity</div>') +
+            (isLocked ? '' : (pickingWorkflow === 'essentials'
+              ? '<button class="case-add-btn" data-case-idx="' + idx + '"' + (status === 'picked' ? ' disabled' : '') + '>+ Label One Case</button>'
+              : '<div class="partial-link" data-partial-idx="' + idx + '">Only had some? Enter partial quantity</div>')) +
           '</div>' +
-          (isLocked ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
-          '<div class="tap-btn" data-idx="' + idx + '">' + icon + '</div>' +
+          (isLocked || pickingWorkflow === 'essentials' ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
+          (pickingWorkflow === 'essentials' ? '' : '<div class="tap-btn" data-idx="' + idx + '">' + icon + '</div>') +
         '</div>';
       if(status === 'missing' || status === 'partial'){
         html +=
@@ -2182,6 +2201,39 @@
     document.querySelectorAll('[data-scan-idx]').forEach(function(btn){
       btn.addEventListener('click', function(){
         openScanner(parseInt(btn.dataset.scanIdx, 10));
+      });
+    });
+
+    document.querySelectorAll('[data-case-idx]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if(!requirePickerSelected()) return;
+        var itemIndex = parseInt(btn.dataset.caseIdx, 10);
+        btn.disabled = true;
+        btn.textContent = 'Labeling…';
+        fetch('/api/picking-case', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body:workflowBody({ stopName:orderDetail.stopName, itemIndex:itemIndex })
+        }).then(function(r){
+          return r.json().then(function(data){ return { ok:r.ok, data:data }; });
+        }).then(function(result){
+          if(!result.ok || result.data.error) throw new Error(result.data.error || 'Could not add this case.');
+          orderDetail.itemStatus = result.data.itemStatus;
+          orderDetail.itemScannedCount = result.data.itemScannedCount;
+          orderDetail.itemCrateNumber = {};
+          orderDetail.itemCrateBreakdown = {};
+          printEssentialsCaseLabel(
+            result.data.itemIndex,
+            result.data.scannedCount,
+            result.data.totalQty,
+            result.data.caseLabelJobId
+          );
+          showScanSuccess(result.data.itemTitle, result.data.scannedCount, result.data.totalQty);
+          renderOrder();
+        }).catch(function(error){
+          alert(error.message);
+          renderOrder();
+        });
       });
     });
 

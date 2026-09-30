@@ -293,6 +293,7 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/optimize-route",
   "/api/start-route",
   "/api/picking-item",
+  "/api/picking-case",
   "/api/picking-scan",
   "/api/picking-new-crate",
   "/api/picking-reopen-crate",
@@ -2397,6 +2398,80 @@ app.post("/api/picking-item", async (req, res) => {
       itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
       itemCrateNumber: toIndexKeyedDict(record.itemCrateNumber, order.lineItems),
       itemCrateBreakdown: toIndexKeyedDict(record.itemCrateBreakdown, order.lineItems),
+      currentCrateNumber: record.currentCrateNumber,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Essentials are shipped as their own physical cases, not packed into route
+// crates. Most warehouse cases do not have manufacturer barcodes, so this
+// endpoint is the deliberate one-tap equivalent of one successful scan:
+// exactly one case is counted and the browser receives one idempotent label
+// job ID. It can never mark the full ordered quantity in a single tap.
+app.post("/api/picking-case", async (req, res) => {
+  try {
+    const { stopName, itemIndex } = req.body;
+    if (!stopName || itemIndex === undefined) {
+      return res.status(400).json({ error: "stopName and itemIndex required" });
+    }
+    const cache = await fetchTodaysStopOrders();
+    const key = pickingKeyFor(stopName);
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    if (workflow !== "essentials") {
+      return res.status(400).json({ error: "Manual case taps are only available in Essentials Picking." });
+    }
+    if (!record.pickedBy) {
+      return res.status(400).json({ error: "Select who's picking this order first." });
+    }
+    const item = order.lineItems[Number(itemIndex)];
+    if (!item) return res.status(400).json({ error: "Invalid itemIndex for this order." });
+    const itemKey = lineItemKey(item);
+    const currentStatus = readItemState(record.itemStatus, item, Number(itemIndex)) || "not_picked";
+    const priorCount = Number(readItemState(record.itemScannedCount, item, Number(itemIndex))) || 0;
+    if (currentStatus === "missing" || currentStatus === "partial") {
+      return res.status(409).json({ error: "This item is already marked short or missing. Reopen it before adding a case." });
+    }
+    if (currentStatus === "picked" || priorCount >= item.quantity) {
+      return res.status(409).json({ error: "All ordered cases for this item are already labeled." });
+    }
+
+    if (!record.startedAt) record.startedAt = new Date().toISOString();
+    const caseNumber = priorCount + 1;
+    record.itemScannedCount[itemKey] = caseNumber;
+    record.itemStatus[itemKey] = caseNumber >= item.quantity ? "picked" : "not_picked";
+    delete record.itemCrateNumber[itemKey];
+    delete record.itemCrateBreakdown[itemKey];
+    delete record.itemStatus[itemIndex];
+    delete record.itemScannedCount[itemIndex];
+    delete record.itemCrateNumber[itemIndex];
+    delete record.itemCrateBreakdown[itemIndex];
+    saveState(state);
+
+    const caseLabelJobId = `ess-${crypto.createHash("sha256").update([
+      sourceOrder.orderId,
+      itemKey,
+      caseNumber,
+      record.startedAt,
+    ].join("|")).digest("hex").slice(0, 24)}`;
+    res.json({
+      ok: true,
+      matched: true,
+      itemIndex: Number(itemIndex),
+      itemTitle: item.title,
+      scannedCount: caseNumber,
+      totalQty: item.quantity,
+      caseLabelJobId,
+      status: record.itemStatus[itemKey],
+      itemStatus: toIndexKeyedDict(record.itemStatus, order.lineItems),
+      itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
+      itemCrateNumber: {},
+      itemCrateBreakdown: {},
       currentCrateNumber: record.currentCrateNumber,
     });
   } catch (err) {

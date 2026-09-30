@@ -82,6 +82,14 @@ test('routes one NETUM to distinct order and Essentials printer profiles', () =>
   assert.match(picking, /pickingWorkflow === 'essentials' \|\| view !== 'order'/);
   assert.match(server, /Essentials are labeled as individual cases and do not use crates/);
   assert.match(server, /caseLabelJobId: workflow === "essentials"/);
+  assert.match(server, /"\/api\/picking-case"/);
+  const caseStart = server.indexOf('app.post("/api/picking-case"');
+  const caseEnd = server.indexOf('app.post("/api/picking-scan"', caseStart);
+  const caseHandler = server.slice(caseStart, caseEnd);
+  assert.match(caseHandler, /const caseNumber = priorCount \+ 1/);
+  assert.match(caseHandler, /Manual case taps are only available in Essentials Picking/);
+  assert.doesNotMatch(caseHandler, /record\.itemScannedCount\[itemKey\] = item\.quantity/);
+  assert.match(picking, /\+ Label One Case/);
 });
 
 test('opens scoped Essentials picking from the Essentials board', () => {
