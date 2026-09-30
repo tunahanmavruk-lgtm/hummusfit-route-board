@@ -969,7 +969,7 @@
   <div class="hf-appbar-links">
     <a href="/">Long Island routes</a>
     <a href="/out-of-state">Out-of-state</a>
-    <a class="active" href="/picking">Order picking</a>
+    <a class="active" id="orderPickingNav" href="/picking">Order picking</a>
     <a href="/essentials" data-essentials-nav hidden>Essentials</a>
   </div>
   <a class="hf-hub-link" href="https://logistics.myhummusfit.com/">Open logistics hub <span aria-hidden="true">↗</span></a>
@@ -1072,6 +1072,9 @@
   }
 
   if(pickingWorkflow === 'essentials'){
+    document.getElementById('orderPickingNav').classList.remove('active');
+    document.querySelector('[data-essentials-nav]').classList.add('active');
+    document.querySelector('[data-essentials-nav]').hidden = false;
     document.getElementById('pageTitle').innerHTML = 'ESSENTIALS <span>PICKING</span>';
     document.getElementById('backLink').textContent = '← All Essentials';
     document.getElementById('btPrinterStatus').textContent = '🖨️ ZD620 3×1 ready';
@@ -2000,7 +2003,9 @@
     }
 
     if(!isLocked){
-      html += '<div class="scanner-ready-hint"><span class="dot"></span>Bluetooth scanner ready — scan any item, no tap needed</div>';
+      html += '<div class="scanner-ready-hint"><span class="dot"></span>' + (pickingWorkflow === 'essentials'
+        ? 'Case labels ready — tap + Label One Case for each physical case'
+        : 'Bluetooth scanner ready — scan any item, no tap needed') + '</div>';
       html +=
         '<div class="picker-row">' +
           '<div class="picker-label">Who\'s picking this order</div>' +
