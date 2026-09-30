@@ -2222,6 +2222,7 @@
           orderDetail.itemScannedCount = result.data.itemScannedCount;
           orderDetail.itemCrateNumber = {};
           orderDetail.itemCrateBreakdown = {};
+          playScanFeedback();
           printEssentialsCaseLabel(
             result.data.itemIndex,
             result.data.scannedCount,

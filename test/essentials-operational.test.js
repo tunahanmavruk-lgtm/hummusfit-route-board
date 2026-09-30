@@ -26,6 +26,8 @@ test('holds Shopify fulfillment until food and Essentials are both complete', ()
   const handler = server.slice(start, end);
   assert.match(handler, /workflowCompletion\(/);
   assert.match(handler, /if \(allWorkflowsComplete\) \{[\s\S]*autoFulfillPickedOrders\(sourceOrder\)/);
+  assert.match(handler, /Essentials item\(s\) still have unverified cases/);
+  assert.match(handler, /item\.verifiedCases < item\.requiredCases/);
 });
 
 test('functionally splits one Shopify order without losing or duplicating lines', () => {
@@ -90,6 +92,7 @@ test('routes one NETUM to distinct order and Essentials printer profiles', () =>
   assert.match(caseHandler, /Manual case taps are only available in Essentials Picking/);
   assert.doesNotMatch(caseHandler, /record\.itemScannedCount\[itemKey\] = item\.quantity/);
   assert.match(picking, /\+ Label One Case/);
+  assert.match(picking, /playScanFeedback\(\);[\s\S]*printEssentialsCaseLabel/);
 });
 
 test('opens scoped Essentials picking from the Essentials board', () => {

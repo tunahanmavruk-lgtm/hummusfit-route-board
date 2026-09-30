@@ -2825,12 +2825,22 @@ app.post("/api/picking-finish", async (req, res) => {
     }
 
     const outstanding = order.lineItems
-      .map((item, idx) => ({ idx, title: item.title, status: readItemState(record.itemStatus, item, idx) || "not_picked" }))
-      .filter((item) => item.status === "not_picked");
+      .map((item, idx) => ({
+        idx,
+        title: item.title,
+        status: readItemState(record.itemStatus, item, idx) || "not_picked",
+        verifiedCases: Number(readItemState(record.itemScannedCount, item, idx)) || 0,
+        requiredCases: Number(item.quantity) || 0,
+      }))
+      .filter((item) => workflow === "essentials"
+        ? item.status !== "picked" || item.verifiedCases < item.requiredCases
+        : item.status === "not_picked");
 
     if (outstanding.length > 0) {
       return res.status(400).json({
-        error: `${outstanding.length} item(s) still need to be marked before finishing.`,
+        error: workflow === "essentials"
+          ? `${outstanding.length} Essentials item(s) still have unverified cases. Verify every case before finishing.`
+          : `${outstanding.length} item(s) still need to be marked before finishing.`,
         outstanding,
       });
     }
