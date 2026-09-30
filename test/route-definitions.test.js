@@ -77,23 +77,21 @@ test("routes B2B orders with all shared-ZIP stops preserved", () => {
   assert.match(server, /B2B_ZIP_TO_STOP\.set\(zipMatch\[1\], new Set\(\)\)/);
 });
 
-test("keeps fulfilled orders visible as locked delivery and receiving snapshots", () => {
-  assert.match(server, /const LOCAL_LOOKBACK_DAYS = 21/);
-  assert.match(server, /created_at:>='\$\{localLookbackStart\}' fulfillment_status:unfulfilled status:any -status:cancelled/);
-  assert.doesNotMatch(server, /created_at:>='\$\{isoStart\}' created_at:<='\$\{isoEnd\}' status:any/);
-  assert.match(server, /displayFulfillmentStatus/);
-  assert.match(server, /ord\.displayFulfillmentStatus === "FULFILLED"/);
+test("keeps every non-fulfilled order visible until a successful scan fulfillment", () => {
+  assert.doesNotMatch(server, /LOCAL_LOOKBACK_DAYS|B2B_LOOKBACK_DAYS|created_at:>/);
+  assert.match(server, /status:any -status:cancelled -fulfillment_status:fulfilled/);
+  assert.match(server, /order\.displayFulfillmentStatus !== "FULFILLED"/);
+  assert.match(server, /isEligible: \(key\) => Boolean\(VALID_STOP_NAMES\.get\(key\)\?\.isB2B\)/);
   assert.match(server, /fulfillmentResults\.every\(\(result\) => result\.ok\)/);
-  assert.match(server, /mergeRecentCompletedOrders\(activeByStopName, now\)/);
-  assert.match(server, /b2bOrderExpiresAt\(archived\.createdAt, deliveryDays, completed\)/);
-  assert.match(server, /through 8 PM ET on their scheduled delivery day/);
-  assert.match(server, /function completedSnapshotExpiresAt/);
-  assert.match(server, /completedHourET >= 12 \? 38 : 14/);
-  assert.match(server, /archived\.deliveryComplete \|\| now > completedSnapshotExpiresAt\(archived, key\)/);
-  assert.match(server, /markArchivedStopDelivered\(pickingKeyFor\(stop\.name\)/);
-  assert.match(server, /retainedAfterFulfillment: true/);
-  assert.match(server, /removedFromBoard: false/);
-  assert.doesNotMatch(server, /delete ordersCache\.byStopName\[key\]/);
+  assert.match(server, /delete ordersCache\.byStopName\[key\]/);
+  assert.match(server, /removedFromBoard: shopifyFulfilled/);
+  assert.doesNotMatch(server, /mergeRecentCompletedOrders\(activeByStopName/);
+  assert.match(server, /const archived = archive\[key\]/);
+  assert.match(server, /archiveCompletedOrder\(key, record, order\)/);
+  assert.match(outOfStateBoard, /function rebuildRoutesData\(\)/);
+  assert.match(outOfStateBoard, /hasOpenOrder = route\.stops\.some/);
+  assert.match(outOfStateBoard, /dayLabel: 'Open unfulfilled orders'/);
+  assert.match(outOfStateBoard, /rebuildRoutesData\(\)/);
 });
 
 test("uses current Bouncie names and identifiers as the ten-vehicle fleet source of truth", () => {

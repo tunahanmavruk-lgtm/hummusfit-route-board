@@ -1225,8 +1225,6 @@
         }
         orderDetail.completedAt = result.data.completedAt;
         orderDetail.completedBy = result.data.completedBy;
-        orderDetail.retainedAfterFulfillment = Boolean(result.data.retainedForDelivery);
-        orderDetail.shopifyFulfilled = Boolean(result.data.retainedForDelivery);
         if(result.data.closedCrates){ orderDetail.closedCrates = result.data.closedCrates; }
         renderOrder();
         // Print the final crate's label too, so every crate has one by
@@ -1238,6 +1236,8 @@
         var fulfillmentFailures = (result.data.fulfillment || []).filter(function(entry){ return !entry.ok; });
         if(fulfillmentFailures.length){
           alert('Picking is saved, but Shopify has not confirmed fulfillment yet. This order will stay on the board for a manager to review.');
+        } else if(result.data.removedFromBoard){
+          loadList();
         }
       }).catch(function(err){
         closeModal();

@@ -9,7 +9,6 @@ const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow } = require("./essentials-shadow.js");
 const {
-  b2bOrderExpiresAt,
   hasB2BSignal,
   normalizeOrderTags,
   selectB2BStop,
@@ -192,35 +191,6 @@ function markArchivedOrderFulfilled(stopKey, orderId) {
   saveArchive(archive);
 }
 
-// Shopify's unfulfilled feed is authoritative while an order is being picked.
-// After auto-fulfillment the same order still has an operational job to do: it
-// must remain visible to the driver and receiving store. B2B snapshots remain
-// through 8 PM ET on their scheduled delivery day, even after scanning and
-// Shopify fulfillment, then leave the board at that hard cutoff. Local
-// orders only need to survive through their next delivery shift: an afternoon/
-// evening pick expires at 2 PM ET the following day, while an overnight/morning
-// pick expires at 2 PM ET that same day. A new live unfulfilled order always
-// wins, and a driver-completed stop closes its snapshot immediately.
-function completedSnapshotExpiresAt(archived, stopKey) {
-  const completed = new Date(archived.archivedAt || archived.completedAt);
-  if (!Number.isFinite(completed.getTime())) return 0;
-  if (archived.isB2B) {
-    const deliveryDays = VALID_STOP_NAMES.get(stopKey)?.deliveryDays || [];
-    return b2bOrderExpiresAt(archived.createdAt, deliveryDays, completed);
-  }
-
-  const startOfCompletedDayET = getStartOfDayEastern(completed);
-  const completedHourET = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      hour12: false,
-      hour: "2-digit",
-    }).format(completed)
-  ) % 24;
-  const deliveryDayOffsetHours = completedHourET >= 12 ? 38 : 14;
-  return startOfCompletedDayET.getTime() + deliveryDayOffsetHours * HOUR_MS;
-}
-
 function markArchivedStopDelivered(stopKey, deliveredAt) {
   const archive = loadArchive();
   const archived = archive[stopKey];
@@ -229,32 +199,6 @@ function markArchivedStopDelivered(stopKey, deliveredAt) {
   archived.deliveredAt = deliveredAt;
   saveArchive(archive);
   return true;
-}
-
-function mergeRecentCompletedOrders(activeByStopName, now = Date.now()) {
-  const archive = loadArchive();
-  const merged = { ...activeByStopName };
-  Object.entries(archive).forEach(([key, archived]) => {
-    if (merged[key] || !archived || !archived.completedAt || !Array.isArray(archived.lineItems)) return;
-    if (archived.deliveryComplete || now > completedSnapshotExpiresAt(archived, key)) return;
-    merged[key] = {
-      orderId: archived.orderId,
-      orderName: archived.orderName,
-      orderCount: archived.orderCount || 1,
-      createdAt: archived.createdAt || archived.completedAt,
-      orders: archived.orders || [{ id: archived.orderId, name: archived.orderName, createdAt: archived.createdAt || archived.completedAt }],
-      lineItems: archived.lineItems,
-      isB2B: Boolean(archived.isB2B),
-      retainedAfterFulfillment: true,
-      // Archives written before this field existed only disappear from the
-      // live unfulfilled feed after Shopify has cleared them; treat those
-      // legacy snapshots as fulfilled. New failed fulfillment attempts write
-      // an explicit false and remain labelled only as completed.
-      shopifyFulfilled: archived.shopifyFulfilled !== false,
-      fulfilledAt: archived.fulfilledAt || null,
-    };
-  });
-  return merged;
 }
 
 app.use(express.json());
@@ -1329,7 +1273,6 @@ async function shopifyGraphQL(query, variables) {
 // In-memory cache, refreshed on demand (not every request)
 let ordersCache = { fetchedAt: 0, byStopName: {}, windowStart: null, windowEnd: null };
 const ORDERS_CACHE_MS = 60 * 1000; // 1 minute
-const LOCAL_LOOKBACK_DAYS = 21;
 let ordersRefreshInFlight = null;
 
 // Stale-while-revalidate: a full refresh (Shopify local + B2B pulls, plus
@@ -1367,7 +1310,6 @@ async function fetchTodaysStopOrders() {
 async function refreshOrdersCache() {
   const now = Date.now();
   const { windowStart, windowEnd } = getOrderWindowEastern(new Date());
-  const localLookbackStart = new Date(now - LOCAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   let orders = [];
   let cursor = null;
@@ -1383,6 +1325,7 @@ async function refreshOrdersCache() {
               id
               name
               createdAt
+              displayFulfillmentStatus
               tags
               customer { tags }
               lineItems(first: 250) {
@@ -1412,11 +1355,13 @@ async function refreshOrdersCache() {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${localLookbackStart}' fulfillment_status:unfulfilled status:any -status:cancelled`,
+      queryString: "status:any -status:cancelled -fulfillment_status:fulfilled",
     });
 
     const edges = data.orders.edges;
-    orders = orders.concat(edges.map((e) => e.node));
+    orders = orders.concat(
+      edges.map((e) => e.node).filter((order) => order.displayFulfillmentStatus !== "FULFILLED")
+    );
     hasNextPage = data.orders.pageInfo.hasNextPage;
     cursor = edges.length ? edges[edges.length - 1].cursor : null;
     if (!edges.length) break;
@@ -1504,8 +1449,7 @@ async function refreshOrdersCache() {
   }
 
   const activeByStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
-  const byStopName = mergeRecentCompletedOrders(activeByStopName, now);
-  ordersCache = { fetchedAt: now, byStopName, windowStart, windowEnd };
+  ordersCache = { fetchedAt: now, byStopName: activeByStopName, windowStart, windowEnd };
   return ordersCache;
 }
 
@@ -1513,8 +1457,8 @@ async function refreshOrdersCache() {
 // actual delivery, sometimes with more than one separate order for the
 // same upcoming stop. Local's narrow same-day window and "first order
 // wins" logic would silently miss or drop real orders for these stops,
-// so B2B gets its own fetch: pull anything still unfulfilled within a
-// generous lookback, and combine every matching order for a stop into
+// so B2B gets its own fetch: pull every order that still needs fulfillment,
+// regardless of age, and combine every matching order for a stop into
 // one merged pick list instead of keeping only the first.
 // A shared customer account (like PWRBLD or Ares, which order for
 // several different physical locations from one account) can't be told
@@ -1533,9 +1477,7 @@ B2B_ROUTES.forEach((route) => {
   });
 });
 
-const B2B_LOOKBACK_DAYS = 21;
-async function fetchB2BStopOrders(now = Date.now()) {
-  const lookbackStart = new Date(now - B2B_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+async function fetchB2BStopOrders() {
   let orders = [];
   let cursor = null;
   let hasNextPage = true;
@@ -1550,6 +1492,7 @@ async function fetchB2BStopOrders(now = Date.now()) {
               id
               name
               createdAt
+              displayFulfillmentStatus
               tags
               customer { tags }
               shippingAddress { zip }
@@ -1580,10 +1523,12 @@ async function fetchB2BStopOrders(now = Date.now()) {
     `;
     const data = await shopifyGraphQL(query, {
       cursor,
-      queryString: `created_at:>='${lookbackStart}' fulfillment_status:unfulfilled status:any -status:cancelled`,
+      queryString: "status:any -status:cancelled -fulfillment_status:fulfilled",
     });
     const edges = data.orders.edges;
-    orders = orders.concat(edges.map((e) => e.node));
+    orders = orders.concat(
+      edges.map((e) => e.node).filter((order) => order.displayFulfillmentStatus !== "FULFILLED")
+    );
     hasNextPage = data.orders.pageInfo.hasNextPage;
     cursor = edges.length ? edges[edges.length - 1].cursor : null;
     if (!edges.length) break;
@@ -1609,10 +1554,7 @@ async function fetchB2BStopOrders(now = Date.now()) {
       customerTags,
       zipCandidates: zip ? B2B_ZIP_TO_STOP.get(zip) : [],
       useZip: hasB2BSignal(tags),
-      isEligible: (key) => {
-        const stopMeta = VALID_STOP_NAMES.get(key);
-        return Boolean(stopMeta?.isB2B && now <= b2bOrderExpiresAt(order.createdAt, stopMeta.deliveryDays));
-      },
+      isEligible: (key) => Boolean(VALID_STOP_NAMES.get(key)?.isB2B),
     });
     if (!key) {
       if (hasB2BSignal(tags)) console.warn(`B2B order ${order.name} has no unambiguous stop tag; not assigning by ZIP ${zip || "unknown"}`);
@@ -2754,21 +2696,15 @@ app.post("/api/picking-finish", async (req, res) => {
       fulfillmentResults = [{ ok: false, error: err.message }];
     }
 
-    // A successful Shopify fulfillment moves this from the unfulfilled
-    // queue into a locked delivery/receiving snapshot. It deliberately
-    // stays on the board so drivers and stores do not lose the route,
-    // crate count, picked items, or receiving workflow.
+    // A successful Shopify fulfillment removes the order from the live
+    // route board immediately. The completed archive remains authoritative
+    // for crate labels and the store-facing receiving QR workflow.
     const shopifyFulfilled =
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
     if (shopifyFulfilled) {
       markArchivedOrderFulfilled(key, order.orderId);
       if (ordersCache.byStopName[key] && ordersCache.byStopName[key].orderId === order.orderId) {
-        ordersCache.byStopName[key] = {
-          ...ordersCache.byStopName[key],
-          retainedAfterFulfillment: true,
-          shopifyFulfilled: true,
-          fulfilledAt: new Date().toISOString(),
-        };
+        delete ordersCache.byStopName[key];
       }
     }
 
@@ -2779,8 +2715,8 @@ app.post("/api/picking-finish", async (req, res) => {
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: record.closedCrates,
       fulfillment: fulfillmentResults,
-      removedFromBoard: false,
-      retainedForDelivery: shopifyFulfilled,
+      removedFromBoard: shopifyFulfilled,
+      retainedForDelivery: false,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

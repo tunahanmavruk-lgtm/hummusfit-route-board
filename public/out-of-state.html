@@ -610,6 +610,8 @@
   }
 
   var routesData = [];
+  var scheduledRoutesData = [];
+  var allRoutesData = [];
   var fleetData = [];
   var driversData = [];
   var hqData = { name: '', address: '' };
@@ -619,6 +621,27 @@
   var scheduledToday = {};
   var vanStatusList = [];
   var etaCache = {}; // routeId -> eta response
+
+  // The normal board stays focused on today's/tomorrow's route waves, but an
+  // open Shopify order is never allowed to disappear just because its route
+  // is outside that display window. Add any otherwise-hidden route that has
+  // at least one live non-fulfilled order; it falls away automatically after
+  // scanning successfully fulfills the last open order on that route.
+  function rebuildRoutesData(){
+    var visibleRouteIds = {};
+    routesData = scheduledRoutesData.slice();
+    routesData.forEach(function(route){ visibleRouteIds[route.id] = true; });
+    allRoutesData.forEach(function(route){
+      if(visibleRouteIds[route.id]) return;
+      var hasOpenOrder = route.stops.some(function(stop){
+        return Boolean(ordersByStop[stop.name.toLowerCase()]);
+      });
+      if(hasOpenOrder){
+        routesData.push(Object.assign({}, route, { dayLabel: 'Open unfulfilled orders' }));
+        visibleRouteIds[route.id] = true;
+      }
+    });
+  }
 
   function nextStatus(current){
     var i = STATUS_CYCLE.indexOf(current || 'not_started');
@@ -1026,7 +1049,8 @@
       fetch('/api/today-orders').then(function(r){ return r.json(); }),
       fetch('/api/van-status').then(function(r){ return r.json(); })
     ]).then(function(results){
-      routesData = results[0].routes;
+      scheduledRoutesData = results[0].routes || [];
+      allRoutesData = results[0].allRoutes || scheduledRoutesData;
       driversData = results[0].drivers || [];
       fleetData = results[0].fleet || [];
       fleetVehicleIds = results[0].fleetVehicleIds || {};
@@ -1036,6 +1060,7 @@
       scheduledToday = results[2].scheduledToday || {};
       pickingStatusByStop = results[2].pickingStatus || {};
       vanStatusList = results[3].vehicles || [];
+      rebuildRoutesData();
       syncFleetFromBouncie();
       render();
       refreshAllStartedEtas();
@@ -1056,6 +1081,7 @@
       scheduledToday = results[1].scheduledToday || {};
       pickingStatusByStop = results[1].pickingStatus || {};
       vanStatusList = results[2].vehicles || [];
+      rebuildRoutesData();
       syncFleetFromBouncie();
       render();
       refreshAllStartedEtas();
