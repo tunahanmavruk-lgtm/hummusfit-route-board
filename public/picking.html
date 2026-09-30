@@ -957,7 +957,6 @@
 </style>
 <link rel="stylesheet" href="/hf-logistics-theme.css?v=1">
 <script defer src="/essentials-nav.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="page-picking">
 
@@ -1299,6 +1298,21 @@
     return false;
   }
 
+  var cameraScannerLibraryPromise = null;
+  function loadCameraScannerLibrary(){
+    if(typeof Html5Qrcode !== 'undefined') return Promise.resolve();
+    if(cameraScannerLibraryPromise) return cameraScannerLibraryPromise;
+    cameraScannerLibraryPromise = new Promise(function(resolve, reject){
+      var script = document.createElement('script');
+      script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+      script.async = true;
+      script.onload = function(){ resolve(); };
+      script.onerror = function(){ reject(new Error('Camera scanner failed to load.')); };
+      document.head.appendChild(script);
+    });
+    return cameraScannerLibraryPromise;
+  }
+
   function openScanner(idx){
     if(!requirePickerSelected()) return;
     scanningForIdx = idx;
@@ -1314,8 +1328,12 @@
         : ('Scan ' + item.title + ' — ' + item.quantity + ' needed');
     }
     if(typeof Html5Qrcode === 'undefined'){
-      alert('Barcode scanner failed to load. Check your connection and try again.');
-      closeScanner();
+      loadCameraScannerLibrary().then(function(){
+        if(scanningForIdx === idx) openScanner(idx);
+      }).catch(function(error){
+        alert(error.message + ' Check your connection and try again.');
+        closeScanner();
+      });
       return;
     }
     html5QrCode = new Html5Qrcode("reader", {
@@ -1781,7 +1799,7 @@
   }
 
   function focusHwScanInput(){
-    if(view === 'order' && orderDetail && !orderDetail.completedAt){
+    if(pickingWorkflow !== 'essentials' && view === 'order' && orderDetail && !orderDetail.completedAt){
       // preventScroll is a second line of defense on top of the fixed
       // top:0/left:0 positioning above — belt-and-suspenders against
       // any browser that still tries to scroll a freshly-focused
@@ -1845,7 +1863,7 @@
     }catch(e){}
     setTimeout(pollNativeScanner, 250);
   }
-  pollNativeScanner();
+  if(pickingWorkflow !== 'essentials') pollNativeScanner();
 
   // iOS Safari can drop focus after alerts, taps elsewhere, or the app
   // being backgrounded — keep pulling it back so a physical scan works

@@ -101,3 +101,11 @@ test('opens scoped Essentials picking from the Essentials board', () => {
   assert.match(app, /result\.mode === 'operational'/);
   assert.match(app, /Shopify fulfillment waits until both Food Picking and Essentials Picking are complete/);
 });
+
+test('keeps unused scanner work off the Essentials workflow', () => {
+  const picking = read('public/picking.html');
+  assert.doesNotMatch(picking, /<script src="https:\/\/unpkg\.com\/html5-qrcode/);
+  assert.match(picking, /if\(pickingWorkflow !== 'essentials'\) pollNativeScanner\(\)/);
+  assert.match(picking, /pickingWorkflow !== 'essentials' && view === 'order'/);
+  assert.match(picking, /loadCameraScannerLibrary\(\)/);
+});
