@@ -18,6 +18,9 @@ test('uses exact Shopify classifications for drinks, snacks, and store supplies'
   }), 'other');
   assert.equal(essentialsTypeFor({ title: 'Chicken Stir Fry' }), null);
   assert.equal(essentialsTypeFor({ title: 'Retail-Style Frozen Chicken Bowl' }), null, 'generic retail wording must not opt food into Essentials');
+  assert.equal(essentialsTypeFor({ title: 'BUILT PUFF — Peanut Butter Cup' }), null, 'food containing cup must stay in food picking');
+  assert.equal(essentialsTypeFor({ title: 'MAGIS SPOON — Protein Cereal Cocoa' }), null, 'a brand name containing spoon must stay in food picking');
+  assert.equal(essentialsTypeFor({ title: 'UNREAL BAR — Cup - Dark Chocolate Peanut Butter' }), null, 'snack cups require explicit Shopify classification');
 });
 
 test('normalizes exact Shopify collection handles and preserves explicit precedence', () => {

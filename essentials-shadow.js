@@ -1,5 +1,4 @@
 const EXCLUDED_APPAREL = /\b(hoodie|apparel|clothing|crop hoodie|t-?shirt|tee|sweatshirt|sweater|hat|cap|beanie|jacket|shorts|pants|leggings|socks)\b/i;
-const LEGACY_OTHER_ESSENTIALS = /\b(spoon|fork|knife|utensil|napkin|garbage bag|trash bag|paper|plastic|cup|lid|straw|sleeve|packaging|container|glove|sanitizer|soap|towel|cleaning)\b/i;
 
 function normalizeClassification(value) {
   return String(value || "")
@@ -36,9 +35,10 @@ function essentialsTypeFor(item) {
   if (explicitClassifications.includes("retail essentials")) return "retail";
   if (explicitClassifications.includes("other essentials")) return "other";
 
-  // Compatibility only for the small set of legacy supplies that were
-  // already recognized before Shopify classification metadata was available.
-  if (LEGACY_OTHER_ESSENTIALS.test(searchable)) return "other";
+  // Never infer Essentials from product-name keywords. Words such as "cup"
+  // and "spoon" also occur in ordinary snacks and brand names, which would
+  // incorrectly remove food from normal picking. Shopify classification is
+  // the single source of truth for this operational split.
   return null;
 }
 
