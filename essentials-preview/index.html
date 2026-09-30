@@ -16,7 +16,7 @@
       <span class="logo"><img src="/assets/logo.png" alt="Hummus Fit"></span>
       <span><strong>HF Logistics</strong><small>Warehouse operations</small></span>
     </a>
-    <span class="preview-pill">Shadow mode · read only</span>
+    <span class="preview-pill" id="modePill">Shadow mode · read only</span>
   </nav>
 
   <aside class="sidebar" aria-label="Logistics sections">
@@ -36,7 +36,7 @@
         <p class="subtitle">Retail goods and store supplies, grouped from current regular orders.</p>
       </div>
       <div class="cycle-card" aria-label="Shadow-mode status">
-        <span>Operating mode</span><strong>View only</strong><small id="lastUpdated">Loading regular orders…</small>
+        <span>Operating mode</span><strong id="operatingMode">View only</strong><small id="lastUpdated">Loading regular orders…</small>
       </div>
     </header>
 
@@ -44,8 +44,8 @@
       <section class="separation-banner warning" aria-label="Shadow-mode notice">
         <span class="shield" aria-hidden="true">!</span>
         <div>
-          <strong>This is a warehouse view. Essentials remain on their regular orders.</strong>
-          <p>Until routing is activated, nothing is extracted, reassigned, fulfilled, relabeled, or removed from food picking.</p>
+          <strong id="separationTitle">This is a warehouse view. Essentials remain on their regular orders.</strong>
+          <p id="separationDetail">Until routing is activated, nothing is extracted, reassigned, fulfilled, relabeled, or removed from food picking.</p>
         </div>
       </section>
 
@@ -85,6 +85,7 @@
     </section>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/essentials-label-zpl.js"></script>
   <script src="/essentials-preview/app.js"></script>
 </body>
 </html>

@@ -87,7 +87,7 @@ test("keeps every non-fulfilled order visible until a successful scan fulfillmen
   assert.match(server, /removedFromBoard: shopifyFulfilled/);
   assert.doesNotMatch(server, /mergeRecentCompletedOrders\(activeByStopName/);
   assert.match(server, /const archived = archive\[key\]/);
-  assert.match(server, /archiveCompletedOrder\(key, record, order\)/);
+  assert.match(server, /archiveCompletedOrder\(key,[\s\S]*sourceOrder\)/);
   assert.match(outOfStateBoard, /function rebuildRoutesData\(\)/);
   assert.match(outOfStateBoard, /hasOpenOrder = route\.stops\.some/);
   assert.match(outOfStateBoard, /dayLabel: 'Open unfulfilled orders'/);

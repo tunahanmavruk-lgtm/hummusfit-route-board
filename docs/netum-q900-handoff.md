@@ -9,7 +9,9 @@ barcode delivery, and Zebra crate-label printing. Use it for every new Q900.
 - Install the Order Picking PWA from:
   `https://hummusfit-route-board-production.up.railway.app/picking`
 - Install the current `android-print-bridge/build/hf-auto-print.apk`.
-- Open **HF Auto Print** once and save Zebra IP `10.0.75.254`.
+- Open **HF Auto Print** once and save both printer profiles:
+  - Orders / 4×3: `10.0.75.254`
+  - Essentials ZD620 / 3×1: `192.168.6.41`
 - Keep the HF Auto Print foreground service running.
 - Lock the device in portrait.
 
@@ -48,14 +50,16 @@ app may temporarily rotate the Q900 to landscape.
 
 ## Handoff verification
 
-1. Confirm HF Auto Print reports `HF Auto Print ready` and printer IP
-   `10.0.75.254` at `GET http://127.0.0.1:8877/status`.
+1. Confirm HF Auto Print reports `HF Auto Print ready` and both printer IPs at
+   `GET http://127.0.0.1:8877/status`.
 2. Open Order Picking and confirm **Auto Print ready** is visible.
 3. From the pick-list screen, scan a test barcode while observing Android logs.
    One physical scan must produce exactly one `HFAutoPrint: Scanner event
    received` entry and advance the bridge's `latestId` by one.
-4. Send a clearly marked, non-order 4 x 3 handoff label through `POST /print`.
-   Confirm it prints once, fully framed, without a following blank label.
+4. Send a clearly marked, non-order test through `POST /print` with printer
+   profile `orders`, then another with profile `essentials`. Confirm the Orders
+   printer produces one 4×3 label and the ZD620 produces one 3×1 label, each
+   fully framed and without a following blank label.
 5. If testing against a live order, record the before/after quantity and confirm
    exactly one unit was added. Otherwise remain on the pick-list screen so no
    order state changes.
@@ -68,4 +72,5 @@ app may temporarily rotate the Q900 to landscape.
 - `NT000026032100594`
 - `NT000026032100624`
 
-All verified units use Zebra `10.0.75.254` and the broadcast settings above.
+All verified units use Orders Zebra `10.0.75.254`, Essentials ZD620
+`192.168.6.41`, and the broadcast settings above.

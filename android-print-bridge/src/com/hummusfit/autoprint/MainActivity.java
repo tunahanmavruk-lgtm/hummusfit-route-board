@@ -45,14 +45,28 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
   private static final String PREFS = "printer";
-  private static final String PRINTER_IP = "printer_ip";
-  private static final String DEFAULT_IP = "10.0.75.254";
+  private static final String LEGACY_PRINTER_IP = "printer_ip";
+  private static final String ORDER_PRINTER_IP = "order_printer_ip";
+  private static final String ESSENTIALS_PRINTER_IP = "essentials_printer_ip";
+  private static final String DEFAULT_ORDER_IP = "10.0.75.254";
+  private static final String DEFAULT_ESSENTIALS_IP = "192.168.6.41";
   private static final String PICKING_URL = "https://hummusfit-route-board-production.up.railway.app/picking";
   private static final String ALLOWED_ORIGIN = "https://hummusfit-route-board-production.up.railway.app";
   private static final int BRIDGE_PORT = 8877;
 
   private static SharedPreferences prefs(Context context) {
     return context.getSharedPreferences(PREFS, MODE_PRIVATE);
+  }
+
+  private static String orderPrinterIp(Context context) {
+    SharedPreferences saved = prefs(context);
+    return saved.getString(
+        ORDER_PRINTER_IP,
+        saved.getString(LEGACY_PRINTER_IP, DEFAULT_ORDER_IP));
+  }
+
+  private static String essentialsPrinterIp(Context context) {
+    return prefs(context).getString(ESSENTIALS_PRINTER_IP, DEFAULT_ESSENTIALS_IP);
   }
 
   private static boolean validPrivateIp(String input) {
@@ -93,32 +107,47 @@ public class MainActivity extends Activity {
     layout.addView(title);
 
     TextView description = new TextView(this);
-    description.setText("Keep this companion installed on the NETUM. After each crate is saved in Order Picking, it sends one 4 × 3 label to the Zebra over Wi-Fi. The ongoing notification means the print service is running.");
+    description.setText("Keep this companion installed on the NETUM. Order Picking sends 4 × 3 crate labels to the order Zebra. Essentials sends 3 × 1 labels to the warehouse ZD620. The app chooses the correct printer automatically.");
     description.setTextSize(16);
     description.setPadding(0, pad, 0, pad);
     layout.addView(description);
 
-    TextView ipLabel = new TextView(this);
-    ipLabel.setText("Zebra printer IP address");
-    layout.addView(ipLabel);
+    TextView orderIpLabel = new TextView(this);
+    orderIpLabel.setText("Order / crate-label Zebra IP address");
+    layout.addView(orderIpLabel);
 
-    EditText ip = new EditText(this);
-    ip.setSingleLine(true);
-    ip.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
-    ip.setText(prefs(this).getString(PRINTER_IP, DEFAULT_IP));
-    layout.addView(ip);
+    EditText orderIp = new EditText(this);
+    orderIp.setSingleLine(true);
+    orderIp.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+    orderIp.setText(orderPrinterIp(this));
+    layout.addView(orderIp);
+
+    TextView essentialsIpLabel = new TextView(this);
+    essentialsIpLabel.setText("Essentials 3 × 1 Zebra ZD620 IP address");
+    essentialsIpLabel.setPadding(0, pad / 2, 0, 0);
+    layout.addView(essentialsIpLabel);
+
+    EditText essentialsIp = new EditText(this);
+    essentialsIp.setSingleLine(true);
+    essentialsIp.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+    essentialsIp.setText(essentialsPrinterIp(this));
+    layout.addView(essentialsIp);
 
     Button save = new Button(this);
-    save.setText("Save printer IP");
+    save.setText("Save both printer IPs");
     save.setOnClickListener(v -> {
-      String value = ip.getText().toString().trim();
-      if (!validPrivateIp(value)) {
-        Toast.makeText(this, "Enter a private network IPv4 address", Toast.LENGTH_LONG).show();
+      String orderValue = orderIp.getText().toString().trim();
+      String essentialsValue = essentialsIp.getText().toString().trim();
+      if (!validPrivateIp(orderValue) || !validPrivateIp(essentialsValue)) {
+        Toast.makeText(this, "Enter a private IPv4 address for both printers", Toast.LENGTH_LONG).show();
         return;
       }
-      prefs(this).edit().putString(PRINTER_IP, value).apply();
+      prefs(this).edit()
+          .putString(ORDER_PRINTER_IP, orderValue)
+          .putString(ESSENTIALS_PRINTER_IP, essentialsValue)
+          .apply();
       startBridge(this);
-      Toast.makeText(this, "Printer saved: " + value, Toast.LENGTH_SHORT).show();
+      Toast.makeText(this, "Order and Essentials printers saved", Toast.LENGTH_SHORT).show();
     });
     layout.addView(save);
 
@@ -175,7 +204,7 @@ public class MainActivity extends Activity {
       Notification notification = new Notification.Builder(this, "hf-print")
           .setSmallIcon(android.R.drawable.ic_menu_send)
           .setContentTitle("HF Auto Print running")
-          .setContentText("Zebra crate labels are ready")
+          .setContentText("Order and Essentials Zebra printers are ready")
           .setContentIntent(open)
           .setOngoing(true)
           .build();
@@ -302,7 +331,15 @@ public class MainActivity extends Activity {
           return;
         }
         if ("GET".equals(request[0]) && "/status".equals(requestPath)) {
-          respond(out, 200, json(true, "HF Auto Print ready").put("printerIp", prefs(this).getString(PRINTER_IP, DEFAULT_IP)), true);
+          String orderIp = orderPrinterIp(this);
+          String essentialsIp = essentialsPrinterIp(this);
+          respond(out, 200, json(true, "HF Auto Print ready")
+              // Keep printerIp during the APK rollout so the existing picking
+              // page and device handoff checks remain backward compatible.
+              .put("printerIp", orderIp)
+              .put("printers", new JSONObject()
+                  .put("orders", orderIp)
+                  .put("essentials", essentialsIp)), true);
           return;
         }
         if ("GET".equals(request[0]) && "/scan".equals(requestPath)) {
@@ -348,8 +385,13 @@ public class MainActivity extends Activity {
         JSONObject job = new JSONObject(new String(body, StandardCharsets.UTF_8));
         String jobId = job.optString("jobId", "");
         String zpl = job.optString("zpl", "");
+        String printerName = job.optString("printer", "orders");
         if (jobId.length() < 8 || jobId.length() > 128 || !zpl.startsWith("^XA") || !zpl.trim().endsWith("^XZ")) {
           respond(out, 400, json(false, "Invalid Zebra job"), true);
+          return;
+        }
+        if (!"orders".equals(printerName) && !"essentials".equals(printerName)) {
+          respond(out, 400, json(false, "Unknown printer profile"), true);
           return;
         }
         synchronized (completedJobs) {
@@ -358,7 +400,9 @@ public class MainActivity extends Activity {
             return;
           }
         }
-        String ip = prefs(this).getString(PRINTER_IP, DEFAULT_IP);
+        String ip = "essentials".equals(printerName)
+            ? essentialsPrinterIp(this)
+            : orderPrinterIp(this);
         if (!validPrivateIp(ip)) {
           respond(out, 503, json(false, "Printer IP is not configured"), true);
           return;
@@ -383,7 +427,10 @@ public class MainActivity extends Activity {
           return;
         }
         synchronized (completedJobs) { completedJobs.put(jobId, true); }
-        respond(out, 200, json(true, "Sent to Zebra").put("duplicate", false), true);
+        respond(out, 200, json(true, "Sent to Zebra")
+            .put("duplicate", false)
+            .put("printer", printerName)
+            .put("printerIp", ip), true);
       } catch (Exception e) {
         android.util.Log.e("HFAutoPrint", "Print request failed", e);
       }

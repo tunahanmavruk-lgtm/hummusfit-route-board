@@ -9,6 +9,11 @@ const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow } = require("./essentials-shadow.js");
 const {
+  lineItemsForWorkflow,
+  normalizePickingWorkflow,
+  workflowCompletion,
+} = require("./picking-workflow.js");
+const {
   hasB2BSignal,
   normalizeOrderTags,
   selectB2BStop,
@@ -40,12 +45,15 @@ const LOGO_BLACK_PATH = path.join(__dirname, "public", "assets", "logo-black.png
 const RECEIVING_APP_URL =
   process.env.RECEIVING_APP_URL || "https://hummusfit-receiving-production.up.railway.app";
 
-// Preview-only boundary for the future Essentials workflow. It remains
-// completely unreachable unless explicitly enabled in the environment;
-// production does not set this flag. Keep these files outside /public so
-// express.static cannot accidentally expose the preview around this gate.
+// The Essentials board and its operational picking split are gated
+// independently. This lets the board remain visible in read-only mode while
+// the separate scanner/printer workflow is installed and tested on a NETUM.
+// Keep these files outside /public so express.static cannot bypass the route
+// gate, and never enable separation until the two-printer bridge is installed.
 const ESSENTIALS_ROUTE_BOARD_ENABLED =
   process.env.ESSENTIALS_ROUTE_BOARD_ENABLED === "true";
+const ESSENTIALS_SEPARATION_ENABLED =
+  process.env.ESSENTIALS_SEPARATION_ENABLED === "true";
 const ESSENTIALS_PREVIEW_DIR = path.join(__dirname, "essentials-preview");
 
 // Non-fridge supply items (paper goods, plastic goods, spoons, garbage
@@ -779,6 +787,7 @@ function defaultState() {
     stopStatus: {},
     routeMeta: {},
     picking: {},
+    essentialsPicking: {},
     deliveryWindowStart: getOrderWindowEastern(new Date()).windowStart.toISOString(),
     b2bLastResetDate: {},
   };
@@ -808,6 +817,7 @@ function loadState() {
     if (!state.assignments) state.assignments = {}; // migrate older saved state
     if (!state.routeMeta) state.routeMeta = {}; // migrate older saved state
     if (!state.picking) state.picking = {}; // migrate older saved state
+    if (!state.essentialsPicking) state.essentialsPicking = {}; // migrate older saved state
     if (!state.b2bLastResetDate) state.b2bLastResetDate = {}; // migrate older saved state
 
     let fleetChanged = false;
@@ -1999,6 +2009,70 @@ function getPickingRecord(state, stopName, order) {
   return state.picking[key];
 }
 
+function normalizedPickingWorkflow(value) {
+  return normalizePickingWorkflow(value, ESSENTIALS_SEPARATION_ENABLED);
+}
+
+function lineItemsForPickingWorkflow(order, workflow) {
+  return lineItemsForWorkflow(order, workflow, ESSENTIALS_SEPARATION_ENABLED);
+}
+
+function orderForPickingWorkflow(order, workflow) {
+  return { ...order, lineItems: lineItemsForPickingWorkflow(order, workflow) };
+}
+
+function newWorkflowPickingRecord(order) {
+  return {
+    orderId: order.orderId,
+    orderName: order.orderName,
+    itemStatus: {},
+    itemNotes: {},
+    itemPickedQty: {},
+    itemScannedCount: {},
+    itemCrateNumber: {},
+    itemCrateBreakdown: {},
+    currentCrateNumber: 1,
+    closedCrates: [],
+    pickedBy: null,
+    startedAt: null,
+    completedAt: null,
+    completedBy: null,
+  };
+}
+
+function getEssentialsPickingRecord(state, stopName, order) {
+  const key = pickingKeyFor(stopName);
+  if (!state.essentialsPicking) state.essentialsPicking = {};
+  const existing = state.essentialsPicking[key];
+  if (!existing || (existing.completedAt && existing.orderId !== order.orderId)) {
+    state.essentialsPicking[key] = newWorkflowPickingRecord(order);
+  } else {
+    existing.orderId = order.orderId;
+    existing.orderName = order.orderName;
+  }
+  const record = state.essentialsPicking[key];
+  for (const field of ["itemStatus", "itemNotes", "itemPickedQty", "itemScannedCount", "itemCrateNumber", "itemCrateBreakdown"]) {
+    if (!record[field]) record[field] = {};
+  }
+  if (!record.currentCrateNumber) record.currentCrateNumber = 1;
+  if (!record.closedCrates) record.closedCrates = [];
+  if (record.startedAt === undefined) record.startedAt = null;
+  return record;
+}
+
+function getWorkflowPickingRecord(state, stopName, order, workflow) {
+  return workflow === "essentials"
+    ? getEssentialsPickingRecord(state, stopName, order)
+    : getPickingRecord(state, stopName, order);
+}
+
+function pickingWorkflowContext(req, state, key, sourceOrder) {
+  const workflow = normalizedPickingWorkflow((req.body && req.body.workflow) || req.query.workflow);
+  const order = orderForPickingWorkflow(sourceOrder, workflow);
+  const record = getWorkflowPickingRecord(state, key, order, workflow);
+  return { workflow, order, record };
+}
+
 // Whether a given crate has ANYTHING physically in it yet — used to
 // block "New Crate" on an empty box and to size crateCount for the
 // driver/receiving side. Split-aware: checks the real per-crate
@@ -2159,9 +2233,11 @@ app.get("/api/picking-list", async (req, res) => {
   try {
     const cache = await fetchTodaysStopOrders();
     const state = loadState();
-    const list = Object.entries(cache.byStopName).map(([key, order]) => {
-      const record = getPickingRecord(state, key, order);
-      const statuses = Object.values(record.itemStatus);
+    const workflow = normalizedPickingWorkflow(req.query.workflow);
+    const list = Object.entries(cache.byStopName).map(([key, sourceOrder]) => {
+      const order = orderForPickingWorkflow(sourceOrder, workflow);
+      const record = getWorkflowPickingRecord(state, key, order, workflow);
+      const statuses = order.lineItems.map((item, idx) => readItemState(record.itemStatus, item, idx) || "not_picked");
       const pickedCount = statuses.filter((s) => s === "picked").length;
       const missingCount = statuses.filter((s) => s === "missing").length;
       const totalItems = order.lineItems.length;
@@ -2183,9 +2259,9 @@ app.get("/api/picking-list", async (req, res) => {
         retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
         shopifyFulfilled: Boolean(order.shopifyFulfilled),
       };
-    });
+    }).filter((entry) => entry.totalItems > 0);
     saveState(state); // persist any freshly-seeded records
-    res.json({ stops: list, configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN) });
+    res.json({ stops: list, workflow, configured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN) });
   } catch (err) {
     res.json({ stops: [], configured: false, error: err.message });
   }
@@ -2196,11 +2272,14 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
   try {
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    if (order.lineItems.length === 0) {
+      return res.status(404).json({ error: workflow === "essentials" ? "No Essentials items found for this order." : "No food items found for this order." });
+    }
     saveState(state);
 
     res.json({
@@ -2231,6 +2310,7 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
       shopifyFulfilled: Boolean(order.shopifyFulfilled),
       fulfilledAt: order.fulfilledAt || null,
+      workflow,
       pickers: PICKERS,
     });
   } catch (err) {
@@ -2247,8 +2327,11 @@ app.post("/api/picking-item", async (req, res) => {
     }
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+
+    const state = loadState();
+    const { order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
 
     const item = order.lineItems[itemIndex];
     if (!item) {
@@ -2256,8 +2339,6 @@ app.post("/api/picking-item", async (req, res) => {
     }
     const itemKey = lineItemKey(item);
 
-    const state = loadState();
-    const record = getPickingRecord(state, key, order);
     if (!record.startedAt) {
       record.startedAt = new Date().toISOString();
     }
@@ -2336,11 +2417,11 @@ app.post("/api/picking-scan", async (req, res) => {
     }
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
     // A scan with nobody assigned means it either happened before the
     // picker chose their name, or the client's local state is stale — in
     // both cases the scan should not silently count, and the picker
@@ -2452,11 +2533,11 @@ app.post("/api/picking-new-crate", async (req, res) => {
     if (!stopName) return res.status(400).json({ error: "stopName required" });
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
 
     const closedCrateNumber = record.currentCrateNumber;
     const hasItemsInCrate = crateHasAnyItems(record, closedCrateNumber);
@@ -2495,11 +2576,11 @@ app.post("/api/picking-reopen-crate", async (req, res) => {
     }
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
     const targetCrate = Number(crateNumber);
 
     if (!record.closedCrates.includes(targetCrate)) {
@@ -2534,11 +2615,11 @@ app.post("/api/picking-set-picker", async (req, res) => {
     if (!stopName) return res.status(400).json({ error: "stopName required" });
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
     record.pickedBy = picker || null;
     if (picker && !record.startedAt) {
       record.startedAt = new Date().toISOString();
@@ -2648,11 +2729,11 @@ app.post("/api/picking-finish", async (req, res) => {
     if (!stopName) return res.status(400).json({ error: "stopName required" });
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const record = getPickingRecord(state, key, order);
+    const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
 
     if (!record.pickedBy) {
       return res.status(400).json({ error: "Select who's picking this order first." });
@@ -2681,7 +2762,27 @@ app.post("/api/picking-finish", async (req, res) => {
     record.completedAt = new Date().toISOString();
     record.completedBy = record.pickedBy;
     saveState(state);
-    archiveCompletedOrder(key, record, order);
+
+    const foodOrder = orderForPickingWorkflow(sourceOrder, "orders");
+    const essentialsOrder = orderForPickingWorkflow(sourceOrder, "essentials");
+    const foodRecord = workflow === "orders"
+      ? record
+      : getWorkflowPickingRecord(state, key, foodOrder, "orders");
+    const essentialsRecord = workflow === "essentials"
+      ? record
+      : getWorkflowPickingRecord(state, key, essentialsOrder, "essentials");
+    const completion = workflowCompletion(
+      sourceOrder,
+      foodRecord,
+      essentialsRecord,
+      ESSENTIALS_SEPARATION_ENABLED
+    );
+    const { foodComplete, essentialsComplete, allComplete: allWorkflowsComplete } = completion;
+    saveState(state);
+
+    if (allWorkflowsComplete) {
+      archiveCompletedOrder(key, foodOrder.lineItems.length > 0 ? foodRecord : essentialsRecord, sourceOrder);
+    }
 
     // Auto-fulfill the real Shopify order(s) behind this stop now that
     // picking is done. Never lets a Shopify-side failure block the
@@ -2689,21 +2790,23 @@ app.post("/api/picking-finish", async (req, res) => {
     // any failure is logged (Railway logs) and returned in the
     // response so it can be handled by hand if it ever comes up.
     let fulfillmentResults = [];
-    try {
-      fulfillmentResults = await autoFulfillPickedOrders(order);
-    } catch (err) {
-      console.error(`[auto-fulfill] unexpected failure for stop ${key}:`, err.message);
-      fulfillmentResults = [{ ok: false, error: err.message }];
+    if (allWorkflowsComplete) {
+      try {
+        fulfillmentResults = await autoFulfillPickedOrders(sourceOrder);
+      } catch (err) {
+        console.error(`[auto-fulfill] unexpected failure for stop ${key}:`, err.message);
+        fulfillmentResults = [{ ok: false, error: err.message }];
+      }
     }
 
     // A successful Shopify fulfillment removes the order from the live
     // route board immediately. The completed archive remains authoritative
     // for crate labels and the store-facing receiving QR workflow.
-    const shopifyFulfilled =
+    const shopifyFulfilled = allWorkflowsComplete &&
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
     if (shopifyFulfilled) {
-      markArchivedOrderFulfilled(key, order.orderId);
-      if (ordersCache.byStopName[key] && ordersCache.byStopName[key].orderId === order.orderId) {
+      markArchivedOrderFulfilled(key, sourceOrder.orderId);
+      if (ordersCache.byStopName[key] && ordersCache.byStopName[key].orderId === sourceOrder.orderId) {
         delete ordersCache.byStopName[key];
       }
     }
@@ -2716,6 +2819,8 @@ app.post("/api/picking-finish", async (req, res) => {
       closedCrates: record.closedCrates,
       fulfillment: fulfillmentResults,
       removedFromBoard: shopifyFulfilled,
+      workflow,
+      waitingForWorkflow: completion.waitingForWorkflow,
       retainedForDelivery: false,
     });
   } catch (err) {
@@ -2731,13 +2836,23 @@ app.post("/api/picking-reopen", async (req, res) => {
     if (!stopName) return res.status(400).json({ error: "stopName required" });
     const cache = await fetchTodaysStopOrders();
     const key = pickingKeyFor(stopName);
-    const order = cache.byStopName[key];
-    if (!order) return res.status(404).json({ error: "No order found for this stop." });
-    if (order.retainedAfterFulfillment) {
+    const sourceOrder = cache.byStopName[key];
+    if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) {
       return res.status(409).json({ error: "This order is already fulfilled in Shopify and is locked for delivery and receiving." });
     }
 
     const state = loadState();
+    const workflow = normalizedPickingWorkflow(req.body.workflow);
+    if (workflow === "essentials") {
+      const order = orderForPickingWorkflow(sourceOrder, workflow);
+      const record = getEssentialsPickingRecord(state, key, order);
+      record.completedAt = null;
+      record.completedBy = null;
+      saveState(state);
+      return res.json({ ok: true, workflow });
+    }
+    const order = orderForPickingWorkflow(sourceOrder, workflow);
     const liveRecord = state.picking[key];
     // Trust any completed live record regardless of orderId drift — same
     // reasoning as /api/picked-summary above: completion locks the
@@ -2794,9 +2909,15 @@ app.post("/api/picking-reset-order", async (req, res) => {
     }
 
     const state = loadState();
-    delete state.picking[key];
+    const workflow = normalizedPickingWorkflow(req.body.workflow);
+    if (workflow === "essentials") {
+      if (!state.essentialsPicking) state.essentialsPicking = {};
+      delete state.essentialsPicking[key];
+    } else {
+      delete state.picking[key];
+    }
     saveState(state);
-    res.json({ ok: true });
+    res.json({ ok: true, workflow });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2811,14 +2932,16 @@ app.post("/api/picking-reset-order", async (req, res) => {
 // items actually packed into THAT crate.
 // Shared by the Zebra-ready PDF label endpoint and the picking screen's
 // label preview. One place decides what belongs to a physical crate.
-async function getCrateLabelData(stopNameRaw, crateNumber) {
+async function getCrateLabelData(stopNameRaw, crateNumber, workflowRaw) {
   const cache = await fetchTodaysStopOrders();
   const key = pickingKeyFor(decodeURIComponent(stopNameRaw));
-  const order = cache.byStopName[key];
-  if (!order) return null;
+  const sourceOrder = cache.byStopName[key];
+  if (!sourceOrder) return null;
 
   const state = loadState();
-  const record = getPickingRecord(state, key, order);
+  const workflow = normalizedPickingWorkflow(workflowRaw);
+  const order = orderForPickingWorkflow(sourceOrder, workflow);
+  const record = getWorkflowPickingRecord(state, key, order, workflow);
 
   // Split-aware: a large-quantity item can legitimately have some
   // units in an earlier crate and the rest in this one, if "New
@@ -2848,13 +2971,14 @@ async function getCrateLabelData(stopNameRaw, crateNumber) {
     stopNameUpper,
     identity,
     crateItems,
+    workflow,
   };
 }
 
 app.get("/api/crate-label-data/:stopName/:crateNumber", async (req, res) => {
   try {
     const crateNumber = parseInt(req.params.crateNumber, 10);
-    const data = await getCrateLabelData(req.params.stopName, crateNumber);
+    const data = await getCrateLabelData(req.params.stopName, crateNumber, req.query.workflow);
     if (!data) return res.status(404).json({ error: "No order found for this stop." });
     if (data.empty) return res.status(404).json({ error: "No items found in this crate." });
     res.json(data);
@@ -2866,7 +2990,7 @@ app.get("/api/crate-label-data/:stopName/:crateNumber", async (req, res) => {
 app.get("/api/crate-label/:stopName/:crateNumber", async (req, res) => {
   try {
     const crateNumber = parseInt(req.params.crateNumber, 10);
-    const data = await getCrateLabelData(req.params.stopName, crateNumber);
+    const data = await getCrateLabelData(req.params.stopName, crateNumber, req.query.workflow);
     if (!data) return res.status(404).send("No order found for this stop.");
     if (data.empty) return res.status(404).send("No items found in this crate.");
 
@@ -3525,14 +3649,14 @@ app.get("/api/essentials-shadow", async (req, res) => {
     } catch (_) {}
     const cards = buildEssentialsShadow(
       cache.byStopName,
-      stateSnapshot.picking || {},
+      (ESSENTIALS_SEPARATION_ENABLED ? stateSnapshot.essentialsPicking : stateSnapshot.picking) || {},
       (stopName) => routeInfoForStop(stopName).routeName
     );
     res.set("Cache-Control", "no-store");
     res.json({
-      mode: "shadow",
+      mode: ESSENTIALS_SEPARATION_ENABLED ? "operational" : "shadow",
       source: "regular-orders",
-      mutationsEnabled: false,
+      mutationsEnabled: ESSENTIALS_SEPARATION_ENABLED,
       generatedAt: new Date().toISOString(),
       cards,
     });

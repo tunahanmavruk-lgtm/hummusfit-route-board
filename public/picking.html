@@ -1025,6 +1025,7 @@
 
 <script src="/crate-label-layout.js"></script>
 <script src="/crate-label-zpl.js"></script>
+<script src="/essentials-label-zpl.js"></script>
 <script>
 (function(){
   function fmtTime(iso){
@@ -1041,6 +1042,23 @@
   var scanningForIdx = null;
   var html5QrCode = null;
   var pushSubscribedFlag = false;
+  var urlParams = new URLSearchParams(window.location.search);
+  var pickingWorkflow = urlParams.get('workflow') === 'essentials' ? 'essentials' : 'orders';
+
+  function workflowBody(data){
+    data.workflow = pickingWorkflow;
+    return JSON.stringify(data);
+  }
+
+  function workflowQuery(){
+    return '?workflow=' + encodeURIComponent(pickingWorkflow);
+  }
+
+  if(pickingWorkflow === 'essentials'){
+    document.getElementById('pageTitle').innerHTML = 'ESSENTIALS <span>PICKING</span>';
+    document.getElementById('backLink').textContent = '← All Essentials';
+    document.getElementById('btPrinterStatus').textContent = '🖨️ ZD620 3×1 ready';
+  }
 
   function pushSupported(){
     return 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
@@ -1127,7 +1145,9 @@
   function renderList(){
     view = 'list';
     document.body.classList.remove('b2b-mode');
-    document.getElementById('pageTitle').innerHTML = 'PICK <span>LIST</span>';
+    document.getElementById('pageTitle').innerHTML = pickingWorkflow === 'essentials'
+      ? 'ESSENTIALS <span>PICKING</span>'
+      : 'PICK <span>LIST</span>';
     document.getElementById('backLink').style.display = 'none';
     updateCrateFab();
     var main = document.getElementById('mainContent');
@@ -1143,7 +1163,9 @@
     }
 
     if(pickingList.length === 0){
-      main.innerHTML = notifBanner + '<div class="empty-state">No orders in the current picking window yet.<br>Check back once today\'s orders start coming in.</div>';
+      main.innerHTML = notifBanner + '<div class="empty-state">' + (pickingWorkflow === 'essentials'
+        ? 'No Essentials lines are waiting right now.'
+        : 'No orders in the current picking window yet.<br>Check back once today\'s orders start coming in.') + '</div>';
       wireNotifBanner();
       return;
     }
@@ -1214,7 +1236,7 @@
       fetch('/api/picking-finish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stopName: orderDetail.stopName })
+        body: workflowBody({ stopName: orderDetail.stopName })
       }).then(function(r){
         return r.json().then(function(data){ return { ok: r.ok, data: data }; });
       }).then(function(result){
@@ -1234,7 +1256,9 @@
           printCrateLabel(orderDetail.stopName, result.data.finalCrateNumber);
         }
         var fulfillmentFailures = (result.data.fulfillment || []).filter(function(entry){ return !entry.ok; });
-        if(fulfillmentFailures.length){
+        if(result.data.waitingForWorkflow){
+          alert((pickingWorkflow === 'essentials' ? 'Essentials' : 'Food picking') + ' is complete. Shopify fulfillment is safely waiting for ' + (result.data.waitingForWorkflow === 'essentials' ? 'Essentials Picking' : 'Food Picking') + ' to finish.');
+        } else if(fulfillmentFailures.length){
           alert('Picking is saved, but Shopify has not confirmed fulfillment yet. This order will stay on the board for a manager to review.');
         } else if(result.data.removedFromBoard){
           loadList();
@@ -1466,7 +1490,7 @@
     fetch('/api/picking-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scanned })
+      body: workflowBody({ stopName: orderDetail.stopName, scannedCode: scanned })
     }).then(function(r){ return r.json(); }).then(function(result){
       if(!result.matched){
         closeScanner();
@@ -1564,7 +1588,7 @@
     fetch('/api/picking-new-crate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stopName: orderDetail.stopName })
+      body: workflowBody({ stopName: orderDetail.stopName })
     }).then(function(r){
       return r.json().then(function(data){ return { ok: r.ok, data: data }; });
     }).then(function(result){
@@ -1629,11 +1653,13 @@
   // tested 4x3 system-print path so no saved crate loses its label.
   async function printCrateLabel(stopName, crateNumber){
     try{
-      var response = await fetch('/api/crate-label-data/' + encodeURIComponent(stopName) + '/' + encodeURIComponent(crateNumber), { cache:'no-store' });
+      var response = await fetch('/api/crate-label-data/' + encodeURIComponent(stopName) + '/' + encodeURIComponent(crateNumber) + workflowQuery(), { cache:'no-store' });
       var data = await response.json();
       if(!response.ok || data.error) throw new Error(data.error || 'Could not load crate label.');
       if(await autoPrintAvailable()){
-        var labelPages = createCrateLabelZpl.pages(data, crateNumber);
+        var labelPages = pickingWorkflow === 'essentials'
+          ? [createEssentialsLabelZpl(data, crateNumber)]
+          : createCrateLabelZpl.pages(data, crateNumber);
         var jobId = String(stopName) + '/' + crateNumber + '/' + Date.now() + '/' + Math.random().toString(36).slice(2);
         for(var pageIndex = 0; pageIndex < labelPages.length; pageIndex++){
           var sent;
@@ -1641,7 +1667,7 @@
             sent = await bridgeRequest('/print', {
               method:'POST',
               headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
-              body:JSON.stringify({ jobId:jobId + '/' + (pageIndex + 1), zpl:labelPages[pageIndex] })
+              body:JSON.stringify({ printer:pickingWorkflow === 'essentials' ? 'essentials' : 'orders', jobId:jobId + '/' + (pageIndex + 1), zpl:labelPages[pageIndex] })
             }, 8000);
           }catch(bridgeError){
             throw new Error('NETUM did not confirm label ' + (pageIndex + 1) + '/' + labelPages.length + '. Check its notification and use Reprint if needed.');
@@ -1652,6 +1678,9 @@
         btStatusEl().textContent = '🖨️ Crate ' + crateNumber + ': ' + labelPages.length + ' label' + (labelPages.length === 1 ? '' : 's') + ' sent to Zebra';
         setTimeout(function(){ btStatusEl().textContent = '🖨️ Auto Print ready'; }, 4000);
         return;
+      }
+      if(pickingWorkflow === 'essentials'){
+        throw new Error('HF Auto Print is required for the 3×1 Essentials printer. Open the companion app and retry.');
       }
       renderCratePrintSheet(data, crateNumber);
       window.print();
@@ -1795,7 +1824,7 @@
     fetch('/api/picking-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stopName: orderDetail.stopName, scannedCode: scannedCode })
+      body: workflowBody({ stopName: orderDetail.stopName, scannedCode: scannedCode })
     }).then(function(r){ return r.json(); }).then(function(result){
       if(!result.matched){
         if(result.needsPicker){
@@ -1982,7 +2011,7 @@
           ' <span class="crate-reprint-hint">(tap the crate number to reprint its label, tap Edit to add/remove items in it)</span></div>';
       }
 
-      html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>Finish Order</button>';
+      html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>' + (pickingWorkflow === 'essentials' ? 'Finish Essentials' : 'Finish Order') + '</button>';
       if(!canFinish){
         html += '<div class="finish-hint">' +
           (notPicked > 0 ? notPicked + ' item(s) still need to be marked before you can finish' : 'Select your name to finish') +
@@ -1990,13 +2019,15 @@
       }
     }
 
-    html +=
-      '<div class="bottom-bar">' +
-        '<a class="big-btn' + (hasMissing ? ' danger' : ' disabled') + '" ' +
-          (hasMissing ? 'href="/api/missing-items-pdf/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank"' : '') +
-          '>Missing Report</a>' +
-        '<a class="big-btn primary" href="/api/packing-slip/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank">Packing Slip PDF</a>' +
-      '</div>';
+    if(pickingWorkflow !== 'essentials'){
+      html +=
+        '<div class="bottom-bar">' +
+          '<a class="big-btn' + (hasMissing ? ' danger' : ' disabled') + '" ' +
+            (hasMissing ? 'href="/api/missing-items-pdf/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank"' : '') +
+            '>Missing Report</a>' +
+          '<a class="big-btn primary" href="/api/packing-slip/' + encodeURIComponent(orderDetail.stopName) + '" target="_blank">Packing Slip PDF</a>' +
+        '</div>';
+    }
 
     main.innerHTML = html;
 
@@ -2008,7 +2039,7 @@
             fetch('/api/picking-reopen', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stopName: orderDetail.stopName })
+              body: workflowBody({ stopName: orderDetail.stopName })
             }).then(function(r){ return r.json(); }).then(function(){
               orderDetail.completedAt = null;
               orderDetail.completedBy = null;
@@ -2029,7 +2060,7 @@
         fetch('/api/picking-reset-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stopName: orderDetail.stopName })
+          body: workflowBody({ stopName: orderDetail.stopName })
         }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
           .then(function(result){
             if(!result.ok || result.data.error){
@@ -2051,7 +2082,7 @@
         fetch('/api/picking-set-picker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stopName: orderDetail.stopName, picker: pickerEl.value })
+          body: workflowBody({ stopName: orderDetail.stopName, picker: pickerEl.value })
         }).then(function(r){ return r.json(); }).then(function(data){
           orderDetail.pickedByPhoto = data.pickedByPhoto || null;
           renderOrder();
@@ -2085,7 +2116,7 @@
         fetch('/api/picking-reopen-crate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stopName: orderDetail.stopName, crateNumber: crateNumber })
+          body: workflowBody({ stopName: orderDetail.stopName, crateNumber: crateNumber })
         }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
           .then(function(result){
             if(!result.ok || result.data.error){
@@ -2158,7 +2189,7 @@
         fetch('/api/picking-item', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: workflowBody({
             stopName: orderDetail.stopName,
             itemIndex: idx,
             status: newStatus,
@@ -2199,7 +2230,7 @@
         fetch('/api/picking-item', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: next })
+          body: workflowBody({ stopName: orderDetail.stopName, itemIndex: idx, status: next })
         });
       });
     });
@@ -2215,7 +2246,7 @@
           fetch('/api/picking-item', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stopName: orderDetail.stopName, itemIndex: idx, status: orderDetail.itemStatus[idx], note: val })
+            body: workflowBody({ stopName: orderDetail.stopName, itemIndex: idx, status: orderDetail.itemStatus[idx], note: val })
           });
         }, 500);
       });
@@ -2241,7 +2272,7 @@
   }
 
   function openOrder(stopName){
-    fetch('/api/picking-order/' + encodeURIComponent(stopName))
+    fetch('/api/picking-order/' + encodeURIComponent(stopName) + workflowQuery())
       .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
       .then(function(result){
         if(!result.ok || result.data.error){
@@ -2263,7 +2294,7 @@
   });
 
   function loadList(){
-    fetch('/api/picking-list')
+    fetch('/api/picking-list' + workflowQuery())
       .then(function(r){ return r.json(); })
       .then(function(data){
         pickingList = data.stops || [];
@@ -2287,23 +2318,27 @@
   // Zebra setup and calibration are available from the persistent print
   // status control. The calibration job uses the same path as live crates.
   btStatusEl().addEventListener('click', function(){
+    var isEssentials = pickingWorkflow === 'essentials';
+    var setupTitle = isEssentials ? 'Zebra ZD620 3×1 setup' : 'Zebra 4×3 setup';
+    var setupModel = isEssentials ? 'Warehouse: Zebra ZD620, 203 dpi' : 'Orders: Zebra ZD421/ZD621, 203 dpi';
+    var setupMedia = isEssentials ? '3-inch-wide × 1-inch-long gap labels' : '4-inch-wide × 3-inch-long gap labels';
     var html =
       '<div class="modal-overlay" id="printerSetupOverlay">' +
         '<div class="modal-box print-modal-box">' +
-          '<div class="modal-title">Zebra 4×3 setup</div>' +
+          '<div class="modal-title">' + setupTitle + '</div>' +
           '<div style="padding:0 20px 18px;line-height:1.55;color:var(--dim);font-size:13px;">' +
-            '<b style="display:block;color:var(--ink);margin-bottom:8px;">Recommended: Zebra ZD421, 203 dpi, direct thermal</b>' +
-            '<div>1. Load 4-inch-wide × 3-inch-long gap labels.</div>' +
+            '<b style="display:block;color:var(--ink);margin-bottom:8px;">' + setupModel + '</b>' +
+            '<div>1. Load ' + setupMedia + '.</div>' +
             '<div>2. Recommended: connect the printer and picking device to the same Wi-Fi network. Use Bluetooth Classic as a fallback.</div>' +
-            '<div>3. NETUM: open HF Auto Print once and save the Zebra IP for automatic labels.</div>' +
+            '<div>3. NETUM: open HF Auto Print and save both Zebra IP addresses.</div>' +
             '<div>4. Windows/Mac: add it as a network printer using its IP address and the Zebra driver.</div>' +
             '<div>5. Run SmartCal: hold Pause + Cancel for two seconds.</div>' +
-            '<div>6. In Zebra Print use 4 × 3 in media, Rotation 0°, and Fit To Page off.</div>' +
-            '<div>7. Test 4×3 Label prints automatically on a configured NETUM; other devices show their print dialog.</div>' +
+            '<div>6. Keep Rotation 0° and Fit To Page off.</div>' +
+            '<div>7. The test prints automatically on a configured NETUM.</div>' +
           '</div>' +
           '<div class="modal-actions">' +
             '<div class="modal-btn" id="printerSetupCloseBtn">Close</div>' +
-            '<div class="modal-btn confirm" id="printerSetupTestBtn">Test 4×3 Label</div>' +
+            '<div class="modal-btn confirm" id="printerSetupTestBtn">Test ' + (isEssentials ? '3×1' : '4×3') + ' Label</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -2315,7 +2350,7 @@
       document.getElementById('modalContainer').innerHTML = '';
       var data = {
         routeName:'HF LOGISTICS · ZEBRA TEST', stopNameUpper:'TEST STORE',
-        orderName:'4X3-CALIBRATION', pickedBy:'Warehouse',
+        orderName:isEssentials ? '3X1-CALIBRATION' : '4X3-CALIBRATION', pickedBy:'Warehouse',
         crateItems:[
           { quantity:12, title:'Chicken Bowl' }, { quantity:8, title:'Steak Bowl' },
           { quantity:6, title:'Falafel Bowl' }, { quantity:4, title:'Hummus Cups' }
@@ -2325,15 +2360,19 @@
         try{
           var sent = await bridgeRequest('/print', {
             method:'POST', headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
-            body:JSON.stringify({ jobId:'test/' + Date.now(), zpl:createCrateLabelZpl(data, 1) })
+            body:JSON.stringify({
+              printer:isEssentials ? 'essentials' : 'orders',
+              jobId:'test/' + Date.now(),
+              zpl:isEssentials ? createEssentialsLabelZpl(data, 1) : createCrateLabelZpl(data, 1)
+            })
           }, 8000);
           var result = await sent.json();
           if(!sent.ok || !result.ok) throw new Error(result.message || 'Printer rejected the test.');
           btStatusEl().textContent = '🖨️ Test sent to Zebra';
         }catch(err){ alert('Test label failed: ' + err.message); }
       }else{
-        renderCratePrintSheet(data, 1);
-        window.print();
+        if(isEssentials) alert('Open HF Auto Print on this NETUM and retry the ZD620 test.');
+        else { renderCratePrintSheet(data, 1); window.print(); }
       }
     });
   });
@@ -2344,7 +2383,6 @@
   // /picking?stop=Lindenhurst — used by the "order number" link on the
   // main Route Board so dispatch/drivers land right on that order
   // instead of having to find it in the list themselves.
-  var urlParams = new URLSearchParams(window.location.search);
   var deepLinkStop = urlParams.get('stop');
   if(deepLinkStop){
     openOrder(deepLinkStop);
