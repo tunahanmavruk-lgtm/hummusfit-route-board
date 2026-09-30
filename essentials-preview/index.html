@@ -24,7 +24,7 @@
     <a href="/">Long Island</a>
     <a href="/out-of-state">Out-of-state</a>
     <a href="/picking">Order picking</a>
-    <a class="active" href="/essentials" aria-current="page">Essentials <small>Shadow</small></a>
+    <a class="active" href="/essentials" aria-current="page">Essentials <small id="essentialsNavMode">Shadow</small></a>
     <div class="sidebar-note"><strong>No routing control</strong><span>This tab cannot move or fulfill an order.</span></div>
   </aside>
 
@@ -59,7 +59,7 @@
       </section>
 
       <section class="summary-grid" aria-label="Essentials overview">
-        <article><span>Essentials groups</span><strong id="groupCount">—</strong><small>Derived from regular orders</small></article>
+        <article><span>Essentials groups</span><strong id="groupCount">—</strong><small id="groupSource">Derived from regular orders</small></article>
         <article><span>Ordered quantity</span><strong id="caseCount">—</strong><small>Cases or packs as ordered</small></article>
         <article><span>Ready to route</span><strong id="readyCount">—</strong><small>Regular order completed</small></article>
         <article class="attention"><span>Needs attention</span><strong id="exceptionCount">—</strong><small>Missing or partial regular line</small></article>
@@ -80,7 +80,7 @@
       <button class="modal-close" id="closeModal" aria-label="Close">×</button>
       <p class="eyebrow">3×1 Zebra label preview</p><h2 id="labelTitle">Essentials</h2>
       <div class="label-preview"><div><small>HF ESSENTIALS</small><strong id="labelStore">STORE</strong></div><div class="label-meta"><span id="labelOrder">REGULAR ORDER</span><b id="labelCases">0 CASES</b></div><div class="barcode" aria-hidden="true"></div></div>
-      <p class="modal-note">Printing is locked in shadow mode. This preview does not call NETUM, Zebra, crate-label, or regular-order APIs.</p>
+      <p class="modal-note" id="labelPreviewNote">Printing is locked in shadow mode. This preview does not call NETUM, Zebra, crate-label, or regular-order APIs.</p>
       <button class="primary full" id="confirmPreview">Close preview</button>
     </section>
   </div>

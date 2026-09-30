@@ -79,10 +79,14 @@ async function loadShadowQueue(){
     mutationsEnabled = result.mode === 'operational' && result.mutationsEnabled === true;
     shadowCards = Array.isArray(result.cards) ? result.cards : [];
     if(mutationsEnabled){
+      document.title = 'Hummus Fit Essentials — Live Picking';
       document.getElementById('modePill').textContent = 'Operational · Separate picking';
+      document.getElementById('essentialsNavMode').textContent = 'Live';
       document.getElementById('operatingMode').textContent = 'Live picking';
+      document.getElementById('groupSource').textContent = 'Active Shopify orders';
       document.getElementById('separationTitle').textContent = 'Essentials are separated from food picking.';
       document.getElementById('separationDetail').textContent = 'Shopify fulfillment waits until both Food Picking and Essentials Picking are complete.';
+      document.getElementById('labelPreviewNote').textContent = 'This is a visual preview only. Use + Label One Case in Essentials Picking to print the real 3×1 case label.';
     }
     updateSummary(); render();
     document.getElementById('loadingState').hidden = true;
