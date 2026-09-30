@@ -1,6 +1,6 @@
 # HF Auto Print for NETUM Q900
 
-This small Android companion routes Zebra jobs from HF Logistics to two printers on the local network. Order Picking sends 4 × 3-inch crate labels to the order-printer profile. Essentials sends 3 × 1-inch labels to the warehouse ZD620 profile. Both workflows post to `127.0.0.1:8877` on the same NETUM and include `printer: "orders"` or `printer: "essentials"`; the companion forwards the ZPL to the corresponding private IPv4 address on TCP 9100. The browser uses its normal print fallback if the companion is absent.
+This small Android companion routes Zebra jobs from HF Logistics to two printers on the local network. Order Picking sends 4 × 3-inch crate labels to the order-printer profile. Each successful Essentials case scan sends one 3 × 1-inch case label to the warehouse ZD620 profile; Essentials do not use crates. Both workflows post to `127.0.0.1:8877` on the same NETUM and include `printer: "orders"` or `printer: "essentials"`; the companion forwards the ZPL to the corresponding private IPv4 address on TCP 9100. The browser uses its normal print fallback if the companion is absent.
 
 The HTTP listener binds to loopback only and accepts browser requests only from `https://hummusfit-route-board-production.up.railway.app`. The `X-HF-Print` header forces an origin-checked preflight. A bounded in-memory job-ID cache rejects repeat submissions of the same job. A successful response means the job was sent to the Zebra socket; it does not prove that physical media exited the printer.
 

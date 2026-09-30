@@ -2331,7 +2331,7 @@ app.post("/api/picking-item", async (req, res) => {
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const { order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
 
     const item = order.lineItems[itemIndex];
     if (!item) {
@@ -2365,7 +2365,7 @@ app.post("/api/picking-item", async (req, res) => {
         delete record.itemScannedCount[itemKey];
       }
     }
-    if (status === "picked" || status === "partial") {
+    if (workflow !== "essentials" && (status === "picked" || status === "partial")) {
       // Physically going into a box right now — tag it with whichever
       // crate is currently active. A manual tap is one instant, all-
       // at-once action, so unlike a multi-scan item it can never
@@ -2421,7 +2421,7 @@ app.post("/api/picking-scan", async (req, res) => {
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const { order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
     // A scan with nobody assigned means it either happened before the
     // picker chose their name, or the client's local state is stale — in
     // both cases the scan should not silently count, and the picker
@@ -2474,23 +2474,19 @@ app.post("/api/picking-scan", async (req, res) => {
     const priorScanned = readItemState(record.itemScannedCount, item, matchIdx) || 0;
     record.itemScannedCount[matchKey] = priorScanned + 1;
     const scannedNow = record.itemScannedCount[matchKey];
-    // This unit is physically going into whichever crate is active RIGHT
-    // NOW — not necessarily the same crate earlier units of this same
-    // item went into. If "New Crate" gets tapped mid-scan on a
-    // large-quantity item, the remaining units really do end up in a
-    // different physical box, so each crate needs its own accurate
-    // count of this item rather than the whole quantity being credited
-    // to a single crate (which either undercounted the new crate or
-    // overcounted it, depending which crate "won").
-    const priorBreakdown = readItemState(record.itemCrateBreakdown, item, matchIdx) || {};
-    record.itemCrateBreakdown[matchKey] = { ...priorBreakdown };
-    record.itemCrateBreakdown[matchKey][record.currentCrateNumber] =
-      (record.itemCrateBreakdown[matchKey][record.currentCrateNumber] || 0) + 1;
-    // itemCrateNumber now just tracks "which crate is this item active
-    // in right now" for quick presence checks — always the current
-    // crate, updated on every scan. The real per-crate quantities live
-    // in itemCrateBreakdown above.
-    record.itemCrateNumber[matchKey] = record.currentCrateNumber;
+    if (workflow !== "essentials") {
+      // Food units are physically packed into route crates. Essentials are
+      // already their own cases, so they intentionally never enter this
+      // crate accounting path and receive a 3x1 label per scan instead.
+      const priorBreakdown = readItemState(record.itemCrateBreakdown, item, matchIdx) || {};
+      record.itemCrateBreakdown[matchKey] = { ...priorBreakdown };
+      record.itemCrateBreakdown[matchKey][record.currentCrateNumber] =
+        (record.itemCrateBreakdown[matchKey][record.currentCrateNumber] || 0) + 1;
+      record.itemCrateNumber[matchKey] = record.currentCrateNumber;
+    } else {
+      delete record.itemCrateNumber[matchKey];
+      delete record.itemCrateBreakdown[matchKey];
+    }
     let newStatus = "not_picked";
     if (scannedNow >= item.quantity) {
       newStatus = "picked";
@@ -2511,6 +2507,14 @@ app.post("/api/picking-scan", async (req, res) => {
       itemTitle: item.title,
       scannedCount: scannedNow,
       totalQty: item.quantity,
+      caseLabelJobId: workflow === "essentials"
+        ? `ess-${crypto.createHash("sha256").update([
+            sourceOrder.orderId,
+            matchKey,
+            scannedNow,
+            record.startedAt,
+          ].join("|")).digest("hex").slice(0, 24)}`
+        : null,
       status: newStatus,
       itemStatus: toIndexKeyedDict(record.itemStatus, order.lineItems),
       itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
@@ -2537,7 +2541,10 @@ app.post("/api/picking-new-crate", async (req, res) => {
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    const { workflow, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    if (workflow === "essentials") {
+      return res.status(400).json({ error: "Essentials are labeled as individual cases and do not use crates." });
+    }
 
     const closedCrateNumber = record.currentCrateNumber;
     const hasItemsInCrate = crateHasAnyItems(record, closedCrateNumber);
@@ -2580,7 +2587,10 @@ app.post("/api/picking-reopen-crate", async (req, res) => {
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
 
     const state = loadState();
-    const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    const { workflow, record } = pickingWorkflowContext(req, state, key, sourceOrder);
+    if (workflow === "essentials") {
+      return res.status(400).json({ error: "Essentials are labeled as individual cases and do not use crates." });
+    }
     const targetCrate = Number(crateNumber);
 
     if (!record.closedCrates.includes(targetCrate)) {
@@ -2750,12 +2760,11 @@ app.post("/api/picking-finish", async (req, res) => {
       });
     }
 
-    // Auto-close whatever crate was still active — every crate gets a
-    // label by the time the order is finished, including the last one,
-    // even if the picker never explicitly tapped "New Crate" for it.
-    const finalCrateNumber = record.currentCrateNumber;
-    const finalCrateHasItems = crateHasAnyItems(record, finalCrateNumber);
-    if (finalCrateHasItems && !record.closedCrates.includes(finalCrateNumber)) {
+    // Food picking closes and labels its last route crate. Essentials are
+    // already individual cases and were labeled one-by-one as they scanned.
+    const finalCrateNumber = workflow === "essentials" ? null : record.currentCrateNumber;
+    const finalCrateHasItems = workflow === "essentials" ? false : crateHasAnyItems(record, finalCrateNumber);
+    if (workflow !== "essentials" && finalCrateHasItems && !record.closedCrates.includes(finalCrateNumber)) {
       record.closedCrates.push(finalCrateNumber);
     }
 
@@ -2816,7 +2825,7 @@ app.post("/api/picking-finish", async (req, res) => {
       completedAt: record.completedAt,
       completedBy: record.completedBy,
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
-      closedCrates: record.closedCrates,
+      closedCrates: workflow === "essentials" ? [] : record.closedCrates,
       fulfillment: fulfillmentResults,
       removedFromBoard: shopifyFulfilled,
       workflow,

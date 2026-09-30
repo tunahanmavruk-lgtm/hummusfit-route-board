@@ -52,9 +52,9 @@ If the printer skips labels or the starting position moves, rerun SmartCal. If t
 
 ## Daily operation
 
-Leave both printers powered on and connected to the warehouse LAN. On a configured NETUM, regular crate jobs go to the Orders printer and Essentials jobs go to the ZD620. **New Crate** saves the crate and sends its label automatically. **Confirm & Finish** does the same for the final crate if it contains items. Reprint sends a fresh label automatically. If the companion cannot reach the selected printer, the page shows an error; use Reprint after correcting the connection. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
+Leave both printers powered on and connected to the warehouse LAN. On a configured NETUM, regular food/order picking keeps its existing crate workflow: **New Crate** and **Confirm & Finish** send 4×3 crate labels to the Orders printer. Essentials never use crates. Each successful Essentials case scan immediately sends one 3×1 label to the ZD620, marked with the store, product, and `CASE n OF total`. The catalog-validation page is scan-only and intentionally does not print labels. If the companion cannot reach the selected printer, the page shows an error so the case can be held aside and retried. When loading another roll with the same stock, press Feed once or twice; a full SmartCal is normally unnecessary.
 
-Each label emphasizes the store name, its unique destination code/pattern, and a large crate number. The store address is omitted. A crowded crate prints numbered continuation labels for the same crate so every product remains visible. Keep all labels for that crate together. The NETUM sends each numbered label as a separate confirmed job; if one fails, use Reprint after checking which labels physically came out.
+Order labels emphasize the store name, destination code/pattern, and a large crate number. A crowded food crate prints numbered continuation labels. Essentials case labels instead identify the store, Shopify order, product, and case sequence; attach each 3×1 label directly to the physical product case that was just scanned.
 
 ## Wireless troubleshooting
 

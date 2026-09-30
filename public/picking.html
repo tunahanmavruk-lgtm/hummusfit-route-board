@@ -1252,7 +1252,7 @@
         // Print the final crate's label too, so every crate has one by
         // the time the order is done — even if "New Crate" was never
         // tapped for this last box.
-        if(result.data.finalCrateNumber){
+        if(pickingWorkflow !== 'essentials' && result.data.finalCrateNumber){
           printCrateLabel(orderDetail.stopName, result.data.finalCrateNumber);
         }
         var fulfillmentFailures = (result.data.fulfillment || []).filter(function(entry){ return !entry.ok; });
@@ -1503,6 +1503,9 @@
       orderDetail.itemCrateNumber = result.itemCrateNumber;
       orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
+      if(pickingWorkflow === 'essentials'){
+        printEssentialsCaseLabel(result.itemIndex, result.scannedCount, result.totalQty, result.caseLabelJobId);
+      }
       showScanSuccess(result.itemTitle || item.title, result.scannedCount || result.itemScannedCount[idx], result.totalQty || item.quantity);
       var nowFullyPicked = result.itemStatus[idx] === 'picked';
       if(nowFullyPicked){
@@ -1542,7 +1545,7 @@
   var crateFabItemCountEl = document.getElementById('crateFabItemCount');
 
   function updateCrateFab(){
-    if(view !== 'order' || !orderDetail || orderDetail.completedAt){
+    if(pickingWorkflow === 'essentials' || view !== 'order' || !orderDetail || orderDetail.completedAt){
       crateFabEl.style.display = 'none';
       return;
     }
@@ -1646,6 +1649,42 @@
       }
     }catch(e){}
     return false;
+  }
+
+  // Essentials arrive as their own physical cases rather than being packed
+  // into route crates. Every confirmed case scan gets exactly one compact
+  // ZD620 label immediately, with a deterministic job ID so a browser retry
+  // cannot print the same case twice.
+  async function printEssentialsCaseLabel(itemIndex, scannedCount, totalQty, caseLabelJobId){
+    var item = orderDetail && orderDetail.lineItems && orderDetail.lineItems[itemIndex];
+    if(!item || typeof createEssentialsCaseLabelZpl !== 'function') return;
+    try{
+      if(!await autoPrintAvailable()) throw new Error('HF Auto Print is not ready.');
+      var caseNumber = Math.max(1, Number(scannedCount) || 1);
+      var caseTotal = Math.max(caseNumber, Number(totalQty) || Number(item.quantity) || 1);
+      var cleanOrder = String(orderDetail.orderName || 'ORDER').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
+      var jobId = caseLabelJobId || ('essentials-case-' + cleanOrder + '-' + itemIndex + '-' + caseNumber);
+      var sent = await bridgeRequest('/print', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'X-HF-Print':'1' },
+        body:JSON.stringify({
+          printer:'essentials',
+          jobId:jobId,
+          zpl:createEssentialsCaseLabelZpl({
+            stopNameUpper:String(orderDetail.stopName || '').toUpperCase(),
+            orderName:orderDetail.orderName,
+            itemTitle:item.title,
+            caseNumber:caseNumber,
+            totalCases:caseTotal
+          })
+        })
+      }, 8000);
+      var result = await sent.json();
+      if(!sent.ok || !result.ok) throw new Error(result.message || 'ZD620 did not accept the label.');
+      btStatusEl().textContent = '🖨️ ' + item.title + ' — case ' + caseNumber + '/' + caseTotal + ' labeled';
+    }catch(error){
+      alert('Case scan was saved, but its 3×1 label did not print: ' + error.message + '\nKeep this case aside and retry before finishing.');
+    }
   }
 
   // On a NETUM with HF Auto Print, the crate goes straight to the Zebra
@@ -1843,6 +1882,9 @@
       orderDetail.itemCrateNumber = result.itemCrateNumber;
       orderDetail.itemCrateBreakdown = result.itemCrateBreakdown;
       orderDetail.currentCrateNumber = result.currentCrateNumber;
+      if(pickingWorkflow === 'essentials'){
+        printEssentialsCaseLabel(result.itemIndex, result.scannedCount, result.totalQty, result.caseLabelJobId);
+      }
       renderOrder();
       showScanSuccess(result.itemTitle, result.scannedCount, result.totalQty);
     }).catch(function(err){
@@ -1995,6 +2037,7 @@
     var canFinish = !isLocked && notPicked === 0 && rowTotal > 0;
 
     if(!isLocked){
+      if(pickingWorkflow !== 'essentials'){
       var itemsInCurrentCrate = orderDetail.lineItems.filter(function(item, idx){
         return orderDetail.itemCrateNumber && orderDetail.itemCrateNumber[idx] === orderDetail.currentCrateNumber;
       }).length;
@@ -2009,6 +2052,7 @@
               ' <span class="crate-edit-link" data-edit-crate="' + c + '">Edit</span>';
           }).join(', ') +
           ' <span class="crate-reprint-hint">(tap the crate number to reprint its label, tap Edit to add/remove items in it)</span></div>';
+      }
       }
 
       html += '<button class="finish-btn" id="finishBtn"' + (canFinish ? '' : ' disabled') + '>' + (pickingWorkflow === 'essentials' ? 'Finish Essentials' : 'Finish Order') + '</button>';
@@ -2174,7 +2218,7 @@
         }
         orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
         orderDetail.itemCrateBreakdown = orderDetail.itemCrateBreakdown || {};
-        if(newStatus === 'picked' || newStatus === 'partial'){
+        if(pickingWorkflow !== 'essentials' && (newStatus === 'picked' || newStatus === 'partial')){
           orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
           // A manual entry is one instant action — always fully replaces
           // any prior per-crate breakdown for this item, never split.
@@ -2210,7 +2254,7 @@
         orderDetail.itemStatus[idx] = next;
         orderDetail.itemCrateNumber = orderDetail.itemCrateNumber || {};
         orderDetail.itemCrateBreakdown = orderDetail.itemCrateBreakdown || {};
-        if(next === 'picked' || next === 'partial'){
+        if(pickingWorkflow !== 'essentials' && (next === 'picked' || next === 'partial')){
           orderDetail.itemCrateNumber[idx] = orderDetail.currentCrateNumber;
           // Cycling straight to "picked" via tap (not partial) always
           // means the full ordered quantity — one instant action, one

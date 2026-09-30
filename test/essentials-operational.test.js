@@ -70,6 +70,7 @@ test('functionally blocks fulfillment until both workstreams finish', () => {
 test('routes one NETUM to distinct order and Essentials printer profiles', () => {
   const bridge = read('android-print-bridge/src/com/hummusfit/autoprint/MainActivity.java');
   const picking = read('public/picking.html');
+  const server = read('server.js');
   assert.match(bridge, /DEFAULT_ORDER_IP = "10\.0\.75\.254"/);
   assert.match(bridge, /DEFAULT_ESSENTIALS_IP = "192\.168\.6\.41"/);
   assert.match(bridge, /"orders"\.equals\(printerName\)/);
@@ -77,6 +78,10 @@ test('routes one NETUM to distinct order and Essentials printer profiles', () =>
   assert.match(bridge, /Unknown printer profile/);
   assert.match(picking, /printer:pickingWorkflow === 'essentials' \? 'essentials' : 'orders'/);
   assert.match(picking, /workflowBody\(/);
+  assert.match(picking, /printEssentialsCaseLabel\(result\.itemIndex, result\.scannedCount, result\.totalQty, result\.caseLabelJobId\)/);
+  assert.match(picking, /pickingWorkflow === 'essentials' \|\| view !== 'order'/);
+  assert.match(server, /Essentials are labeled as individual cases and do not use crates/);
+  assert.match(server, /caseLabelJobId: workflow === "essentials"/);
 });
 
 test('opens scoped Essentials picking from the Essentials board', () => {
