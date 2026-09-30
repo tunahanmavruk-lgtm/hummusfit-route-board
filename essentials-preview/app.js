@@ -9,6 +9,8 @@ const visibleItemsFor = entry => activeFilter === 'all' ? entry.items : entry.it
 function card(entry){
   const visibleItems = visibleItemsFor(entry);
   const displayedQuantity = visibleItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const orderNames = String(entry.regularOrderName || '').split(',').map(value => value.trim()).filter(Boolean);
+  const orderLabel = orderNames.length > 1 ? orderNames[orderNames.length - 1] + ' + ' + (orderNames.length - 1) + ' more' : (orderNames[0] || '');
   const hasRetail = visibleItems.some(item => item.type === 'retail');
   const hasOther = visibleItems.some(item => item.type === 'other');
   const typeName = hasRetail && hasOther ? 'Retail + Other Essentials' : hasRetail ? 'Retail Essentials' : 'Other Essentials';
@@ -16,13 +18,14 @@ function card(entry){
   const workflowAction = mutationsEnabled
     ? '<button class="primary" data-pick="' + escapeHtml(entry.stopKey) + '">Open Essentials picking</button>'
     : '<button class="primary shadow-action" disabled>Actions locked · Shadow mode</button>';
+  const previewAction = mutationsEnabled ? '' : '<button class="secondary" data-label="' + escapeHtml(entry.id) + '">Preview 3×1 Label</button>';
   return '<article class="order-card' + (entry.hasException ? ' exception' : '') + '">' +
-    '<div class="card-top"><span class="type-pill ' + (!hasRetail ? 'other' : '') + '">' + typeName + '</span><span class="order-id">' + escapeHtml(entry.regularOrderName) + '</span></div>' +
+    '<div class="card-top"><span class="type-pill ' + (!hasRetail ? 'other' : '') + '">' + typeName + '</span><span class="order-id">' + escapeHtml(orderLabel) + '</span></div>' +
     '<h3>' + escapeHtml(displayStore(entry.store)) + '</h3><p class="route-line">' + escapeHtml(entry.routeName || 'Regular route') + '</p>' +
-    '<div class="case-count"><strong>' + escapeHtml(displayedQuantity) + '</strong><span>' + (activeFilter === 'all' ? 'combined ordered qty' : 'filtered ordered qty') + '</span></div><ul class="item-list">' + items + '</ul>' +
+    '<div class="case-count"><strong>' + escapeHtml(displayedQuantity) + '</strong><span>' + (mutationsEnabled ? 'total cases' : (activeFilter === 'all' ? 'combined ordered qty' : 'filtered ordered qty')) + '</span></div><ul class="item-list">' + items + '</ul>' +
     (entry.progress ? '<div class="progress" aria-label="' + entry.progress + '% reflected from regular picking"><i style="width:' + entry.progress + '%"></i></div>' : '') +
     (entry.hasException ? '<p class="exception-note"><span>!</span><span>Missing or partial on the regular order. Resolve it in Order Picking.</span></p>' : '') +
-    '<div class="card-actions"><button class="secondary" data-label="' + escapeHtml(entry.id) + '">Preview 3×1 Label</button>' + workflowAction + '</div></article>';
+    '<div class="card-actions">' + previewAction + workflowAction + '</div></article>';
 }
 
 function updateSummary(){
@@ -79,8 +82,9 @@ async function loadShadowQueue(){
     mutationsEnabled = result.mode === 'operational' && result.mutationsEnabled === true;
     shadowCards = Array.isArray(result.cards) ? result.cards : [];
     if(mutationsEnabled){
+      document.body.classList.add('operational');
       document.title = 'Hummus Fit Essentials — Live Picking';
-      document.getElementById('modePill').textContent = 'Operational · Separate picking';
+      document.getElementById('modePill').textContent = 'Live';
       document.getElementById('essentialsNavMode').textContent = 'Live';
       document.getElementById('operatingMode').textContent = 'Live picking';
       document.getElementById('groupSource').textContent = 'Active Shopify orders';
