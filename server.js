@@ -17,6 +17,7 @@ const {
   hasB2BSignal,
   normalizeOrderTags,
   selectB2BStop,
+  completedOrderVisible,
   mergeRecentCompletedOrders,
 } = require("./order-lifecycle.js");
 const webpush = require("web-push");
@@ -1302,6 +1303,14 @@ let ordersRefreshInFlight = null;
 // background for the next request instead.
 async function fetchTodaysStopOrders() {
   const now = Date.now();
+  // Apply the 3 PM cutoff even if the one-minute Shopify cache is still
+  // warm; never delay a scanner request just to refresh the order feed.
+  Object.entries(ordersCache.byStopName).forEach(([key, order]) => {
+    if (order.retainedAfterFulfillment &&
+        !completedOrderVisible(order, VALID_STOP_NAMES.get(key), now)) {
+      delete ordersCache.byStopName[key];
+    }
+  });
   const isStale = now - ordersCache.fetchedAt >= ORDERS_CACHE_MS;
   const hasData = ordersCache.fetchedAt > 0;
 
