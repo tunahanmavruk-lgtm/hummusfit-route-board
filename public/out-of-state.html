@@ -623,10 +623,9 @@
   var etaCache = {}; // routeId -> eta response
 
   // The normal board stays focused on today's/tomorrow's route waves, but an
-  // open Shopify order is never allowed to disappear just because its route
+  // order awaiting delivery is never allowed to disappear just because its route
   // is outside that display window. Add any otherwise-hidden route that has
-  // at least one live non-fulfilled order; it falls away automatically after
-  // scanning successfully fulfills the last open order on that route.
+  // at least one open or recently picked order; it falls away after delivery.
   function rebuildRoutesData(){
     var visibleRouteIds = {};
     routesData = scheduledRoutesData.slice();
@@ -637,7 +636,7 @@
         return Boolean(ordersByStop[stop.name.toLowerCase()]);
       });
       if(hasOpenOrder){
-        routesData.push(Object.assign({}, route, { dayLabel: 'Open unfulfilled orders' }));
+        routesData.push(Object.assign({}, route, { dayLabel: 'Orders awaiting delivery' }));
         visibleRouteIds[route.id] = true;
       }
     });

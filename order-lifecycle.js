@@ -32,8 +32,38 @@ function selectB2BStop({ orderTags, customerTags, zipCandidates, useZip, isEligi
   return customerStops.length === 1 ? customerStops[0] : null;
 }
 
+// Shopify removes fulfilled orders from the picking feed. Keep a recent,
+// completed snapshot on the delivery board until the stop is delivered.
+// A new live order for the same stop always takes precedence.
+const COMPLETED_BOARD_RETENTION_MS = 5 * 24 * 60 * 60 * 1000;
+function mergeRecentCompletedOrders(activeByStopName, archive, validStopNames, now = Date.now()) {
+  const merged = { ...activeByStopName };
+  for (const [key, saved] of Object.entries(archive || {})) {
+    if (merged[key] || !validStopNames.has(key) || !saved?.completedAt ||
+        !saved.shopifyFulfilled || saved.deliveryComplete ||
+        !saved.orderId || !Array.isArray(saved.lineItems)) continue;
+    const archivedAt = Date.parse(saved.archivedAt || saved.completedAt);
+    if (!Number.isFinite(archivedAt) || archivedAt > now ||
+        now - archivedAt > COMPLETED_BOARD_RETENTION_MS) continue;
+    merged[key] = {
+      orderId: saved.orderId,
+      orderName: saved.orderName,
+      createdAt: saved.createdAt,
+      orderCount: saved.orderCount || 1,
+      orders: saved.orders || [],
+      lineItems: saved.lineItems,
+      isB2B: Boolean(saved.isB2B),
+      retainedAfterFulfillment: true,
+      shopifyFulfilled: true,
+      fulfilledAt: saved.fulfilledAt || null,
+    };
+  }
+  return merged;
+}
+
 module.exports = {
   hasB2BSignal,
   normalizeOrderTags,
   selectB2BStop,
+  mergeRecentCompletedOrders,
 };

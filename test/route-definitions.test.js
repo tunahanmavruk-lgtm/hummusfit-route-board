@@ -77,20 +77,20 @@ test("routes B2B orders with all shared-ZIP stops preserved", () => {
   assert.match(server, /B2B_ZIP_TO_STOP\.set\(zipMatch\[1\], new Set\(\)\)/);
 });
 
-test("keeps every non-fulfilled order visible until a successful scan fulfillment", () => {
+test("keeps picked orders visible on the route board through delivery", () => {
   assert.doesNotMatch(server, /LOCAL_LOOKBACK_DAYS|B2B_LOOKBACK_DAYS|created_at:>/);
   assert.match(server, /status:any -status:cancelled -fulfillment_status:fulfilled/);
   assert.match(server, /order\.displayFulfillmentStatus !== "FULFILLED"/);
   assert.match(server, /isEligible: \(key\) => Boolean\(VALID_STOP_NAMES\.get\(key\)\?\.isB2B\)/);
   assert.match(server, /fulfillmentResults\.every\(\(result\) => result\.ok\)/);
-  assert.match(server, /delete ordersCache\.byStopName\[key\]/);
-  assert.match(server, /removedFromBoard: shopifyFulfilled/);
-  assert.doesNotMatch(server, /mergeRecentCompletedOrders\(activeByStopName/);
+  assert.match(server, /mergeRecentCompletedOrders\(activeByStopName, loadArchive\(\)/);
+  assert.match(server, /removedFromBoard: false/);
+  assert.match(server, /retainedForDelivery: shopifyFulfilled/);
   assert.match(server, /const archived = archive\[key\]/);
   assert.match(server, /archiveCompletedOrder\(key,[\s\S]*sourceOrder\)/);
   assert.match(outOfStateBoard, /function rebuildRoutesData\(\)/);
   assert.match(outOfStateBoard, /hasOpenOrder = route\.stops\.some/);
-  assert.match(outOfStateBoard, /dayLabel: 'Open unfulfilled orders'/);
+  assert.match(outOfStateBoard, /dayLabel: 'Orders awaiting delivery'/);
   assert.match(outOfStateBoard, /rebuildRoutesData\(\)/);
 });
 

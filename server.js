@@ -17,6 +17,7 @@ const {
   hasB2BSignal,
   normalizeOrderTags,
   selectB2BStop,
+  mergeRecentCompletedOrders,
 } = require("./order-lifecycle.js");
 const webpush = require("web-push");
 
@@ -1208,7 +1209,11 @@ app.post("/api/stop-status", (req, res) => {
       .flatMap((route) => route.stops)
       .find((candidate) => candidate.id === stopId);
     if (stop && !stop.isServiceStop) {
-      markArchivedStopDelivered(pickingKeyFor(stop.name), updated.deliveredAt || now);
+      const stopKey = pickingKeyFor(stop.name);
+      if (markArchivedStopDelivered(stopKey, updated.deliveredAt || now) &&
+          ordersCache.byStopName[stopKey]?.retainedAfterFulfillment) {
+        delete ordersCache.byStopName[stopKey];
+      }
     }
   }
   saveState(state);
@@ -1460,7 +1465,12 @@ async function refreshOrdersCache() {
   }
 
   const activeByStopName = Object.assign({}, localByStopName, await fetchB2BStopOrders());
-  ordersCache = { fetchedAt: now, byStopName: activeByStopName, windowStart, windowEnd };
+  ordersCache = {
+    fetchedAt: now,
+    byStopName: mergeRecentCompletedOrders(activeByStopName, loadArchive(), VALID_STOP_NAMES, now),
+    windowStart,
+    windowEnd,
+  };
   return ordersCache;
 }
 
@@ -2330,6 +2340,7 @@ app.post("/api/picking-item", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2420,6 +2431,7 @@ app.post("/api/picking-case", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2494,6 +2506,7 @@ app.post("/api/picking-scan", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2614,6 +2627,7 @@ app.post("/api/picking-new-crate", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2660,6 +2674,7 @@ app.post("/api/picking-reopen-crate", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2702,6 +2717,7 @@ app.post("/api/picking-set-picker", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2816,6 +2832,7 @@ app.post("/api/picking-finish", async (req, res) => {
     const key = pickingKeyFor(stopName);
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
+    if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
 
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -2893,15 +2910,16 @@ app.post("/api/picking-finish", async (req, res) => {
       }
     }
 
-    // A successful Shopify fulfillment removes the order from the live
-    // route board immediately. The completed archive remains authoritative
-    // for crate labels and the store-facing receiving QR workflow.
+    // Shopify removes fulfilled orders from its picking feed. Keep the
+    // archived snapshot visible on the route board until delivery instead.
     const shopifyFulfilled = allWorkflowsComplete &&
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
     if (shopifyFulfilled) {
       markArchivedOrderFulfilled(key, sourceOrder.orderId);
-      if (ordersCache.byStopName[key] && ordersCache.byStopName[key].orderId === sourceOrder.orderId) {
-        delete ordersCache.byStopName[key];
+      if (ordersCache.byStopName[key]?.orderId === sourceOrder.orderId) {
+        ordersCache.byStopName[key] = mergeRecentCompletedOrders(
+          {}, loadArchive(), VALID_STOP_NAMES
+        )[key];
       }
     }
 
@@ -2912,10 +2930,10 @@ app.post("/api/picking-finish", async (req, res) => {
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: workflow === "essentials" ? [] : record.closedCrates,
       fulfillment: fulfillmentResults,
-      removedFromBoard: shopifyFulfilled,
+      removedFromBoard: false,
       workflow,
       waitingForWorkflow: completion.waitingForWorkflow,
-      retainedForDelivery: false,
+      retainedForDelivery: shopifyFulfilled,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3784,7 +3802,9 @@ let previousOrderStopKeys = new Set();
 async function checkForNewOrdersAndNotify() {
   try {
     const cache = await fetchTodaysStopOrders();
-    const currentKeys = new Set(Object.keys(cache.byStopName));
+    const currentKeys = new Set(Object.keys(cache.byStopName).filter(
+      (key) => !cache.byStopName[key].retainedAfterFulfillment
+    ));
     const newlyAppeared = [...currentKeys].filter((k) => !previousOrderStopKeys.has(k));
 
     // Skip the very first run after a fresh server start — everything
