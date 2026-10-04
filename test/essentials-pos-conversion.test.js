@@ -15,7 +15,7 @@ const supplies = {
   productCollections: ["Other Essentials"],
 };
 const food = { title: "Chicken meal", sku: "MEAL-001", quantity: 4 };
-const key = (item) => `${item.title}::${item.sku}`;
+const key = (item) => `${item.title}::${item.sku || ""}`;
 const read = (dict, item, index) => dict?.[key(item)] ?? dict?.[index];
 
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
@@ -51,6 +51,24 @@ test("uses separate Essentials pick state and excludes food and Other Essentials
   assert.throws(() => receiptLines(order, record, { "SS-4890008101306-CS8": 4, "BUILT-PFB0374-CS12": 2 }, read), /Invalid received/);
   assert.throws(() => receiptLines(order, record, { "SS-4890008101306-CS8": 3, "BUILT-PFB0374-CS12": 2, "PAPER-CS24": 1 }, read), /Unexpected/);
   assert.throws(() => receiptLines(order, { ...record, orderId: "wrong" }, { "SS-4890008101306-CS8": 3 }, read), /exact order/);
+});
+
+test("a SKU-less retail case reports its mapping gap without blocking an approved case", () => {
+  const water = { title: "CASE — Poland Spring Water — 48 × 16.9 oz", sku: null, quantity: 1,
+    productCollections: ["Retail Essentials"] };
+  const order = { orderId: "gid://shopify/Order/2", lineItems: [coca, water] };
+  const record = {
+    orderId: order.orderId, completedAt: "2026-10-04T22:00:00Z",
+    itemStatus: { [key(coca)]: "picked", [key(water)]: "picked" },
+    itemScannedCount: { [key(coca)]: 3, [key(water)]: 1 },
+  };
+  const counts = { [coca.sku]: 3, [water.title]: 1 };
+  const lines = receiptLines(order, record, counts, read);
+  assert.equal(lines[0].unitSku, "4890008101306");
+  assert.equal(lines[0].receivedCases, 3);
+  assert.equal(lines[1].caseSku, water.title);
+  assert.match(lines[1].error, /missing a Shopify SKU/);
+  assert.throws(() => receiptLines(order, record, { ...counts, null: 1 }, read), /Unexpected receipt SKU/);
 });
 
 test("idempotency key is stable per store, order, and case SKU", () => {
