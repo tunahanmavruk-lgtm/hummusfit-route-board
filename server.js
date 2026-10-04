@@ -7,7 +7,8 @@ const PDFDocument = require("pdfkit");
 const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
-const { buildEssentialsShadow } = require("./essentials-shadow.js");
+const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
+const { caseMapping, receiptLines, receiptKey, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
   lineItemsForWorkflow,
@@ -177,7 +178,7 @@ function loadArchive() {
 function saveArchive(archive) {
   fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive, null, 2));
 }
-function archiveCompletedOrder(stopKey, record, order) {
+function archiveCompletedOrder(stopKey, record, order, essentialsRecord = null) {
   const archive = loadArchive();
   archive[stopKey] = {
     ...record,
@@ -188,6 +189,7 @@ function archiveCompletedOrder(stopKey, record, order) {
     orders: order.orders || [{ id: order.orderId, name: order.orderName, createdAt: order.createdAt }],
     isB2B: Boolean(order.isB2B),
     lineItems: order.lineItems,
+    essentialsRecord: essentialsRecord ? JSON.parse(JSON.stringify(essentialsRecord)) : null,
     shopifyFulfilled: false,
   };
   saveArchive(archive);
@@ -303,6 +305,8 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/picking-set-picker",
   "/api/picking-finish",
   "/api/picking-reopen",
+  // This path has its own short-lived service-token check, not board access.
+  "/api/essentials-pos-receipt",
 ]);
 
 app.use((req, res, next) => {
@@ -1031,7 +1035,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     const state = loadState();
     const liveRecord = order ? state.picking[key] : null;
 
-    let record, orderName, isB2B, lineItems;
+    let record, orderName, isB2B, lineItems, essentialsRecord;
     if (liveRecord && liveRecord.completedAt) {
       // Today's live data has a completed record for this stop — trust
       // it regardless of whether the merged orderId string has since
@@ -1044,6 +1048,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       orderName = order.orderName;
       isB2B = Boolean(order.isB2B);
       lineItems = order.lineItems;
+      essentialsRecord = state.essentialsPicking?.[key];
     } else {
       // Not in today's live data — either the calendar has moved past
       // midnight since this was picked, or the order fell out of
@@ -1059,15 +1064,29 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       orderName = archived.orderName;
       isB2B = archived.isB2B;
       lineItems = archived.lineItems;
+      essentialsRecord = archived.essentialsRecord || state.essentialsPicking?.[key];
     }
 
     const items = lineItems.map((item, idx) => {
-      const status = readItemState(record.itemStatus, item, idx) || "not_picked";
+      const essentialsType = ESSENTIALS_SEPARATION_ENABLED ? essentialsTypeFor(item) : null;
+      const workflowIndex = ESSENTIALS_SEPARATION_ENABLED
+        ? lineItems.slice(0, idx).filter((entry) => Boolean(essentialsTypeFor(entry)) === Boolean(essentialsType)).length
+        : idx;
+      const pickedRecord = essentialsType && essentialsRecord?.orderId === record.orderId
+        ? essentialsRecord
+        : record;
+      const status = readItemState(pickedRecord.itemStatus, item, workflowIndex) || "not_picked";
       const pickedQty =
         status === "picked" ? item.quantity :
-        status === "partial" ? (readItemState(record.itemPickedQty, item, idx) || 0) :
+        status === "partial" ? (readItemState(pickedRecord.itemPickedQty, item, workflowIndex) || 0) :
         0; // missing or not_picked
-      return { title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status, imageUrl: item.imageUrl || null };
+      const mapping = essentialsType === "retail" ? caseMapping(item) : null;
+      return {
+        title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status,
+        imageUrl: item.imageUrl || null, productTags: item.productTags || [],
+        productCollections: item.productCollections || [], essentialsType,
+        unitsPerCase: mapping?.unitsPerCase || 0,
+      };
     });
 
     // Same crate-count logic used everywhere else in the app — closed
@@ -1081,6 +1100,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
 
     res.json({
       stopName: req.params.stopName,
+      orderId: record.orderId,
       orderName: orderName,
       pickedBy: record.completedBy || record.pickedBy,
       completedAt: record.completedAt,
@@ -1090,6 +1110,44 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Only the separate Hummus Fit Receiving service may commit a verified
+// store receipt. This endpoint never touches food, Other Essentials, the
+// picking record, warehouse stock, or any B2B location.
+app.post("/api/essentials-pos-receipt", async (req, res) => {
+  if (!ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED || !POS_SHOPIFY_TOKEN) {
+    return res.status(503).json({ error: "Essentials POS conversion is not enabled" });
+  }
+  const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
+  const identity = verifyLogisticsToken(bearer, "essentials.receive");
+  if (!identity || identity.sub !== "hummusfit-receiving") {
+    return res.status(403).json({ error: "Receiving service authorization required" });
+  }
+  try {
+    const { store, orderId, receivedCounts } = req.body || {};
+    const stopKey = String(store || "").trim().toLowerCase();
+    const stop = VALID_STOP_NAMES.get(stopKey);
+    if (!stop || stop.isB2B || !POS_STORE_LOCATIONS[store] || !orderId || !Number.isFinite(ESSENTIALS_POS_CUTOVER)) {
+      return res.status(400).json({ error: "A valid Hummus Fit store, order and cutover are required" });
+    }
+    const archive = loadArchive()[stopKey];
+    if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||
+        Date.parse(archive.createdAt) < ESSENTIALS_POS_CUTOVER) {
+      return res.status(409).json({ error: "This is not a post-cutover fulfilled Hummus Fit Essentials order" });
+    }
+    const lines = receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState);
+    if (!lines.length) return res.json({ ok: true, results: [] });
+    const locationId = await exactStoreLocation(store);
+    const results = [];
+    for (const line of lines) {
+      try { results.push(await convertOneReceivedLine(store, orderId, locationId, line)); }
+      catch (error) { results.push({ sku: line.caseSku, status: "requires_review", error: error.message }); }
+    }
+    res.json({ ok: results.every((result) => ["posted", "already_posted", "zero_received"].includes(result.status)), results });
+  } catch (error) {
+    res.status(409).json({ error: error.message });
   }
 });
 
@@ -1287,6 +1345,122 @@ async function shopifyGraphQL(query, variables) {
     console.error("Shopify GraphQL partial error (continuing with partial data):", JSON.stringify(data.errors).slice(0, 300));
   }
   return data.data;
+}
+
+// POS conversion is deliberately separate from the existing fulfillment
+// Flow. That Flow transfers case SKUs to store locations; after a verified
+// physical receipt we exchange those cases for sell-unit SKUs at the SAME
+// Shopify location. Older orders are excluded so manual corrections (notably
+// Holbrook #743573) cannot be posted twice by a later receiving scan.
+const ESSENTIALS_POS_CONVERSION_ENABLED = process.env.ESSENTIALS_POS_CONVERSION_ENABLED === "true";
+const ESSENTIALS_POS_CUTOVER = Date.parse(process.env.ESSENTIALS_POS_CUTOVER || "2026-10-04T12:00:00Z");
+const POS_LEDGER_FILE = path.join(PERSISTENT_DIR, "essentials-pos-receipts.json");
+const posReceiptInFlight = new Set();
+const POS_API_VERSION = "2026-10";
+const POS_SHOPIFY_TOKEN = process.env.SHOPIFY_POS_CONVERSION_TOKEN || "";
+
+function loadPosLedger() {
+  try { return JSON.parse(fs.readFileSync(POS_LEDGER_FILE, "utf8")); }
+  catch { return {}; }
+}
+function savePosLedger(ledger) {
+  const temporary = `${POS_LEDGER_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2));
+  fs.renameSync(temporary, POS_LEDGER_FILE);
+}
+async function posShopifyGraphQL(query, variables) {
+  if (!SHOP_DOMAIN || !POS_SHOPIFY_TOKEN) throw new Error("Dedicated POS inventory access is not configured");
+  const response = await fetch(`https://${SHOP_DOMAIN}/admin/api/${POS_API_VERSION}/graphql.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": POS_SHOPIFY_TOKEN },
+    body: JSON.stringify({ query, variables }),
+  });
+  const result = await response.json();
+  if (!response.ok || result.errors?.length || !result.data) {
+    throw new Error(`Shopify POS inventory query failed: ${JSON.stringify(result.errors || { status: response.status })}`);
+  }
+  return result.data;
+}
+
+async function exactStoreLocation(store) {
+  const expectedName = POS_STORE_LOCATIONS[store];
+  if (!expectedName) throw new Error(`${store} is not one of the 14 authorized Hummus Fit POS stores`);
+  const data = await posShopifyGraphQL(`query StoreLocations { locations(first: 250) { nodes { id name isActive } } }`, {});
+  const matches = (data.locations?.nodes || []).filter((location) =>
+    location.isActive && location.name.trim() === expectedName);
+  if (matches.length !== 1) throw new Error(`Exactly one active Shopify POS location is required for ${store}`);
+  return matches[0].id;
+}
+
+async function exactInventoryItem(sku, locationId, requireSellable = false) {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
+  const query = `query ExactSku($search: String!, $locationId: ID!) {
+    productVariants(first: 10, query: $search) {
+      nodes { sku barcode price product { status } inventoryItem { id inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
+    }
+  }`;
+  const data = await posShopifyGraphQL(query, { search: `sku:${sku}`, locationId });
+  const matches = (data.productVariants?.nodes || []).filter((variant) => variant.sku === sku);
+  if (matches.length !== 1) throw new Error(`Expected exactly one Shopify variant with SKU ${sku}; found ${matches.length}`);
+  if (requireSellable && (matches[0].product?.status !== "ACTIVE" ||
+      !/^[0-9]{12,14}$/.test(String(matches[0].barcode || "")) ||
+      !(Number(matches[0].price) > 0))) {
+    throw new Error(`POS sell-unit SKU ${sku} must be active, priced, and have a valid UPC/EAN barcode`);
+  }
+  const inventory = matches[0].inventoryItem;
+  const quantity = inventory?.inventoryLevel?.quantities?.find((entry) => entry.name === "available")?.quantity;
+  if (!inventory?.id || !Number.isSafeInteger(quantity)) {
+    throw new Error(`SKU ${sku} is not stocked with available quantity at this POS location`);
+  }
+  return { id: inventory.id, available: quantity };
+}
+
+const POS_ADJUST_MUTATION = `mutation ConvertReceivedCases($input: InventoryAdjustQuantitiesInput!, $key: String!) {
+  inventoryAdjustQuantities(input: $input) @idempotent(key: $key) {
+    inventoryAdjustmentGroup { id }
+    userErrors { field message }
+  }
+}`;
+
+async function convertOneReceivedLine(store, orderId, locationId, line) {
+  const key = receiptKey(store, orderId, line.caseSku);
+  if (posReceiptInFlight.has(key)) return { sku: line.caseSku, status: "processing" };
+  posReceiptInFlight.add(key);
+  try {
+    const ledger = loadPosLedger();
+    const previous = ledger[key];
+    if (previous?.status === "posted") return { sku: line.caseSku, status: "already_posted", units: previous.units };
+    if (previous?.status === "failed") return { sku: line.caseSku, status: "requires_review", error: previous.error };
+    if (!line.receivedCases) return { sku: line.caseSku, status: "zero_received", units: 0 };
+    if (line.error) return { sku: line.caseSku, status: "requires_mapping", error: line.error };
+
+    let plan = previous?.plan;
+    if (plan && plan.receivedCases !== line.receivedCases) {
+      return { sku: line.caseSku, status: "requires_review", error: "Receipt changed after POS conversion started" };
+    }
+    if (!plan) {
+      const caseItem = await exactInventoryItem(line.caseSku, locationId);
+      const unitItem = await exactInventoryItem(line.unitSku, locationId, true);
+      plan = adjustmentPlan(line, caseItem, unitItem, locationId, key);
+      ledger[key] = { status: "pending", store, orderId, caseSku: line.caseSku, plan };
+      savePosLedger(ledger);
+    }
+
+    const result = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key });
+    const adjustment = result.inventoryAdjustQuantities;
+    const errors = adjustment?.userErrors || [];
+    if (!adjustment?.inventoryAdjustmentGroup?.id || errors.length) {
+      const error = errors.map((entry) => entry.message).join("; ") || "Shopify did not confirm the inventory adjustment";
+      ledger[key] = { ...ledger[key], status: "failed", error };
+      savePosLedger(ledger);
+      return { sku: line.caseSku, status: "requires_review", error };
+    }
+    ledger[key] = { ...ledger[key], status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id };
+    savePosLedger(ledger);
+    return { sku: line.caseSku, status: "posted", units: plan.units };
+  } finally {
+    posReceiptInFlight.delete(key);
+  }
 }
 
 // In-memory cache, refreshed on demand (not every request)
@@ -2904,7 +3078,7 @@ app.post("/api/picking-finish", async (req, res) => {
     saveState(state);
 
     if (allWorkflowsComplete) {
-      archiveCompletedOrder(key, foodOrder.lineItems.length > 0 ? foodRecord : essentialsRecord, sourceOrder);
+      archiveCompletedOrder(key, foodOrder.lineItems.length > 0 ? foodRecord : essentialsRecord, sourceOrder, essentialsRecord);
     }
 
     // Auto-fulfill the real Shopify order(s) behind this stop now that
