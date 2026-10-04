@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { caseMapping, receiptLines, receiptKey, adjustmentPlan, POS_STORE_LOCATIONS } = require("../essentials-pos-conversion");
+const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("../essentials-pos-conversion");
 
 const coca = {
   title: "Coca-Cola Plus Japan 8-pack", sku: "SS-4890008101306-CS8", quantity: 3,
@@ -73,4 +73,14 @@ test("one adjustment atomically removes cases and adds units at the same POS loc
   assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 2, unitCost: 14.8 }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /not arrived/);
   assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 3, unitCost: 44.4 }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /case-derived unit cost/);
   assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 3, unitCost: 14.8, mappingPending: true }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /mapping is still pending/);
+});
+
+test("an inactive sell-unit location can be validated before zero-stock activation, but not adjusted", () => {
+  const line = { ...caseMapping(coca), receivedCases: 1 };
+  const caseItem = { id: "case-item", available: 1, unitCost: 14.8 };
+  const inactiveUnit = { id: "unit-item", available: null, price: 3.25 };
+  assert.doesNotThrow(() => validateCaseAndUnit(line, caseItem, inactiveUnit));
+  assert.throws(() => adjustmentPlan(line, caseItem, inactiveUnit, "holbrook-location", "receipt-key"), /not active/);
+  assert.throws(() => validateCaseAndUnit(line, { ...caseItem, mappingPending: true }, inactiveUnit), /mapping is still pending/);
+  assert.throws(() => validateCaseAndUnit(line, { ...caseItem, unitCost: 44.4 }, inactiveUnit), /case-derived unit cost/);
 });

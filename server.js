@@ -8,7 +8,7 @@ const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
-const { caseMapping, receiptLines, receiptKey, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
+const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
@@ -1408,7 +1408,7 @@ async function exactStoreLocation(store) {
   return matches[0].id;
 }
 
-async function exactInventoryItem(sku, locationId, requireSellable = false) {
+async function exactInventoryItem(sku, locationId, requireSellable = false, allowInactiveLevel = false) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
   const query = `query ExactSku($search: String!, $locationId: ID!) {
     productVariants(first: 10, query: $search) {
@@ -1425,11 +1425,12 @@ async function exactInventoryItem(sku, locationId, requireSellable = false) {
   }
   const inventory = matches[0].inventoryItem;
   const quantity = inventory?.inventoryLevel?.quantities?.find((entry) => entry.name === "available")?.quantity;
-  if (!inventory?.id || !Number.isSafeInteger(quantity)) {
+  if (!inventory?.id || (!allowInactiveLevel && !Number.isSafeInteger(quantity))) {
     throw new Error(`SKU ${sku} is not stocked with available quantity at this POS location`);
   }
   return {
-    id: inventory.id, available: quantity, price: Number(matches[0].price),
+    id: inventory.id, available: Number.isSafeInteger(quantity) ? quantity : null,
+    price: Number(matches[0].price),
     unitCost: Number(inventory.unitCost?.amount),
     mappingPending: (matches[0].product?.tags || []).includes("mapping-pending"),
   };
@@ -1441,6 +1442,26 @@ const POS_ADJUST_MUTATION = `mutation ConvertReceivedCases($input: InventoryAdju
     userErrors { field message }
   }
 }`;
+
+const POS_ACTIVATE_MUTATION = `mutation ActivateReceivedSellUnit($inventoryItemId: ID!, $locationId: ID!, $key: String!) {
+  inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId, available: 0) @idempotent(key: $key) {
+    inventoryLevel { id }
+    userErrors { field message }
+  }
+}`;
+
+async function activateSellUnitAtStore(unitItem, locationId, key) {
+  const activationKey = crypto.createHash("sha256").update(`activate:${key}`).digest("hex");
+  const data = await posShopifyGraphQL(POS_ACTIVATE_MUTATION, {
+    inventoryItemId: unitItem.id, locationId, key: activationKey,
+  });
+  const result = data.inventoryActivate;
+  if (!result?.inventoryLevel?.id || result.userErrors?.length) {
+    throw new Error(`POS sell-unit activation failed: ${
+      (result?.userErrors || []).map((error) => error.message).join("; ") || "Shopify did not confirm activation"
+    }`);
+  }
+}
 
 async function convertOneReceivedLine(store, orderId, locationId, line) {
   const key = receiptKey(store, orderId, line.caseSku);
@@ -1460,7 +1481,15 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
     }
     if (!plan) {
       const caseItem = await exactInventoryItem(line.caseSku, locationId);
-      const unitItem = await exactInventoryItem(line.unitSku, locationId, true);
+      let unitItem = await exactInventoryItem(line.unitSku, locationId, true, true);
+      // Check the entire catalog mapping and landed cost before creating even
+      // an empty inventory level at a store. New POS items may not have been
+      // activated at each of the 14 locations yet.
+      validateCaseAndUnit(line, caseItem, unitItem);
+      if (unitItem.available === null) {
+        await activateSellUnitAtStore(unitItem, locationId, key);
+        unitItem = await exactInventoryItem(line.unitSku, locationId, true);
+      }
       plan = adjustmentPlan(line, caseItem, unitItem, locationId, key);
       writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan });
     }

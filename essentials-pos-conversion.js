@@ -73,7 +73,7 @@ function receiptKey(store, orderId, caseSku) {
   return crypto.createHash("sha256").update(JSON.stringify([store, orderId, caseSku])).digest("hex");
 }
 
-function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
+function validateCaseAndUnit(line, caseItem, unitItem) {
   if (caseItem.mappingPending) throw new Error("Case-to-unit mapping is still pending catalog verification");
   if (!(caseItem.unitCost > 0) || !(unitItem.price > 0)) {
     throw new Error("Case cost and POS sell-unit price must be verified before conversion");
@@ -82,6 +82,13 @@ function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
     throw new Error("POS sell-unit price does not exceed the case-derived unit cost; verify case count and cost");
   }
   if (caseItem.available < line.receivedCases) throw new Error("Case stock has not arrived at this Shopify location");
+}
+
+function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
+  validateCaseAndUnit(line, caseItem, unitItem);
+  if (!Number.isSafeInteger(unitItem.available)) {
+    throw new Error("POS sell-unit inventory is not active at this Shopify location");
+  }
   const units = line.receivedCases * line.unitsPerCase;
   if (!Number.isSafeInteger(units) || units > 100000) throw new Error("Invalid sell-unit quantity");
   return {
@@ -98,4 +105,4 @@ function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
   };
 }
 
-module.exports = { caseMapping, receiptLines, receiptKey, adjustmentPlan, POS_STORE_LOCATIONS };
+module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS };
