@@ -8,6 +8,7 @@ const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow } = require("./essentials-shadow.js");
+const { remainingStopEtas } = require("./live-eta.js");
 const {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
@@ -1213,7 +1214,8 @@ app.post("/api/stop-status", (req, res) => {
       const stopKey = pickingKeyFor(stop.name);
       if (markArchivedStopDelivered(stopKey, updated.deliveredAt || now) &&
           ordersCache.byStopName[stopKey]?.retainedAfterFulfillment) {
-        delete ordersCache.byStopName[stopKey];
+        ordersCache.byStopName[stopKey].deliveryComplete = true;
+        ordersCache.byStopName[stopKey].deliveredAt = updated.deliveredAt || now;
       }
     }
   }
@@ -1303,7 +1305,7 @@ let ordersRefreshInFlight = null;
 // background for the next request instead.
 async function fetchTodaysStopOrders() {
   const now = Date.now();
-  // Apply the 3 PM cutoff even if the one-minute Shopify cache is still
+  // Apply the next-day 1 PM Eastern cutoff even if the one-minute Shopify cache is still
   // warm; never delay a scanner request just to refresh the order feed.
   Object.entries(ordersCache.byStopName).forEach(([key, order]) => {
     if (order.retainedAfterFulfillment &&
@@ -2278,6 +2280,7 @@ app.get("/api/picking-list", async (req, res) => {
         completedAt: record.completedAt,
         retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
         shopifyFulfilled: Boolean(order.shopifyFulfilled),
+        deliveryComplete: Boolean(order.deliveryComplete),
       };
     }).filter((entry) => entry.totalItems > 0);
     saveState(state); // persist any freshly-seeded records
@@ -3346,6 +3349,86 @@ app.get("/api/van-status", async (req, res) => {
 
 // ================= GOOGLE MAPS — ROUTE OPTIMIZATION & LIVE ETA =================
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const LIVE_ETA_CACHE_MS = 60 * 1000;
+const liveEtaCache = new Map();
+const liveEtaInFlight = new Map();
+let etaVehiclesCache = { fetchedAt: 0, vehicles: [] };
+let etaVehiclesInFlight = null;
+
+async function getEtaVehicles() {
+  if (Date.now() - etaVehiclesCache.fetchedAt < VAN_STATUS_CACHE_MS) return etaVehiclesCache.vehicles;
+  if (!etaVehiclesInFlight) {
+    etaVehiclesInFlight = (async () => {
+      const token = await getBouncieToken();
+      const response = await fetch("https://api.bouncie.dev/v1/vehicles", {
+        headers: { Authorization: token }, signal: AbortSignal.timeout(6000),
+      });
+      if (!response.ok) throw new Error(`Bouncie vehicle lookup failed (${response.status})`);
+      const vehicles = await response.json();
+      etaVehiclesCache = { fetchedAt: Date.now(), vehicles };
+      return vehicles;
+    })().finally(() => { etaVehiclesInFlight = null; });
+  }
+  return etaVehiclesInFlight;
+}
+
+async function liveEtasForRoute(route, state, vanImei) {
+  const meta = state.routeMeta[route.id];
+  const firstStopId = meta.optimizedStopIds.find((id) => state.stopStatus[id]?.status !== "delivered");
+  const firstStop = route.stops.find((stop) => stop.id === firstStopId);
+  if (!firstStop || !vanImei || !GOOGLE_MAPS_API_KEY) return null;
+  const key = `${route.id}:${meta.startedAt}:${vanImei}:${firstStopId}`;
+  const cached = liveEtaCache.get(key);
+  if (cached && Date.now() - cached.updatedAt < LIVE_ETA_CACHE_MS) {
+    return {
+      ...cached,
+      byStopId: remainingStopEtas(meta, route, state.stopStatus, cached.firstLegSeconds,
+        UNLOAD_MINUTES_PER_STOP * 60, cached.updatedAt),
+    };
+  }
+  if (liveEtaInFlight.has(key)) return liveEtaInFlight.get(key);
+  const pending = (async () => {
+    const vehicles = await getEtaVehicles();
+    const vehicle = vehicles.find((entry) => String(entry.imei) === String(vanImei));
+    const positionAt = Date.parse(vehicle?.stats?.lastUpdated);
+    // A parked/offline Bouncie device can retain yesterday's coordinates.
+    // Never call that a live arrival estimate.
+    if (!Number.isFinite(positionAt) || Date.now() - positionAt > 10 * 60 * 1000 ||
+        positionAt > Date.now() + 60 * 1000) return null;
+    const location = vehicle?.stats?.location;
+    const lat = Number(location?.lat);
+    const lon = Number(location?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+        Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) return null;
+    const origin = `${lat},${lon}`;
+    const params = new URLSearchParams({
+      origin, destination: firstStop.address, mode: "driving",
+      departure_time: "now", traffic_model: "best_guess", key: GOOGLE_MAPS_API_KEY,
+    });
+    const response = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`, {
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!response.ok) throw new Error(`Google Directions lookup failed (${response.status})`);
+    const directions = await response.json();
+    if (directions.status !== "OK") throw new Error(`Google Directions status ${directions.status}`);
+    const leg = directions.routes?.[0]?.legs?.[0];
+    const firstLegSeconds = Number(leg?.duration_in_traffic?.value);
+    if (!Number.isFinite(firstLegSeconds)) return null;
+    const updatedAt = Date.now();
+    const value = { firstLegSeconds, updatedAt };
+    for (const [cacheKey, entry] of liveEtaCache) {
+      if (updatedAt - entry.updatedAt > 5 * LIVE_ETA_CACHE_MS) liveEtaCache.delete(cacheKey);
+    }
+    liveEtaCache.set(key, value);
+    return {
+      ...value,
+      byStopId: remainingStopEtas(meta, route, state.stopStatus, firstLegSeconds,
+        UNLOAD_MINUTES_PER_STOP * 60, updatedAt),
+    };
+  })().finally(() => { liveEtaInFlight.delete(key); });
+  liveEtaInFlight.set(key, pending);
+  return pending;
+}
 
 function getRouteById(routeId) {
   return ROUTES.find((r) => r.id === routeId) || B2B_ROUTES.find((r) => r.id === routeId);
@@ -3719,12 +3802,34 @@ app.get("/api/route-eta/:routeId", (req, res) => {
 // "your delivery arrives at X" alongside the receiving checklist. Kept
 // deliberately separate from the warehouse-only /api/picking-* routes,
 // which have nothing to do with the store side of this.
-app.get("/api/store-eta/:stopName", (req, res) => {
+app.get("/api/store-eta/:stopName", async (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
+  res.header("Cache-Control", "no-store");
   const state = loadState();
   const eta = computeEtaForStop(state, decodeURIComponent(req.params.stopName));
   if (!eta) {
     return res.status(404).json({ error: "No route stop matches that store name." });
+  }
+  if (eta.started && !eta.delivered && eta.eta && eta.vanImei) {
+    try {
+      const route = getRouteById(eta.routeId);
+      const stop = route?.stops.find((entry) =>
+        entry.name.toLowerCase() === String(req.params.stopName).toLowerCase());
+      const live = route && await liveEtasForRoute(route, state, eta.vanImei);
+      const current = stop && live?.byStopId[stop.id];
+      if (current) {
+        eta.eta = current.eta;
+        eta.stopsAway = current.stopsAway;
+        eta.etaSource = "live-traffic";
+        eta.etaUpdatedAt = new Date(live.updatedAt).toISOString();
+      }
+    } catch (error) {
+      console.warn(`[store-eta] ${eta.routeId}: ${error.message}`);
+    }
+  }
+  if (eta.started && eta.eta && !eta.etaSource) {
+    eta.etaSource = "route-start";
+    if (Date.parse(eta.eta) < Date.now()) eta.eta = null;
   }
   res.json(eta);
 });

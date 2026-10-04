@@ -1,81 +1,65 @@
-const assert = require("node:assert/strict");
-const test = require("node:test");
-const { mergeRecentCompletedOrders } = require("../order-lifecycle.js");
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { mergeRecentCompletedOrders } = require('../order-lifecycle.js');
 
-const now = Date.parse("2026-10-01T16:00:00Z");
 const validStops = new Map([
-  ["meriden", { isB2B: true, deliveryDays: [4] }],
-  ["islip", { isB2B: false, deliveryDays: null }],
+  ['meriden', { isB2B: true, deliveryDays: [4] }],
+  ['islip', { isB2B: false, deliveryDays: null }],
 ]);
 const completed = {
-  orderId: "gid://shopify/Order/123",
-  orderName: "#123",
-  completedAt: "2026-09-30T20:00:00Z",
-  archivedAt: "2026-09-30T20:00:00Z",
+  orderId: 'gid://shopify/Order/123',
+  orderName: '#123',
+  completedAt: '2026-10-01T14:00:00Z',
+  archivedAt: '2026-10-01T14:00:00Z',
+  fulfilledAt: '2026-10-01T16:00:00Z', // Thursday noon EDT
   shopifyFulfilled: true,
-  lineItems: [{ title: "Buffalo Mac", quantity: 2 }],
-  closedCrates: [1],
+  lineItems: [{ title: 'Buffalo Mac', quantity: 2 }],
 };
+const visibleAt = Date.parse('2026-10-02T16:59:59Z'); // Friday 12:59:59 PM EDT
+const expiredAt = Date.parse('2026-10-02T17:00:00Z'); // Friday 1 PM EDT
 
-test("restores a picked Shopify-fulfilled stop without changing live orders", () => {
-  const live = { islip: { orderId: "live-1", orderName: "#456" } };
-  const merged = mergeRecentCompletedOrders(live, { meriden: completed }, validStops, now);
-  assert.deepEqual(merged.islip, live.islip);
-  assert.equal(merged.meriden.orderName, "#123");
+test('fulfilled order stays on board through next-day 12:59:59 PM Eastern, including after delivery', () => {
+  const saved = { ...completed, deliveryComplete: true, deliveredAt: '2026-10-01T21:00:00Z' };
+  const merged = mergeRecentCompletedOrders({}, { meriden: saved }, validStops, visibleAt);
+  assert.equal(merged.meriden.orderId, completed.orderId);
+  assert.equal(merged.meriden.deliveryComplete, true);
   assert.equal(merged.meriden.retainedAfterFulfillment, true);
   assert.deepEqual(merged.meriden.lineItems, completed.lineItems);
-  assert.deepEqual(live, { islip: { orderId: "live-1", orderName: "#456" } });
+  assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: saved }, validStops, expiredAt), {});
 });
 
-test("a newer live order takes precedence over an archived pick", () => {
-  const live = { meriden: { orderId: "new-order", orderName: "#789" } };
-  assert.equal(mergeRecentCompletedOrders(live, { meriden: completed }, validStops, now).meriden.orderId, "new-order");
+test('unfulfilled live order stays visible after cutoff and beats old archive', () => {
+  const live = { meriden: { orderId: 'new-unfulfilled', orderName: '#new' } };
+  assert.equal(mergeRecentCompletedOrders(live, { meriden: completed }, validStops, expiredAt).meriden.orderId, 'new-unfulfilled');
+  assert.deepEqual(mergeRecentCompletedOrders(live, {}, validStops, expiredAt), live);
 });
 
-test("delivered, incomplete, invalid, and expired snapshots stay off the board", () => {
-  const variants = [
-    { ...completed, deliveryComplete: true },
+test('actual fulfillment day controls cutoff, not picking or scheduled delivery day', () => {
+  const pickedFridayFulfilledMonday = {
+    ...completed,
+    completedAt: '2026-10-02T21:00:00Z',
+    archivedAt: '2026-10-02T21:00:00Z',
+    fulfilledAt: '2026-10-05T15:00:00Z',
+  };
+  const brookfield = new Map([['brookfield', { isB2B: true, deliveryDays: [1] }]]);
+  const archive = { brookfield: pickedFridayFulfilledMonday };
+  assert.ok(mergeRecentCompletedOrders({}, archive, brookfield, Date.parse('2026-10-06T16:59:00Z')).brookfield);
+  assert.deepEqual(mergeRecentCompletedOrders({}, archive, brookfield, Date.parse('2026-10-06T17:00:00Z')), {});
+});
+
+test('cutoff follows Eastern local day across fall daylight-saving change', () => {
+  const archive = { islip: { ...completed, fulfilledAt: '2026-10-31T20:00:00Z' } };
+  assert.ok(mergeRecentCompletedOrders({}, archive, validStops, Date.parse('2026-11-01T17:59:59Z')).islip);
+  assert.deepEqual(mergeRecentCompletedOrders({}, archive, validStops, Date.parse('2026-11-01T18:00:00Z')), {});
+});
+
+test('incomplete and invalid snapshots do not appear', () => {
+  for (const saved of [
     { ...completed, completedAt: null },
     { ...completed, shopifyFulfilled: false },
-    { ...completed, archivedAt: "2026-09-20T20:00:00Z" },
-  ];
-  for (const candidate of variants) {
-    assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: candidate }, validStops, now), {});
+    { ...completed, fulfilledAt: '2026-10-03T12:00:00Z' },
+  ]) {
+    assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: saved }, validStops, visibleAt), {});
   }
-  assert.deepEqual(mergeRecentCompletedOrders({}, { unknown: completed }, validStops, now), {});
-});
-
-test("Thursday route picked Wednesday remains visible until Friday 3 PM Eastern", () => {
-  const before = Date.parse("2026-10-02T18:59:00Z"); // Friday 2:59 PM ET
-  const after = Date.parse("2026-10-02T19:00:00Z"); // Friday 3:00 PM ET
-  assert.ok(mergeRecentCompletedOrders({}, { meriden: completed }, validStops, before).meriden);
-  assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: completed }, validStops, after), {});
-});
-
-test("yesterday's Wednesday route clears Thursday at 3 PM without hiding today's live order", () => {
-  const metadata = new Map([["new castle", { isB2B: true, deliveryDays: [3] }]]);
-  const archive = { "new castle": { ...completed, archivedAt: "2026-09-29T17:00:00Z" } };
-  const after = Date.parse("2026-10-01T19:00:00Z");
-  assert.deepEqual(mergeRecentCompletedOrders({}, archive, metadata, after), {});
-  const live = { "new castle": { orderId: "new-unfulfilled", orderName: "#new" } };
-  assert.equal(mergeRecentCompletedOrders(live, archive, metadata, after)["new castle"].orderId, "new-unfulfilled");
-});
-
-test("Friday picking for Monday delivery survives the weekend and clears Tuesday afternoon", () => {
-  const metadata = new Map([["brookfield", { isB2B: true, deliveryDays: [1] }]]);
-  const archive = { brookfield: { ...completed, archivedAt: "2026-10-02T21:00:00Z" } }; // Friday 5 PM ET
-  assert.ok(mergeRecentCompletedOrders({}, archive, metadata, Date.parse("2026-10-06T18:59:00Z")).brookfield);
-  assert.deepEqual(mergeRecentCompletedOrders({}, archive, metadata, Date.parse("2026-10-06T19:00:00Z")), {});
-});
-
-test("local orders picked after noon stay through the next day's route", () => {
-  const archive = { islip: { ...completed, archivedAt: "2026-10-01T20:00:00Z" } }; // Thursday 4 PM ET
-  assert.ok(mergeRecentCompletedOrders({}, archive, validStops, Date.parse("2026-10-03T18:59:00Z")).islip);
-  assert.deepEqual(mergeRecentCompletedOrders({}, archive, validStops, Date.parse("2026-10-03T19:00:00Z")), {});
-});
-
-test("3 PM Eastern cleanup remains correct across daylight-saving changes", () => {
-  const archive = { islip: { ...completed, archivedAt: "2026-10-31T20:00:00Z" } }; // Saturday 4 PM EDT
-  assert.ok(mergeRecentCompletedOrders({}, archive, validStops, Date.parse("2026-11-02T19:59:00Z")).islip);
-  assert.deepEqual(mergeRecentCompletedOrders({}, archive, validStops, Date.parse("2026-11-02T20:00:00Z")), {});
+  assert.deepEqual(mergeRecentCompletedOrders({}, { unknown: completed }, validStops, visibleAt), {});
 });

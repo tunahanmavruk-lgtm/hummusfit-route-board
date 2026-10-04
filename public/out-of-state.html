@@ -759,7 +759,7 @@
 
       var deliveredCount = visibleStops.filter(function(s){
         var st = stateData.stopStatus[s.id];
-        return st && st.status === 'delivered';
+        return (st && st.status === 'delivered') || Boolean(ordersByStop[s.name.toLowerCase()] && ordersByStop[s.name.toLowerCase()].deliveryComplete);
       }).length;
 
       var card = document.createElement('div');
@@ -781,9 +781,9 @@
       var stopsHtml = '';
       orderedStops.forEach(function(stop){
         var stopState = stateData.stopStatus[stop.id] || {};
-        var status = stopState.status || 'not_started';
         var stopKey = stop.name.toLowerCase();
         var order = ordersByStop[stopKey];
+        var status = stopState.status || (order && order.deliveryComplete ? 'delivered' : 'not_started');
         var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
         // A real order sitting on an off-day stop (see visibleStops filter
         // above) is exactly the case this badge exists for — dispatch

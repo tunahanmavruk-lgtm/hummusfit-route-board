@@ -862,18 +862,17 @@
       var meta = stateData.routeMeta[route.id] || {};
       var eta = etaCache[route.id];
 
-      // Stops that aren't scheduled to deliver today (e.g. Natural Body's
-      // Mon/Wed/Fri-only schedule) are fully hidden from the board, not
-      // just muted — the route visually shrinks on its off days.
+      // Keep any stop with an actual order visible through its retention
+      // window, even if its scheduled delivery day has passed.
       var visibleStops = route.stops.filter(function(s){
         var key = s.name.toLowerCase();
-        return scheduledToday[key] !== false;
+        return scheduledToday[key] !== false || Boolean(ordersByStop[key]);
       });
 
       var deliveryStops = visibleStops.filter(function(s){ return !s.isServiceStop; });
       var deliveredCount = deliveryStops.filter(function(s){
         var st = stateData.stopStatus[s.id];
-        return st && st.status === 'delivered';
+        return (st && st.status === 'delivered') || Boolean(ordersByStop[s.name.toLowerCase()] && ordersByStop[s.name.toLowerCase()].deliveryComplete);
       }).length;
 
       var wasStarted = !!(prevRouteMeta[route.id] && prevRouteMeta[route.id].startedAt);
@@ -887,15 +886,15 @@
       if(meta.optimizedStopIds && meta.optimizedStopIds.length === route.stops.length && meta.optimizedStopIds.every(function(id){ return route.stops.some(function(s){ return s.id === id; }); })){
         orderedStops = meta.optimizedStopIds
           .map(function(id){ return route.stops.find(function(s){ return s.id === id; }); })
-          .filter(function(s){ return s && scheduledToday[s.name.toLowerCase()] !== false; });
+          .filter(function(s){ return s && (scheduledToday[s.name.toLowerCase()] !== false || Boolean(ordersByStop[s.name.toLowerCase()])); });
       }
 
       var stopsHtml = '';
       orderedStops.forEach(function(stop){
         var stopState = stateData.stopStatus[stop.id] || {};
-        var status = stopState.status || 'not_started';
         var stopKey = stop.name.toLowerCase();
         var order = ordersByStop[stopKey];
+        var status = stopState.status || (order && order.deliveryComplete ? 'delivered' : 'not_started');
         var isScheduled = scheduledToday[stopKey] !== false; // default true if unknown
 
         // Real ground truth, not a guess: this stop's status right now vs.

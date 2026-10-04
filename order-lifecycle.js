@@ -33,49 +33,33 @@ function selectB2BStop({ orderTags, customerTags, zipCandidates, useZip, isEligi
 }
 
 // Shopify removes fulfilled orders from the picking feed. Keep their
-// snapshots through the delivery run, then clear yesterday's completed
-// route at 3 PM Eastern. Calendar-day arithmetic avoids DST hour shifts.
+// snapshots until 1 PM Eastern on the calendar day after Shopify fulfillment.
+// Calendar-day arithmetic avoids DST hour shifts.
 const DAY_MS = 24 * 60 * 60 * 1000;
 const easternCalendarFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
   year: "numeric", month: "numeric", day: "numeric",
   weekday: "short", hour: "numeric", hourCycle: "h23",
 });
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 function easternCalendar(timestamp) {
   const parts = Object.fromEntries(easternCalendarFormatter.formatToParts(timestamp).map((part) => [part.type, part.value]));
   return {
     day: Math.floor(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) / DAY_MS),
-    weekday: WEEKDAYS.indexOf(parts.weekday),
     hour: Number(parts.hour),
   };
 }
 
 function completedOrderVisible(saved, stopMeta, now = Date.now()) {
   if (!stopMeta || !saved?.completedAt || !saved.shopifyFulfilled ||
-      saved.deliveryComplete || !saved.orderId || !Array.isArray(saved.lineItems)) return false;
-  const archivedAt = Date.parse(saved.archivedAt || saved.completedAt);
-  if (!Number.isFinite(archivedAt) || archivedAt > now) return false;
-  const picked = easternCalendar(archivedAt);
+      !saved.orderId || !Array.isArray(saved.lineItems)) return false;
+  // Older archives predate fulfilledAt; use their archive time only as a
+  // compatibility fallback, never the route's scheduled delivery day.
+  const fulfilledAt = Date.parse(saved.fulfilledAt || saved.archivedAt || saved.completedAt);
+  if (!Number.isFinite(fulfilledAt) || fulfilledAt > now) return false;
+  const fulfilled = easternCalendar(fulfilledAt);
   const current = easternCalendar(now);
-  const days = stopMeta.deliveryDays;
-  let deliveryDay;
-  if (Array.isArray(days) && days.length > 0) {
-    const offsets = days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-      .map((day) => {
-        const offset = (day - picked.weekday + 7) % 7;
-        return offset === 0 && picked.hour >= 15 ? 7 : offset;
-      });
-    if (!offsets.length) return false;
-    deliveryDay = picked.day + Math.min(...offsets);
-  } else if (!stopMeta.isB2B) {
-    // Local orders picked after the noon board change are for tomorrow.
-    deliveryDay = picked.day + (picked.hour >= 12 ? 1 : 0);
-  } else {
-    return false;
-  }
-  const cleanupDay = deliveryDay + 1;
-  return current.day < cleanupDay || (current.day === cleanupDay && current.hour < 15);
+  const cleanupDay = fulfilled.day + 1;
+  return current.day < cleanupDay || (current.day === cleanupDay && current.hour < 13);
 }
 
 // A new live Shopify order always takes precedence over an older snapshot.
@@ -96,6 +80,8 @@ function mergeRecentCompletedOrders(activeByStopName, archive, validStopNames, n
       retainedAfterFulfillment: true,
       shopifyFulfilled: true,
       fulfilledAt: saved.fulfilledAt || null,
+      deliveryComplete: Boolean(saved.deliveryComplete),
+      deliveredAt: saved.deliveredAt || null,
     };
   }
   return merged;

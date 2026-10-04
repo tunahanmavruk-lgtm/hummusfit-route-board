@@ -1202,7 +1202,7 @@
             '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + total + ' ' + progressNoun + '</div>' +
             '<div class="stop-order-time" style="font-size:11px; color:var(--dim); margin-top:2px;">' + orderTimesLabel(stop) + '</div>' +
             (stop.isB2B ? '<div class="b2b-tag">Out of State</div>' : '') +
-            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Complete') + '</div>' : '') +
+            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.deliveryComplete ? 'Delivered' : stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Complete') + '</div>' : '') +
           '</div>' +
           '<div class="stop-progress-ring">' + ringSvg(stop.pickedUnits !== undefined ? stop.pickedUnits : stop.pickedCount, stop.missingUnits !== undefined ? stop.missingUnits : stop.missingCount, total) +
             '<div class="stop-progress-label">' + done + '/' + total + '</div>' +
