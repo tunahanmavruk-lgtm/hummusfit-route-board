@@ -1419,6 +1419,8 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
   const matches = (data.productVariants?.nodes || []).filter((variant) => variant.sku === sku);
   if (matches.length !== 1) throw new Error(`Expected exactly one Shopify variant with SKU ${sku}; found ${matches.length}`);
   const variant = matches[0];
+  const barcode = String(variant.barcode || "").trim();
+  const validBarcode = /^[0-9]{12,14}$/.test(barcode);
   if (mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
     throw new Error(`POS sell-unit SKU ${sku} no longer matches its approved Shopify variant`);
   }
@@ -1429,7 +1431,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
       !(Number(variant.price) > 0) ||
       (mapping?.requirePosSellUnitTag && !(variant.product?.tags || []).includes("pos-sell-unit")) ||
       (mapping?.unitBarcode && variant.barcode !== mapping.unitBarcode) ||
-      (!mapping?.allowMissingBarcode && !/^[0-9]{12,14}$/.test(String(variant.barcode || ""))))) {
+      (!validBarcode && !(mapping?.allowMissingBarcode && !barcode)))) {
     throw new Error(`POS sell-unit SKU ${sku} must match its approved active product, price, and barcode policy`);
   }
   const inventory = variant.inventoryItem;

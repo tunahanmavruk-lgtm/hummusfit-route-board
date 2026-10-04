@@ -16,18 +16,22 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     caseVariantId: "gid://shopify/ProductVariant/51242424631543",
     unitVariantId: "gid://shopify/ProductVariant/51259498889463",
     requirePosSellUnitTag: true,
+    // Staff will select the exact POS SKU manually until its can barcode is verified.
+    allowMissingBarcode: true,
   }),
   "BUILT-PFB0374-CS12": Object.freeze({
     unitSku: "BUILT-PFB0374", unitsPerCase: 12,
     caseVariantId: "gid://shopify/ProductVariant/51242437738743",
     unitVariantId: "gid://shopify/ProductVariant/51259495022839",
     requirePosSellUnitTag: true,
+    allowMissingBarcode: true,
   }),
   "SD-PEACH-60G-CS8": Object.freeze({
     unitSku: "SD-PEACH-60G", unitsPerCase: 8,
     caseVariantId: "gid://shopify/ProductVariant/51242444226807",
     unitVariantId: "gid://shopify/ProductVariant/51259503444215",
     requirePosSellUnitTag: true,
+    allowMissingBarcode: true,
   }),
 });
 
