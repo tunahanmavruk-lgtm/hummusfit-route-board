@@ -59,6 +59,10 @@ const POS_STORE_LOCATIONS = Object.freeze({
 function caseMapping(item) {
   if (essentialsTypeFor(item) !== "retail") return null;
   const caseSku = String(item.sku || "").trim();
+  if (!caseSku) return {
+    caseSku: String(item.title || "").trim(),
+    error: "Retail Essentials case is missing a Shopify SKU and approved POS mapping",
+  };
   const mapping = VERIFIED_CASE_MAPPINGS[caseSku];
   if (!mapping) return { caseSku, error: "Case SKU needs an approved case-to-POS-unit mapping" };
   return { caseSku, ...mapping };
@@ -73,7 +77,11 @@ function receiptLines(order, essentialsRecord, receivedCounts, readItemState) {
   if (!receivedCounts || typeof receivedCounts !== "object" || Array.isArray(receivedCounts)) {
     throw new Error("Verified received case counts are required");
   }
-  const allowed = new Set(retail.map((item) => item.sku));
+  // The receiving UI keys manual entries for SKU-less products by title.
+  // Preserve that key so one unmapped case cannot invalidate an otherwise
+  // approved case conversion in the same verified store receipt.
+  const receiptCountKey = (item) => String(item.sku || "").trim() || String(item.title || "").trim();
+  const allowed = new Set(retail.map(receiptCountKey));
   for (const sku of Object.keys(receivedCounts)) {
     if (!allowed.has(sku)) throw new Error(`Unexpected receipt SKU: ${sku}`);
   }
@@ -81,7 +89,7 @@ function receiptLines(order, essentialsRecord, receivedCounts, readItemState) {
     const workflowIndex = (order.lineItems || []).filter((entry) => essentialsTypeFor(entry)).indexOf(item);
     const status = readItemState(essentialsRecord.itemStatus, item, workflowIndex);
     const scanned = Number(readItemState(essentialsRecord.itemScannedCount, item, workflowIndex)) || 0;
-    const receivedCases = Number(receivedCounts[item.sku]);
+    const receivedCases = Number(receivedCounts[receiptCountKey(item)]);
     if (status !== "picked" || scanned !== item.quantity) {
       throw new Error(`Essentials picking is not fully verified: ${item.sku || item.title}`);
     }
