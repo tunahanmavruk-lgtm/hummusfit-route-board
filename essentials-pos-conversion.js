@@ -74,6 +74,13 @@ function receiptKey(store, orderId, caseSku) {
 }
 
 function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
+  if (caseItem.mappingPending) throw new Error("Case-to-unit mapping is still pending catalog verification");
+  if (!(caseItem.unitCost > 0) || !(unitItem.price > 0)) {
+    throw new Error("Case cost and POS sell-unit price must be verified before conversion");
+  }
+  if (unitItem.price <= caseItem.unitCost / line.unitsPerCase) {
+    throw new Error("POS sell-unit price does not exceed the case-derived unit cost; verify case count and cost");
+  }
   if (caseItem.available < line.receivedCases) throw new Error("Case stock has not arrived at this Shopify location");
   const units = line.receivedCases * line.unitsPerCase;
   if (!Number.isSafeInteger(units) || units > 100000) throw new Error("Invalid sell-unit quantity");

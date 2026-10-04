@@ -9,6 +9,7 @@ const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
 const { caseMapping, receiptLines, receiptKey, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
+const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
   lineItemsForWorkflow,
@@ -1117,7 +1118,8 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
 // store receipt. This endpoint never touches food, Other Essentials, the
 // picking record, warehouse stock, or any B2B location.
 app.post("/api/essentials-pos-receipt", async (req, res) => {
-  if (!ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED || !POS_SHOPIFY_TOKEN) {
+  if (!ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED ||
+      !POS_SHOPIFY_CLIENT_ID || !POS_SHOPIFY_CLIENT_SECRET) {
     return res.status(503).json({ error: "Essentials POS conversion is not enabled" });
   }
   const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
@@ -1357,7 +1359,13 @@ const ESSENTIALS_POS_CUTOVER = Date.parse(process.env.ESSENTIALS_POS_CUTOVER || 
 const POS_LEDGER_FILE = path.join(PERSISTENT_DIR, "essentials-pos-receipts.json");
 const posReceiptInFlight = new Set();
 const POS_API_VERSION = "2026-10";
-const POS_SHOPIFY_TOKEN = process.env.SHOPIFY_POS_CONVERSION_TOKEN || "";
+const POS_SHOPIFY_CLIENT_ID = process.env.SHOPIFY_POS_CLIENT_ID || "";
+const POS_SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_POS_CLIENT_SECRET || "";
+const getPosToken = createPosTokenProvider({
+  shop: SHOP_DOMAIN,
+  clientId: POS_SHOPIFY_CLIENT_ID,
+  clientSecret: POS_SHOPIFY_CLIENT_SECRET,
+});
 
 function loadPosLedger() {
   try { return JSON.parse(fs.readFileSync(POS_LEDGER_FILE, "utf8")); }
@@ -1369,10 +1377,10 @@ function savePosLedger(ledger) {
   fs.renameSync(temporary, POS_LEDGER_FILE);
 }
 async function posShopifyGraphQL(query, variables) {
-  if (!SHOP_DOMAIN || !POS_SHOPIFY_TOKEN) throw new Error("Dedicated POS inventory access is not configured");
+  if (!SHOP_DOMAIN) throw new Error("Shopify shop domain is not configured");
   const response = await fetch(`https://${SHOP_DOMAIN}/admin/api/${POS_API_VERSION}/graphql.json`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": POS_SHOPIFY_TOKEN },
+    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": await getPosToken() },
     body: JSON.stringify({ query, variables }),
   });
   const result = await response.json();
@@ -1396,7 +1404,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
   const query = `query ExactSku($search: String!, $locationId: ID!) {
     productVariants(first: 10, query: $search) {
-      nodes { sku barcode price product { status } inventoryItem { id inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
+      nodes { sku barcode price product { status tags } inventoryItem { id unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
     }
   }`;
   const data = await posShopifyGraphQL(query, { search: `sku:${sku}`, locationId });
@@ -1412,7 +1420,11 @@ async function exactInventoryItem(sku, locationId, requireSellable = false) {
   if (!inventory?.id || !Number.isSafeInteger(quantity)) {
     throw new Error(`SKU ${sku} is not stocked with available quantity at this POS location`);
   }
-  return { id: inventory.id, available: quantity };
+  return {
+    id: inventory.id, available: quantity, price: Number(matches[0].price),
+    unitCost: Number(inventory.unitCost?.amount),
+    mappingPending: (matches[0].product?.tags || []).includes("mapping-pending"),
+  };
 }
 
 const POS_ADJUST_MUTATION = `mutation ConvertReceivedCases($input: InventoryAdjustQuantitiesInput!, $key: String!) {

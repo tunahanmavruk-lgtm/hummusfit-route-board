@@ -63,12 +63,14 @@ test("only the 14 active Hummus Fit store POS locations can receive sell units",
 
 test("one adjustment atomically removes cases and adds units at the same POS location with CAS", () => {
   const line = { ...caseMapping(coca), receivedCases: 3 };
-  const plan = adjustmentPlan(line, { id: "case-item", available: 3 }, { id: "unit-item", available: 5 }, "holbrook-location", "receipt-key");
+  const plan = adjustmentPlan(line, { id: "case-item", available: 3, unitCost: 14.8 }, { id: "unit-item", available: 5, price: 3.25 }, "holbrook-location", "receipt-key");
   assert.equal(plan.units, 24);
   assert.equal(plan.input.name, "available");
   assert.deepEqual(plan.input.changes, [
     { inventoryItemId: "case-item", locationId: "holbrook-location", delta: -3, changeFromQuantity: 3 },
     { inventoryItemId: "unit-item", locationId: "holbrook-location", delta: 24, changeFromQuantity: 5 },
   ]);
-  assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 2 }, { id: "unit-item", available: 0 }, "holbrook-location", "receipt-key"), /not arrived/);
+  assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 2, unitCost: 14.8 }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /not arrived/);
+  assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 3, unitCost: 44.4 }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /case-derived unit cost/);
+  assert.throws(() => adjustmentPlan(line, { id: "case-item", available: 3, unitCost: 14.8, mappingPending: true }, { id: "unit-item", available: 0, price: 3.25 }, "holbrook-location", "receipt-key"), /mapping is still pending/);
 });
