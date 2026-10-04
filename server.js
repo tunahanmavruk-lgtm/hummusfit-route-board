@@ -3352,6 +3352,7 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const LIVE_ETA_CACHE_MS = 60 * 1000;
 const liveEtaCache = new Map();
 const liveEtaInFlight = new Map();
+const liveEtaUnavailableUntil = new Map();
 let etaVehiclesCache = { fetchedAt: 0, vehicles: [] };
 let etaVehiclesInFlight = null;
 
@@ -3378,6 +3379,7 @@ async function liveEtasForRoute(route, state, vanImei) {
   const firstStop = route.stops.find((stop) => stop.id === firstStopId);
   if (!firstStop || !vanImei || !GOOGLE_MAPS_API_KEY) return null;
   const key = `${route.id}:${meta.startedAt}:${vanImei}:${firstStopId}`;
+  if (Date.now() < (liveEtaUnavailableUntil.get(key) || 0)) return null;
   const cached = liveEtaCache.get(key);
   if (cached && Date.now() - cached.updatedAt < LIVE_ETA_CACHE_MS) {
     return {
@@ -3420,12 +3422,19 @@ async function liveEtasForRoute(route, state, vanImei) {
       if (updatedAt - entry.updatedAt > 5 * LIVE_ETA_CACHE_MS) liveEtaCache.delete(cacheKey);
     }
     liveEtaCache.set(key, value);
+    liveEtaUnavailableUntil.delete(key);
     return {
       ...value,
       byStopId: remainingStopEtas(meta, route, state.stopStatus, firstLegSeconds,
         UNLOAD_MINUTES_PER_STOP * 60, updatedAt),
     };
-  })().finally(() => { liveEtaInFlight.delete(key); });
+  })().catch((error) => {
+    // Avoid repeating a slow/failed external lookup on every 15-second
+    // receiving poll. The initial estimate remains available meanwhile.
+    liveEtaUnavailableUntil.set(key, Date.now() + LIVE_ETA_CACHE_MS);
+    console.warn(`[store-eta] ${route.id}: ${error.message}`);
+    return null;
+  }).finally(() => { liveEtaInFlight.delete(key); });
   liveEtaInFlight.set(key, pending);
   return pending;
 }
