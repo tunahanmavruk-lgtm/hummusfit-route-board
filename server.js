@@ -1376,6 +1376,14 @@ function savePosLedger(ledger) {
   fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2));
   fs.renameSync(temporary, POS_LEDGER_FILE);
 }
+function writePosLedgerEntry(key, update) {
+  // Read immediately before each synchronous write. Two stores can complete
+  // receipts concurrently; a stale whole-file snapshot would erase the
+  // other store's idempotency record.
+  const ledger = loadPosLedger();
+  ledger[key] = { ...(ledger[key] || {}), ...update };
+  savePosLedger(ledger);
+}
 async function posShopifyGraphQL(query, variables) {
   if (!SHOP_DOMAIN) throw new Error("Shopify shop domain is not configured");
   const response = await fetch(`https://${SHOP_DOMAIN}/admin/api/${POS_API_VERSION}/graphql.json`, {
@@ -1454,8 +1462,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
       const caseItem = await exactInventoryItem(line.caseSku, locationId);
       const unitItem = await exactInventoryItem(line.unitSku, locationId, true);
       plan = adjustmentPlan(line, caseItem, unitItem, locationId, key);
-      ledger[key] = { status: "pending", store, orderId, caseSku: line.caseSku, plan };
-      savePosLedger(ledger);
+      writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan });
     }
 
     const result = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key });
@@ -1463,12 +1470,10 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
     const errors = adjustment?.userErrors || [];
     if (!adjustment?.inventoryAdjustmentGroup?.id || errors.length) {
       const error = errors.map((entry) => entry.message).join("; ") || "Shopify did not confirm the inventory adjustment";
-      ledger[key] = { ...ledger[key], status: "failed", error };
-      savePosLedger(ledger);
+      writePosLedgerEntry(key, { status: "failed", error });
       return { sku: line.caseSku, status: "requires_review", error };
     }
-    ledger[key] = { ...ledger[key], status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id };
-    savePosLedger(ledger);
+    writePosLedgerEntry(key, { status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id });
     return { sku: line.caseSku, status: "posted", units: plan.units };
   } finally {
     posReceiptInFlight.delete(key);
