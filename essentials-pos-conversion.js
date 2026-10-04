@@ -1,10 +1,34 @@
 const crypto = require("crypto");
 const { essentialsTypeFor } = require("./essentials-shadow");
 
-const VERIFIED_UNIT_SKU_OVERRIDES = Object.freeze({
-  // The imported Coca-Cola case has an SS- distributor prefix that is NOT
-  // present on the individual POS variant; this was verified in Shopify.
-  "SS-4890008101306-CS8": "4890008101306",
+// Only catalog pairs that have been reviewed against the actual Shopify
+// variants may change store inventory. The SKU suffix alone is not proof of
+// a physical pack count or of which POS product should receive the units.
+const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  "SS-4890008101306-CS8": Object.freeze({
+    unitSku: "4890008101306", unitsPerCase: 8,
+    caseVariantId: "gid://shopify/ProductVariant/51242421289207",
+    unitVariantId: "gid://shopify/ProductVariant/51028267499767",
+    unitBarcode: "4890008101306",
+  }),
+  "SS-8806002023472-CS24": Object.freeze({
+    unitSku: "SS-8806002023472", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51242424631543",
+    unitVariantId: "gid://shopify/ProductVariant/51259498889463",
+    requirePosSellUnitTag: true,
+  }),
+  "BUILT-PFB0374-CS12": Object.freeze({
+    unitSku: "BUILT-PFB0374", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51242437738743",
+    unitVariantId: "gid://shopify/ProductVariant/51259495022839",
+    requirePosSellUnitTag: true,
+  }),
+  "SD-PEACH-60G-CS8": Object.freeze({
+    unitSku: "SD-PEACH-60G", unitsPerCase: 8,
+    caseVariantId: "gid://shopify/ProductVariant/51242444226807",
+    unitVariantId: "gid://shopify/ProductVariant/51259503444215",
+    requirePosSellUnitTag: true,
+  }),
 });
 
 // The 14 active Hummus Fit POS stores. Route Board calls East Islip "Islip";
@@ -27,18 +51,13 @@ const POS_STORE_LOCATIONS = Object.freeze({
   Woodbury: "Hummus Fit Woodbury",
 });
 
-// The case SKU must explicitly identify its sell-unit SKU and pack size.
-// Never infer a pack size from a title: merchandising titles are not stock data.
+// Never infer a pack size or POS variant from a merchandising title or SKU.
 function caseMapping(item) {
   if (essentialsTypeFor(item) !== "retail") return null;
   const caseSku = String(item.sku || "").trim();
-  const match = caseSku.match(/^(.+)-CS([1-9]\d*)$/i);
-  if (!match) return { caseSku, error: "Case SKU needs a verified -CS<count> mapping" };
-  const unitsPerCase = Number(match[2]);
-  if (!Number.isSafeInteger(unitsPerCase) || unitsPerCase > 1000) {
-    return { caseSku, error: "Invalid units-per-case mapping" };
-  }
-  return { caseSku, unitSku: VERIFIED_UNIT_SKU_OVERRIDES[caseSku] || match[1], unitsPerCase };
+  const mapping = VERIFIED_CASE_MAPPINGS[caseSku];
+  if (!mapping) return { caseSku, error: "Case SKU needs an approved case-to-POS-unit mapping" };
+  return { caseSku, ...mapping };
 }
 
 function receiptLines(order, essentialsRecord, receivedCounts, readItemState) {

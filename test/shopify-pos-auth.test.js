@@ -34,3 +34,16 @@ test("fails closed when credentials or inventory scopes are missing", async () =
   });
   await assert.rejects(getToken(), /missing required inventory permissions/);
 });
+
+test("accepts Shopify's implicit read_inventory grant from write_inventory", async () => {
+  const getToken = createPosTokenProvider({
+    shop: "store", clientId: "id", clientSecret: "secret",
+    fetchImpl: async () => ({ ok: true, json: async () => ({
+      access_token: "token",
+      // This is the scope string Shopify returned for the installed POS app.
+      scope: "read_locations,read_products,write_inventory",
+      expires_in: 3600,
+    }) }),
+  });
+  assert.equal(await getToken(), "token");
+});

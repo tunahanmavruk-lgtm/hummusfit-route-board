@@ -1408,31 +1408,40 @@ async function exactStoreLocation(store) {
   return matches[0].id;
 }
 
-async function exactInventoryItem(sku, locationId, requireSellable = false, allowInactiveLevel = false) {
+async function exactInventoryItem(sku, locationId, requireSellable = false, allowInactiveLevel = false, mapping = null) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
   const query = `query ExactSku($search: String!, $locationId: ID!) {
     productVariants(first: 10, query: $search) {
-      nodes { sku barcode price product { status tags } inventoryItem { id unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
+      nodes { id sku barcode price product { status tags } inventoryItem { id unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
     }
   }`;
   const data = await posShopifyGraphQL(query, { search: `sku:${sku}`, locationId });
   const matches = (data.productVariants?.nodes || []).filter((variant) => variant.sku === sku);
   if (matches.length !== 1) throw new Error(`Expected exactly one Shopify variant with SKU ${sku}; found ${matches.length}`);
-  if (requireSellable && (matches[0].product?.status !== "ACTIVE" ||
-      !/^[0-9]{12,14}$/.test(String(matches[0].barcode || "")) ||
-      !(Number(matches[0].price) > 0))) {
-    throw new Error(`POS sell-unit SKU ${sku} must be active, priced, and have a valid UPC/EAN barcode`);
+  const variant = matches[0];
+  if (mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
+    throw new Error(`POS sell-unit SKU ${sku} no longer matches its approved Shopify variant`);
   }
-  const inventory = matches[0].inventoryItem;
+  if (mapping?.caseVariantId && !requireSellable && variant.id !== mapping.caseVariantId) {
+    throw new Error(`Case SKU ${sku} no longer matches its approved Shopify variant`);
+  }
+  if (requireSellable && (variant.product?.status !== "ACTIVE" ||
+      !(Number(variant.price) > 0) ||
+      (mapping?.requirePosSellUnitTag && !(variant.product?.tags || []).includes("pos-sell-unit")) ||
+      (mapping?.unitBarcode && variant.barcode !== mapping.unitBarcode) ||
+      (!mapping?.allowMissingBarcode && !/^[0-9]{12,14}$/.test(String(variant.barcode || ""))))) {
+    throw new Error(`POS sell-unit SKU ${sku} must match its approved active product, price, and barcode policy`);
+  }
+  const inventory = variant.inventoryItem;
   const quantity = inventory?.inventoryLevel?.quantities?.find((entry) => entry.name === "available")?.quantity;
   if (!inventory?.id || (!allowInactiveLevel && !Number.isSafeInteger(quantity))) {
     throw new Error(`SKU ${sku} is not stocked with available quantity at this POS location`);
   }
   return {
     id: inventory.id, available: Number.isSafeInteger(quantity) ? quantity : null,
-    price: Number(matches[0].price),
+    price: Number(variant.price),
     unitCost: Number(inventory.unitCost?.amount),
-    mappingPending: (matches[0].product?.tags || []).includes("mapping-pending"),
+    mappingPending: (variant.product?.tags || []).includes("mapping-pending"),
   };
 }
 
@@ -1480,15 +1489,15 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
       return { sku: line.caseSku, status: "requires_review", error: "Receipt changed after POS conversion started" };
     }
     if (!plan) {
-      const caseItem = await exactInventoryItem(line.caseSku, locationId);
-      let unitItem = await exactInventoryItem(line.unitSku, locationId, true, true);
+      const caseItem = await exactInventoryItem(line.caseSku, locationId, false, false, line);
+      let unitItem = await exactInventoryItem(line.unitSku, locationId, true, true, line);
       // Check the entire catalog mapping and landed cost before creating even
       // an empty inventory level at a store. New POS items may not have been
       // activated at each of the 14 locations yet.
       validateCaseAndUnit(line, caseItem, unitItem);
       if (unitItem.available === null) {
         await activateSellUnitAtStore(unitItem, locationId, key);
-        unitItem = await exactInventoryItem(line.unitSku, locationId, true);
+        unitItem = await exactInventoryItem(line.unitSku, locationId, true, false, line);
       }
       plan = adjustmentPlan(line, caseItem, unitItem, locationId, key);
       writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan });

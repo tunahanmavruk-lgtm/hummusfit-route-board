@@ -20,8 +20,14 @@ function createPosTokenProvider({ shop, clientId, clientSecret, fetchImpl = fetc
       if (!response.ok) throw new Error(`Shopify POS token request failed (${response.status})`);
       const result = await response.json();
       const granted = new Set(String(result.scope || "").split(",").map((scope) => scope.trim()));
+      // Shopify can omit an implied read scope from the token response when
+      // its write counterpart is granted (for example, write_inventory
+      // includes read_inventory). The effective installation scopes and
+      // inventory query still include the read permission.
+      const hasScope = (scope) => granted.has(scope) ||
+        (scope.startsWith("read_") && granted.has(`write_${scope.slice(5)}`));
       if (!result.access_token || !Number.isFinite(result.expires_in) || result.expires_in <= 60 ||
-          REQUIRED_SCOPES.some((scope) => !granted.has(scope))) {
+          REQUIRED_SCOPES.some((scope) => !hasScope(scope))) {
         throw new Error("Dedicated POS app token is missing required inventory permissions");
       }
       cachedToken = result.access_token;

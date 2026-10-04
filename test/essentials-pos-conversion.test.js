@@ -19,12 +19,15 @@ const key = (item) => `${item.title}::${item.sku}`;
 const read = (dict, item, index) => dict?.[key(item)] ?? dict?.[index];
 
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
-  assert.deepEqual(caseMapping(coca), {
-    caseSku: "SS-4890008101306-CS8", unitSku: "4890008101306", unitsPerCase: 8,
-  });
+  assert.equal(caseMapping(coca).unitSku, "4890008101306");
+  assert.equal(caseMapping(coca).unitsPerCase, 8);
+  assert.equal(caseMapping(coca).unitBarcode, "4890008101306");
+  assert.equal(caseMapping(coca).unitVariantId, "gid://shopify/ProductVariant/51028267499767");
+  assert.equal(caseMapping(dreamwich).unitsPerCase, 12);
   assert.equal(caseMapping(supplies), null);
   assert.equal(caseMapping(food), null);
   assert.match(caseMapping({ ...coca, sku: "unmapped" }).error, /mapping/);
+  assert.match(caseMapping({ ...coca, sku: "UNVERIFIED-CS8" }).error, /approved/);
 });
 
 test("uses separate Essentials pick state and excludes food and Other Essentials", () => {
