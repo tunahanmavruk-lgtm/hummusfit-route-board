@@ -8,7 +8,7 @@ const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
-const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
+const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
@@ -1421,12 +1421,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
   const variant = matches[0];
   const barcode = String(variant.barcode || "").trim();
   const validBarcode = /^[0-9]{12,14}$/.test(barcode);
-  if (mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
-    throw new Error(`POS sell-unit SKU ${sku} no longer matches its approved Shopify variant`);
-  }
-  if (mapping?.caseVariantId && !requireSellable && variant.id !== mapping.caseVariantId) {
-    throw new Error(`Case SKU ${sku} no longer matches its approved Shopify variant`);
-  }
+  validateVariantRole(variant, mapping, requireSellable);
   if (requireSellable && (variant.product?.status !== "ACTIVE" ||
       !(Number(variant.price) > 0) ||
       (mapping?.requirePosSellUnitTag && !(variant.product?.tags || []).includes("pos-sell-unit")) ||

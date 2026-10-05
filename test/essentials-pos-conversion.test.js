@@ -1,6 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("../essentials-pos-conversion");
+const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS } = require("../essentials-pos-conversion");
+
+test("case and unit lookups validate their own approved variant, never the other role", () => {
+  const mapping = { caseVariantId: "case-id", unitVariantId: "unit-id" };
+  assert.doesNotThrow(() => validateVariantRole({ id: "case-id", sku: "CASE" }, mapping, false));
+  assert.doesNotThrow(() => validateVariantRole({ id: "unit-id", sku: "UNIT" }, mapping, true));
+  assert.throws(() => validateVariantRole({ id: "unit-id", sku: "CASE" }, mapping, false), /Case SKU/);
+  assert.throws(() => validateVariantRole({ id: "case-id", sku: "UNIT" }, mapping, true), /POS sell-unit SKU/);
+  assert.throws(() => validateVariantRole({ id: "other", sku: "CASE" }, mapping, false), /approved/);
+});
 
 const coca = {
   title: "Coca-Cola Plus Japan 8-pack", sku: "SS-4890008101306-CS8", quantity: 3,

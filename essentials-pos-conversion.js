@@ -136,4 +136,11 @@ function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
   };
 }
 
-module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS };
+function validateVariantRole(variant, mapping, requireSellable) {
+  const expectedId = requireSellable ? mapping?.unitVariantId : mapping?.caseVariantId;
+  if (expectedId && variant.id !== expectedId) {
+    throw new Error(`${requireSellable ? "POS sell-unit" : "Case"} SKU ${variant.sku} no longer matches its approved Shopify variant`);
+  }
+}
+
+module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS };
