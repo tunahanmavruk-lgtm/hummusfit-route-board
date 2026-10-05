@@ -9,6 +9,7 @@ const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
 const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, selectApprovedVariant, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
+const { retailShortagePlan, shortageKey } = require("./receiving-discrepancy.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
@@ -308,6 +309,7 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/picking-reopen",
   // This path has its own short-lived service-token check, not board access.
   "/api/essentials-pos-receipt",
+  "/api/receiving-retail-shortage",
 ]);
 
 app.use((req, res, next) => {
@@ -1358,6 +1360,9 @@ const ESSENTIALS_POS_CONVERSION_ENABLED = process.env.ESSENTIALS_POS_CONVERSION_
 const ESSENTIALS_POS_CUTOVER = Date.parse(process.env.ESSENTIALS_POS_CUTOVER || "2026-10-04T12:00:00Z");
 const POS_LEDGER_FILE = path.join(PERSISTENT_DIR, "essentials-pos-receipts.json");
 const POS_PICK_QUEUE_FILE = path.join(PERSISTENT_DIR, "essentials-pos-pick-queue.json");
+const RECEIVING_SHORTAGE_LEDGER_FILE = path.join(PERSISTENT_DIR, "receiving-retail-shortages.json");
+const RECEIVING_SHORTAGE_STORES = new Set(String(process.env.RECEIVING_SHORTAGE_STORES || "")
+  .split(",").map((name) => name.trim()).filter(Boolean));
 let posPickQueueRunning = false;
 const posReceiptInFlight = new Set();
 const POS_API_VERSION = "2026-10";
@@ -1521,6 +1526,88 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
     posReceiptInFlight.delete(key);
   }
 }
+
+function loadReceivingShortageLedger() {
+  try { return JSON.parse(fs.readFileSync(RECEIVING_SHORTAGE_LEDGER_FILE, "utf8")); }
+  catch (error) { if (error.code === "ENOENT") return {}; throw error; }
+}
+function saveReceivingShortageEntry(key, update) {
+  const ledger = loadReceivingShortageLedger();
+  ledger[key] = { ...(ledger[key] || {}), ...update };
+  const temp = `${RECEIVING_SHORTAGE_LEDGER_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(ledger, null, 2));
+  fs.renameSync(temp, RECEIVING_SHORTAGE_LEDGER_FILE);
+}
+
+// Isolated from Route Board picking and the existing fulfillment Flow. Only
+// a confirmed, already-posted conversion can be reversed; all other kinds of
+// receiving discrepancies remain pending for review.
+app.post("/api/receiving-retail-shortage", async (req, res) => {
+  const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
+  const identity = verifyLogisticsToken(bearer, "essentials.reconcile");
+  if (!identity || identity.sub !== "hummusfit-receiving") {
+    return res.status(403).json({ error: "Receiving service authorization required" });
+  }
+  try {
+    const { store, orderId, reportId, receivedCounts } = req.body || {};
+    const stop = VALID_STOP_NAMES.get(String(store || "").trim().toLowerCase());
+    if (!stop || stop.isB2B || !POS_STORE_LOCATIONS[store] ||
+        !RECEIVING_SHORTAGE_STORES.has(store)) {
+      return res.status(403).json({ error: "Automatic correction is not enabled for this Hummus Fit store" });
+    }
+    if (typeof reportId !== "string" || !/^[A-Za-z0-9 :._-]{1,100}$/.test(reportId)) {
+      return res.status(400).json({ error: "A valid receiving report ID is required" });
+    }
+    const archive = loadArchive()[store.toLowerCase()];
+    if (!archive || archive.isB2B || !archive.shopifyFulfilled || archive.orderId !== orderId ||
+        !Array.isArray(archive.orders) || archive.orders.length !== 1 ||
+        Date.parse(archive.createdAt) < ESSENTIALS_POS_CUTOVER) {
+      return res.status(409).json({ error: "This report is not for one post-cutover fulfilled Hummus Fit order" });
+    }
+    const lines = receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState)
+      .filter((line) => line.receivedCases < line.pickedCases);
+    if (!lines.length) return res.json({ ok: true, results: [] });
+    const locationId = await exactStoreLocation(store);
+    const results = [];
+    for (const line of lines) {
+      try {
+        const previous = loadReceivingShortageLedger()[shortageKey(store, orderId, line.caseSku)];
+        if (previous?.plan && previous.plan.receivedCases !== line.receivedCases) {
+          throw new Error("Received count changed after a correction was started");
+        }
+        if (previous?.status === "posted") {
+          results.push({ ...previous.result, status: "already_posted" });
+          continue;
+        }
+        const conversion = loadPosLedger()[receiptKey(store, orderId, line.caseSku)];
+        const unit = previous?.plan ? null : await exactInventoryItem(line.unitSku, locationId, true, false, line);
+        const proposed = previous?.plan ? null : retailShortagePlan({ store, orderId, reportId, line,
+          postedConversion: conversion, unitItem: unit, locationId });
+        const plan = previous?.plan || proposed;
+        if (!previous?.plan) saveReceivingShortageEntry(plan.key, { status: "pending", plan });
+        const data = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key: plan.key });
+        const adjustment = data.inventoryAdjustQuantities;
+        if (!adjustment?.inventoryAdjustmentGroup?.id || adjustment.userErrors?.length) {
+          throw new Error((adjustment?.userErrors || []).map((error) => error.message).join("; ") ||
+            "Shopify did not confirm the correction");
+        }
+        const group = adjustment.inventoryAdjustmentGroup;
+        const result = { status: "posted", sku: plan.caseSku, posSku: plan.unitSku,
+          delta: plan.delta, receivedCases: plan.receivedCases, pickedCases: plan.pickedCases,
+          inventoryItemId: plan.inventoryItemId, locationId: plan.locationId,
+          adjustmentId: group.id, postedAt: group.createdAt,
+          referenceDocumentUri: group.referenceDocumentUri };
+        saveReceivingShortageEntry(plan.key, { status: "posted", result });
+        results.push(result);
+      } catch (error) {
+        results.push({ sku: line.caseSku, status: "requires_review", error: error.message });
+      }
+    }
+    res.json({ ok: results.every((result) => ["posted", "already_posted"].includes(result.status)), results });
+  } catch (error) {
+    res.status(409).json({ error: error.message });
+  }
+});
 
 // Warehouse Finish Order now initiates conversion. Keep a durable snapshot:
 // the per-store delivery archive can be replaced by tomorrow's order.
