@@ -36,7 +36,7 @@ function harness() {
     },
   });
   vm.runInContext(source.slice(source.indexOf("async function exactInventoryItem("),
-    source.indexOf("// In-memory cache, refreshed on demand")), context);
+    source.indexOf("// Warehouse Finish Order now initiates conversion")), context);
   return { context, mapping, quantities, writes: () => writes };
 }
 

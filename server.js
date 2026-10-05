@@ -1357,6 +1357,8 @@ async function shopifyGraphQL(query, variables) {
 const ESSENTIALS_POS_CONVERSION_ENABLED = process.env.ESSENTIALS_POS_CONVERSION_ENABLED === "true";
 const ESSENTIALS_POS_CUTOVER = Date.parse(process.env.ESSENTIALS_POS_CUTOVER || "2026-10-04T12:00:00Z");
 const POS_LEDGER_FILE = path.join(PERSISTENT_DIR, "essentials-pos-receipts.json");
+const POS_PICK_QUEUE_FILE = path.join(PERSISTENT_DIR, "essentials-pos-pick-queue.json");
+let posPickQueueRunning = false;
 const posReceiptInFlight = new Set();
 const POS_API_VERSION = "2026-10";
 const POS_SHOPIFY_CLIENT_ID = process.env.SHOPIFY_POS_CLIENT_ID || "";
@@ -1442,7 +1444,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
 
 const POS_ADJUST_MUTATION = `mutation ConvertReceivedCases($input: InventoryAdjustQuantitiesInput!, $key: String!) {
   inventoryAdjustQuantities(input: $input) @idempotent(key: $key) {
-    inventoryAdjustmentGroup { id }
+    inventoryAdjustmentGroup { id createdAt referenceDocumentUri }
     userErrors { field message }
   }
 }`;
@@ -1474,7 +1476,10 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
   try {
     const ledger = loadPosLedger();
     const previous = ledger[key];
-    if (previous?.status === "posted") return { sku: line.caseSku, status: "already_posted", units: previous.units };
+    if (previous?.status === "posted") return {
+      sku: line.caseSku, status: "already_posted", units: previous.units,
+      adjustmentId: previous.adjustmentId, postedAt: previous.postedAt,
+    };
     if (previous?.status === "failed") return { sku: line.caseSku, status: "requires_review", error: previous.error };
     if (!line.receivedCases) return { sku: line.caseSku, status: "zero_received", units: 0 };
     if (line.error) return { sku: line.caseSku, status: "requires_mapping", error: line.error };
@@ -1506,12 +1511,84 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
       writePosLedgerEntry(key, { status: "failed", error });
       return { sku: line.caseSku, status: "requires_review", error };
     }
-    writePosLedgerEntry(key, { status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id });
-    return { sku: line.caseSku, status: "posted", units: plan.units };
+    const group = adjustment.inventoryAdjustmentGroup;
+    writePosLedgerEntry(key, { status: "posted", units: plan.units,
+      adjustmentId: group.id, postedAt: group.createdAt,
+      referenceDocumentUri: group.referenceDocumentUri });
+    return { sku: line.caseSku, status: "posted", units: plan.units,
+      adjustmentId: group.id, postedAt: group.createdAt };
   } finally {
     posReceiptInFlight.delete(key);
   }
 }
+
+// Warehouse Finish Order now initiates conversion. Keep a durable snapshot:
+// the per-store delivery archive can be replaced by tomorrow's order.
+function loadPosPickQueue() {
+  try { return JSON.parse(fs.readFileSync(POS_PICK_QUEUE_FILE, "utf8")); }
+  catch (error) { if (error.code === "ENOENT") return {}; throw error; }
+}
+function savePosPickQueue(queue) {
+  const temp = `${POS_PICK_QUEUE_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(queue, null, 2));
+  fs.renameSync(temp, POS_PICK_QUEUE_FILE);
+}
+function enqueuePickedRetailConversion(store, order) {
+  if (!ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED ||
+      !POS_STORE_LOCATIONS[store] || !order?.shopifyFulfilled || order.isB2B ||
+      !Number.isFinite(Date.parse(order.createdAt)) || Date.parse(order.createdAt) < ESSENTIALS_POS_CUTOVER) return;
+  const retail = (order.lineItems || []).filter((item) => essentialsTypeFor(item) === "retail");
+  if (!retail.length) return;
+  const counts = Object.fromEntries(retail.map((item) => [String(item.sku || "").trim() || item.title, item.quantity]));
+  // The same validator used by receiving requires completed, scanned picking.
+  const lines = receiptLines(order, order.essentialsRecord, counts, readItemState);
+  const key = `${store}::${order.orderId}`;
+  const queue = loadPosPickQueue();
+  if (queue[key]) return;
+  queue[key] = { store, orderId: order.orderId, lines, status: "pending", queuedAt: new Date().toISOString() };
+  savePosPickQueue(queue);
+}
+async function processPickedRetailConversions() {
+  if (posPickQueueRunning || !ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED ||
+      !POS_SHOPIFY_CLIENT_ID || !POS_SHOPIFY_CLIENT_SECRET) return;
+  posPickQueueRunning = true;
+  try {
+    // Recover the narrow crash window between successful fulfillment and
+    // enqueue, without replaying pre-cutover orders or touching food lines.
+    const archive = loadArchive();
+    for (const store of Object.keys(POS_STORE_LOCATIONS)) {
+      const order = archive[store.toLowerCase()];
+      if (!order) continue;
+      try { enqueuePickedRetailConversion(store, order); }
+      catch (error) { console.error(`[essentials-pos-pick] ${store} eligibility:`, error.message); }
+    }
+    for (const [key, job] of Object.entries(loadPosPickQueue())) {
+      if (job.status === "complete") continue;
+      const results = [];
+      try {
+        const locationId = await exactStoreLocation(job.store);
+        for (const line of job.lines) {
+          try { results.push(await convertOneReceivedLine(job.store, job.orderId, locationId, line)); }
+          catch (error) { results.push({ sku: line.caseSku, status: "requires_review", error: error.message }); }
+        }
+      } catch (error) { results.push({ status: "requires_review", error: error.message }); }
+      // Reload so a newly finished order queued during an API request is retained.
+      const queue = loadPosPickQueue();
+      if (!queue[key]) continue;
+      const complete = results.length > 0 && results.every((r) => ["posted", "already_posted", "zero_received"].includes(r.status));
+      if (JSON.stringify(queue[key].results) !== JSON.stringify(results)) {
+        console.log(`[essentials-pos-pick] ${job.store} ${job.orderId}: ${JSON.stringify(results)}`);
+      }
+      queue[key] = { ...queue[key], status: complete ? "complete" : "pending", results, checkedAt: new Date().toISOString() };
+      savePosPickQueue(queue);
+    }
+  } catch (error) { console.error("[essentials-pos-pick]", error.message); }
+  finally { posPickQueueRunning = false; }
+}
+
+// Existing fulfillment Flow can take time to credit store case stock. Retry
+// safely rather than adding units before that transfer or decrementing twice.
+setInterval(processPickedRetailConversions, 60_000).unref();
 
 // In-memory cache, refreshed on demand (not every request)
 let ordersCache = { fetchedAt: 0, byStopName: {}, windowStart: null, windowEnd: null };
@@ -3152,6 +3229,12 @@ app.post("/api/picking-finish", async (req, res) => {
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
     if (shopifyFulfilled) {
       markArchivedOrderFulfilled(key, sourceOrder.orderId);
+      try {
+        enqueuePickedRetailConversion(stopName, loadArchive()[key]);
+        void processPickedRetailConversions();
+      } catch (error) {
+        console.error(`[essentials-pos-pick] enqueue failed for ${key}:`, error.message);
+      }
       if (ordersCache.byStopName[key]?.orderId === sourceOrder.orderId) {
         ordersCache.byStopName[key] = mergeRecentCompletedOrders(
           {}, loadArchive(), VALID_STOP_NAMES
