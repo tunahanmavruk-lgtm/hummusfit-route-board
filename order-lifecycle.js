@@ -49,6 +49,49 @@ function easternCalendar(timestamp) {
   };
 }
 
+// The route board is a day-of-delivery view. Local orders are for the day
+// after placement; B2B orders are for their next scheduled delivery day.
+// At 1 PM Eastern on that delivery day, remove the old order from the
+// board even if Shopify still calls it unfulfilled. Picking data is kept.
+function orderVisibleOnBoard(createdAt, stopMeta, now = Date.now()) {
+  const placedAt = Date.parse(createdAt);
+  if (!Number.isFinite(placedAt) || placedAt > now) return false;
+  const placedDay = easternCalendar(placedAt).day;
+  let deliveryDay = placedDay + 1;
+  const days = stopMeta?.isB2B ? stopMeta.deliveryDays : null;
+  if (Array.isArray(days) && days.length) {
+    for (let offset = 1; offset <= 7; offset++) {
+      const candidate = placedDay + offset;
+      if (days.includes(new Date(candidate * DAY_MS).getUTCDay())) {
+        deliveryDay = candidate;
+        break;
+      }
+    }
+  }
+  const current = easternCalendar(now);
+  return current.day < deliveryDay || (current.day === deliveryDay && current.hour < 13);
+}
+
+function boardOrdersByStop(ordersByStop, validStopNames, now = Date.now()) {
+  const board = {};
+  for (const [key, order] of Object.entries(ordersByStop || {})) {
+    const stopMeta = validStopNames.get(key);
+    const sourceOrders = Array.isArray(order.orders) && order.orders.length
+      ? order.orders : [{ id: order.orderId, name: order.orderName, createdAt: order.createdAt }];
+    const visible = sourceOrders.filter((item) => orderVisibleOnBoard(item.createdAt, stopMeta, now));
+    if (!visible.length) continue;
+    board[key] = {
+      ...order,
+      orderId: visible.map((item) => item.id).join(","),
+      orderName: visible.map((item) => item.name).join(", "),
+      orderCount: visible.length,
+      createdAt: visible.map((item) => item.createdAt).sort()[0],
+      orders: visible,
+    };
+  }
+  return board;
+}
+
 function completedOrderVisible(saved, stopMeta, now = Date.now()) {
   if (!stopMeta || !saved?.completedAt || !saved.shopifyFulfilled ||
       !saved.orderId || !Array.isArray(saved.lineItems)) return false;
@@ -93,4 +136,6 @@ module.exports = {
   selectB2BStop,
   completedOrderVisible,
   mergeRecentCompletedOrders,
+  orderVisibleOnBoard,
+  boardOrdersByStop,
 };

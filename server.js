@@ -12,6 +12,7 @@ const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPl
 const { retailShortagePlan, shortageKey } = require("./receiving-discrepancy.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
+const { validateEssentialsStatus, essentialsLineResolved } = require("./essentials-shortage.js");
 const { firstTripEndNearStore, trackingCutoffAt } = require("./store-tracking-privacy.js");
 const {
   lineItemsForWorkflow,
@@ -24,6 +25,7 @@ const {
   selectB2BStop,
   completedOrderVisible,
   mergeRecentCompletedOrders,
+  boardOrdersByStop,
 } = require("./order-lifecycle.js");
 const webpush = require("web-push");
 
@@ -2046,9 +2048,14 @@ app.get("/api/today-orders", async (req, res) => {
   try {
     const cache = await fetchTodaysStopOrders();
     const state = loadState();
+    const boardByStopName = boardOrdersByStop(cache.byStopName, VALID_STOP_NAMES, Date.now());
     const pickingStatus = {};
-    Object.keys(cache.byStopName).forEach((key) => {
+    Object.keys(boardByStopName).forEach((key) => {
       const order = cache.byStopName[key];
+      // A stop can contain both yesterday's and a fresh Shopify order.
+      // Its combined picking/crate record cannot describe just the fresh
+      // portion, so never show yesterday's progress beside today's pill.
+      if (boardByStopName[key].orderId !== order.orderId) return;
       // This also restores an archived, fulfilled snapshot after the daily
       // live picking state resets, so route cards keep their real completed
       // and crate status through delivery and store receiving.
@@ -2085,7 +2092,7 @@ app.get("/api/today-orders", async (req, res) => {
     });
     saveState(state);
     res.json({
-      byStopName: cache.byStopName,
+      byStopName: boardByStopName,
       windowStart: cache.windowStart,
       windowEnd: cache.windowEnd,
       scheduledToday,
@@ -2752,6 +2759,14 @@ app.post("/api/picking-item", async (req, res) => {
     }
     const itemKey = lineItemKey(item);
 
+    if (workflow === "essentials") {
+      const labeledCount = Number(readItemState(record.itemScannedCount, item, Number(itemIndex)) || 0);
+      const statusError = validateEssentialsStatus(status, pickedQty, labeledCount, Number(item.quantity));
+      if (statusError) return res.status(409).json({ error: statusError });
+    } else if (!["not_picked", "picked", "missing", "partial"].includes(status)) {
+      return res.status(400).json({ error: "Invalid item status." });
+    }
+
     if (!record.startedAt) {
       record.startedAt = new Date().toISOString();
     }
@@ -2764,15 +2779,15 @@ app.post("/api/picking-item", async (req, res) => {
         return res.status(400).json({ error: "pickedQty required when status is partial" });
       }
       record.itemPickedQty[itemKey] = pickedQty;
-      record.itemScannedCount[itemKey] = pickedQty;
+      if (workflow !== "essentials") record.itemScannedCount[itemKey] = pickedQty;
     } else {
       // Clear any stale partial-quantity value once the item is no longer partial
       delete record.itemPickedQty[itemKey];
-      if (status === "picked") {
+      if (status === "picked" && workflow !== "essentials") {
         // Manually tapped fully picked (not via scanning) — treat as
         // fully accounted for so a later scan doesn't re-open it.
         record.itemScannedCount[itemKey] = item.quantity;
-      } else if (status === "not_picked") {
+      } else if (status === "not_picked" && workflow !== "essentials") {
         // Cycled back to the start — clear scan progress so a fresh
         // scan-count cycle can begin cleanly.
         delete record.itemScannedCount[itemKey];
@@ -3249,15 +3264,16 @@ app.post("/api/picking-finish", async (req, res) => {
         status: readItemState(record.itemStatus, item, idx) || "not_picked",
         verifiedCases: Number(readItemState(record.itemScannedCount, item, idx)) || 0,
         requiredCases: Number(item.quantity) || 0,
+        pickedQty: readItemState(record.itemPickedQty, item, idx),
       }))
       .filter((item) => workflow === "essentials"
-        ? item.status !== "picked" || item.verifiedCases < item.requiredCases
+        ? !essentialsLineResolved(item.status, item.pickedQty, item.verifiedCases, item.requiredCases)
         : item.status === "not_picked");
 
     if (outstanding.length > 0) {
       return res.status(400).json({
         error: workflow === "essentials"
-          ? `${outstanding.length} Essentials item(s) still have unverified cases. Verify every case before finishing.`
+          ? `${outstanding.length} Essentials item(s) still have unverified cases or unresolved shortages.`
           : `${outstanding.length} item(s) still need to be marked before finishing.`,
         outstanding,
       });

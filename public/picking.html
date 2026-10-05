@@ -445,6 +445,20 @@
     cursor:pointer;
   }
   .case-add-btn:disabled{ opacity:.35; cursor:default; }
+  .essentials-short-btn{
+    display:block;
+    width:100%;
+    margin-top:8px;
+    padding:10px 12px;
+    border:1.5px solid var(--red);
+    border-radius:10px;
+    background:transparent;
+    color:var(--red);
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    font-weight:800;
+    cursor:pointer;
+  }
 
   .finish-btn{
     width:100%;
@@ -2060,7 +2074,10 @@
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
             (isLocked ? '' : (pickingWorkflow === 'essentials'
-              ? '<button class="case-add-btn" data-case-idx="' + idx + '"' + (status === 'picked' ? ' disabled' : '') + '>+ Label One Case</button>'
+              ? '<button class="case-add-btn" data-case-idx="' + idx + '"' + (status !== 'not_picked' ? ' disabled' : '') + '>+ Label One Case</button>' +
+                (status === 'picked' ? '' : '<button class="essentials-short-btn" data-essentials-short-idx="' + idx + '">' +
+                  ((status === 'missing' || status === 'partial') ? 'Reopen item' :
+                    (scannedSoFar > 0 ? 'Mark remaining cases short' : 'Mark unavailable')) + '</button>')
               : '<div class="partial-link" data-partial-idx="' + idx + '">Only had some? Enter partial quantity</div>')) +
           '</div>' +
           (isLocked || pickingWorkflow === 'essentials' ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
@@ -2261,6 +2278,37 @@
       });
     });
 
+    document.querySelectorAll('[data-essentials-short-idx]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if(!requirePickerSelected()) return;
+        var idx = parseInt(btn.dataset.essentialsShortIdx, 10);
+        var item = orderDetail.lineItems[idx];
+        var current = orderDetail.itemStatus[idx] || 'not_picked';
+        var labeled = Number((orderDetail.itemScannedCount || {})[idx] || 0);
+        var reopening = current === 'missing' || current === 'partial';
+        var status = reopening ? 'not_picked' : (labeled > 0 ? 'partial' : 'missing');
+        if(!reopening && !confirm('Mark ' + item.title + ' ' +
+          (labeled > 0 ? (item.quantity - labeled) + ' remaining case(s) short?' : 'unavailable?'))) return;
+        btn.disabled = true;
+        fetch('/api/picking-item', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body:workflowBody({
+            stopName:orderDetail.stopName, itemIndex:idx, status:status,
+            pickedQty:status === 'partial' ? labeled : undefined
+          })
+        }).then(function(r){ return r.json().then(function(data){ return { ok:r.ok, data:data }; }); })
+          .then(function(result){
+            if(!result.ok || result.data.error) throw new Error(result.data.error || 'Could not update this item.');
+            orderDetail.itemStatus = result.data.itemStatus;
+            orderDetail.itemPickedQty = result.data.itemPickedQty;
+            orderDetail.itemScannedCount = result.data.itemScannedCount;
+            orderDetail.itemNotes = result.data.itemNotes;
+            renderOrder();
+          }).catch(function(error){ alert(error.message); btn.disabled = false; });
+      });
+    });
+
     document.querySelectorAll('[data-partial-idx]').forEach(function(el){
       el.addEventListener('click', function(){
         if(!requirePickerSelected()) return;
@@ -2366,7 +2414,10 @@
           fetch('/api/picking-item', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: workflowBody({ stopName: orderDetail.stopName, itemIndex: idx, status: orderDetail.itemStatus[idx], note: val })
+            body: workflowBody({ stopName: orderDetail.stopName, itemIndex: idx,
+              status: orderDetail.itemStatus[idx],
+              pickedQty: orderDetail.itemStatus[idx] === 'partial' ? orderDetail.itemPickedQty[idx] : undefined,
+              note: val })
           });
         }, 500);
       });
