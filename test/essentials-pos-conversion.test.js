@@ -1,4 +1,5 @@
 const test = require("node:test");
+const { selectApprovedVariant } = require("../essentials-pos-conversion");
 const assert = require("node:assert/strict");
 const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS } = require("../essentials-pos-conversion");
 
@@ -26,6 +27,19 @@ const supplies = {
 const food = { title: "Chicken meal", sku: "MEAL-001", quantity: 4 };
 const key = (item) => `${item.title}::${item.sku || ""}`;
 const read = (dict, item, index) => dict?.[key(item)] ?? dict?.[index];
+
+test("Dudes flavors use six bottles and exact grouped variant IDs despite archived duplicate SKUs", () => {
+  for (const flavor of ["HFNC8OZ", "FTB8OZ", "DSSTKS8OZ", "HCS8OZ", "BS8OZ", "DPMS8OZ"]) {
+    const sku = `DG-${flavor}-CS`;
+    const mapping = caseMapping({ ...coca, sku });
+    assert.equal(mapping.unitsPerCase, 6);
+    assert.equal(mapping.unitSku, `DG-${flavor}-EA`);
+    assert.match(mapping.unitBarcode, /^\d{12}$/);
+    const approved = { id: mapping.caseVariantId, sku };
+    assert.equal(selectApprovedVariant([{ id: "archived-id", sku }, approved], sku, mapping, false), approved);
+    assert.throws(() => selectApprovedVariant([{ id: "archived-id", sku }], sku, mapping, false), /approved/);
+  }
+});
 
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
   assert.equal(caseMapping(coca).unitSku, "4890008101306");

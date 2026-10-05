@@ -5,6 +5,12 @@ const { essentialsTypeFor } = require("./essentials-shadow");
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  "DG-HFNC8OZ-CS": Object.freeze({ unitSku: "DG-HFNC8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51233898561783", unitVariantId: "gid://shopify/ProductVariant/51233898496247", unitBarcode: "850050020240" }),
+  "DG-FTB8OZ-CS": Object.freeze({ unitSku: "DG-FTB8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51242736517367", unitVariantId: "gid://shopify/ProductVariant/51233898594551", unitBarcode: "850050020196" }),
+  "DG-DSSTKS8OZ-CS": Object.freeze({ unitSku: "DG-DSSTKS8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51242736910583", unitVariantId: "gid://shopify/ProductVariant/51233898692855", unitBarcode: "850050020158" }),
+  "DG-HCS8OZ-CS": Object.freeze({ unitSku: "DG-HCS8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51242737336567", unitVariantId: "gid://shopify/ProductVariant/51233898758391", unitBarcode: "850050020233" }),
+  "DG-BS8OZ-CS": Object.freeze({ unitSku: "DG-BS8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51242737565943", unitVariantId: "gid://shopify/ProductVariant/51233898823927", unitBarcode: "850050020028" }),
+  "DG-DPMS8OZ-CS": Object.freeze({ unitSku: "DG-DPMS8OZ-EA", unitsPerCase: 6, caseVariantId: "gid://shopify/ProductVariant/51242738254071", unitVariantId: "gid://shopify/ProductVariant/51233898922231", unitBarcode: "850050020110" }),
   "SS-4890008101306-CS8": Object.freeze({
     unitSku: "4890008101306", unitsPerCase: 8,
     caseVariantId: "gid://shopify/ProductVariant/51242421289207",
@@ -143,4 +149,12 @@ function validateVariantRole(variant, mapping, requireSellable) {
   }
 }
 
-module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS };
+function selectApprovedVariant(variants, sku, mapping, requireSellable) {
+  const expectedId = requireSellable ? mapping?.unitVariantId : mapping?.caseVariantId;
+  const matches = variants.filter((variant) => variant.sku === sku && (!expectedId || variant.id === expectedId));
+  if (matches.length !== 1) throw new Error(`Expected exactly one approved Shopify variant with SKU ${sku}; found ${matches.length}`);
+  validateVariantRole(matches[0], mapping, requireSellable);
+  return matches[0];
+}
+
+module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, selectApprovedVariant, POS_STORE_LOCATIONS };

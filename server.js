@@ -8,7 +8,7 @@ const QRCode = require("qrcode");
 const { renderCrateLabelPdf } = require("./crate-label.js");
 const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
-const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
+const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, validateVariantRole, selectApprovedVariant, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
@@ -1416,9 +1416,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
     }
   }`;
   const data = await posShopifyGraphQL(query, { search: `sku:${sku}`, locationId });
-  const matches = (data.productVariants?.nodes || []).filter((variant) => variant.sku === sku);
-  if (matches.length !== 1) throw new Error(`Expected exactly one Shopify variant with SKU ${sku}; found ${matches.length}`);
-  const variant = matches[0];
+  const variant = selectApprovedVariant(data.productVariants?.nodes || [], sku, mapping, requireSellable);
   const barcode = String(variant.barcode || "").trim();
   const validBarcode = /^[0-9]{12,14}$/.test(barcode);
   validateVariantRole(variant, mapping, requireSellable);
