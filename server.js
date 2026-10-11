@@ -10,6 +10,7 @@ const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
 const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
+const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
   lineItemsForWorkflow,
@@ -309,6 +310,7 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/picking-reopen",
   // This path has its own short-lived service-token check, not board access.
   "/api/essentials-pos-receipt",
+  "/api/receiving-barcode-lookup",
 ]);
 
 app.use((req, res, next) => {
@@ -1151,6 +1153,45 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     res.json({ ok: results.every((result) => ["posted", "already_posted", "zero_received"].includes(result.status)), results });
   } catch (error) {
     res.status(409).json({ error: error.message });
+  }
+});
+
+// Staff may identify an off-order barcode, but lookup cannot write inventory.
+// Only a unique exact Shopify variant match is returned to the receiving app.
+app.post("/api/receiving-barcode-lookup", async (req, res) => {
+  const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
+  const identity = verifyLogisticsToken(bearer, "essentials.receive");
+  if (!identity || identity.sub !== "hummusfit-receiving") {
+    return res.status(403).json({ error: "Receiving service authorization required" });
+  }
+  const store = String(req.body?.store || "");
+  const code = String(req.body?.code || "").trim();
+  if (!POS_STORE_LOCATIONS[store] || !/^[A-Za-z0-9_-]{5,60}$/.test(code)) {
+    return res.status(400).json({ error: "A valid Hummus Fit store and scanned code are required" });
+  }
+  try {
+    const query = `query ReceivingBarcode($search: String!) {
+      productVariants(first: 10, query: $search) {
+        nodes { id sku barcode product { title status } }
+        pageInfo { hasNextPage }
+      }
+    }`;
+    const candidates = [];
+    let truncated = false;
+    for (const search of catalogSearches(code)) {
+      const data = await posShopifyGraphQL(query, { search });
+      candidates.push(...(data.productVariants?.nodes || []));
+      truncated ||= Boolean(data.productVariants?.pageInfo?.hasNextPage);
+    }
+    if (truncated) return res.json({ status: "ambiguous", code });
+    const match = exactCatalogMatch(code, candidates);
+    if (match.status !== "matched") return res.json({ status: match.status, code });
+    const variant = match.variant;
+    return res.json({ status: "matched", code, variantId: variant.id,
+      sku: variant.sku || "", title: variant.product?.title || "Unknown product",
+      productStatus: variant.product?.status || "UNKNOWN" });
+  } catch {
+    return res.status(502).json({ error: "Catalog barcode lookup is temporarily unavailable" });
   }
 });
 
