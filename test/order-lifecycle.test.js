@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   hasB2BSignal,
+  hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
 } = require("../order-lifecycle.js");
@@ -60,4 +61,13 @@ test("requires a wholesale/B2B signal before using a destination ZIP fallback", 
   assert.equal(hasB2BSignal(regularCustomerTags), false, "#687037 must not map to Nourish'd by ZIP");
   assert.equal(hasB2BSignal(["wholesale"]), true);
   assert.equal(hasB2BSignal(["B2B"]), true);
+});
+
+test("alerts only for a genuine unmatched out-of-state route candidate", () => {
+  // These classifications come from the 17-order October route audit.
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "Woodbury"], hasLocalStop: true }), false);
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "UPS Ground Shipping"] }), false);
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "Ground Shipping"] }), false);
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale"], zipCandidates: new Set(["brookfield", "fishkill"]) }), true);
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["out-of-state"], hasLocalStop: true }), true);
 });

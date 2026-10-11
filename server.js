@@ -18,6 +18,7 @@ const {
 } = require("./picking-workflow.js");
 const {
   hasB2BSignal,
+  hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
   completedOrderVisible,
@@ -1812,15 +1813,20 @@ async function fetchB2BStopOrders() {
     const customerTags = normalizeOrderTags({ tags: order.customer?.tags });
     const tags = orderTags.concat(customerTags);
     const zip = String(order.shippingAddress?.zip || "").match(/\d{5}/)?.[0];
+    const zipCandidates = zip ? B2B_ZIP_TO_STOP.get(zip) : [];
     const key = selectB2BStop({
       orderTags,
       customerTags,
-      zipCandidates: zip ? B2B_ZIP_TO_STOP.get(zip) : [],
+      zipCandidates,
       useZip: hasB2BSignal(tags),
       isEligible: (key) => Boolean(VALID_STOP_NAMES.get(key)?.isB2B),
     });
     if (!key) {
-      if (hasB2BSignal(tags)) console.warn(`B2B order ${order.name} has no unambiguous stop tag; not assigning by ZIP ${zip || "unknown"}`);
+      if (hasUnmatchedB2BRouteIntent({
+        tags,
+        zipCandidates,
+        hasLocalStop: tags.some((tag) => VALID_STOP_NAMES.get(tag)?.isB2B === false),
+      })) console.warn(`Out-of-state route candidate ${order.name} has no unambiguous stop; not assigning by ZIP ${zip || "unknown"}`);
       return;
     }
     if (!groupedByStop[key]) groupedByStop[key] = [];
