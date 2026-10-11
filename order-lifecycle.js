@@ -11,6 +11,16 @@ function hasB2BSignal(tags) {
   );
 }
 
+// "Wholesale" also covers local stores, parcel shipments and third-party
+// deliveries. Only a declared out-of-state route or a configured route ZIP
+// warrants an alert when the B2B stop resolver cannot find a single stop.
+function hasUnmatchedB2BRouteIntent({ tags, zipCandidates, hasLocalStop }) {
+  const explicitRoute = (tags || []).some((tag) =>
+    /^(b2b|out[ -]?of[ -]?state)$/.test(String(tag || "").trim().toLowerCase())
+  );
+  return explicitRoute || (!hasLocalStop && [...(zipCandidates || [])].length > 0);
+}
+
 // A ZIP can represent more than one picking stop (Brookfield and Fishkill
 // share a physical drop). Never let route-definition order pick a winner.
 function selectB2BStop({ orderTags, customerTags, zipCandidates, useZip, isEligible }) {
@@ -89,6 +99,7 @@ function mergeRecentCompletedOrders(activeByStopName, archive, validStopNames, n
 
 module.exports = {
   hasB2BSignal,
+  hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
   completedOrderVisible,

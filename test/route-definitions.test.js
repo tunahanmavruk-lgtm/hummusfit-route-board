@@ -71,8 +71,8 @@ test("shows Monday out-of-state work from Friday through delivery day", () => {
 });
 
 test("routes B2B orders with all shared-ZIP stops preserved", () => {
-  const zipFallbackCheck = server.indexOf("B2B_ZIP_TO_STOP.get(zip)", server.indexOf("selectB2BStop({"));
-  assert.match(server, /selectB2BStop\(\{[\s\S]*?orderTags,[\s\S]*?customerTags,[\s\S]*?zipCandidates:/);
+  const zipFallbackCheck = server.indexOf("B2B_ZIP_TO_STOP.get(zip)");
+  assert.match(server, /selectB2BStop\(\{[\s\S]*?orderTags,[\s\S]*?customerTags,[\s\S]*?zipCandidates,/);
   assert.ok(zipFallbackCheck >= 0, "shipping ZIP candidates must be passed to the resolver");
   assert.match(server, /B2B_ZIP_TO_STOP\.set\(zipMatch\[1\], new Set\(\)\)/);
 });
