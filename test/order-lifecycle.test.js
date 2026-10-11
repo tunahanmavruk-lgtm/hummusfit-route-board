@@ -68,6 +68,8 @@ test("alerts only for a genuine unmatched out-of-state route candidate", () => {
   assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "Woodbury"], hasLocalStop: true }), false);
   assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "UPS Ground Shipping"] }), false);
   assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale", "Ground Shipping"] }), false);
+  assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["UPS Ground Shipping", "Tier 4"],
+    zipCandidates: new Set(["brookfield"]) }), false);
   assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["wholesale"], zipCandidates: new Set(["brookfield", "fishkill"]) }), true);
   assert.equal(hasUnmatchedB2BRouteIntent({ tags: ["out-of-state"], hasLocalStop: true }), true);
 });
