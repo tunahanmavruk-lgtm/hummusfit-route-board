@@ -18,7 +18,8 @@ function hasUnmatchedB2BRouteIntent({ tags, zipCandidates, hasLocalStop }) {
   const explicitRoute = (tags || []).some((tag) =>
     /^(b2b|out[ -]?of[ -]?state)$/.test(String(tag || "").trim().toLowerCase())
   );
-  return explicitRoute || (!hasLocalStop && [...(zipCandidates || [])].length > 0);
+  return explicitRoute || (!hasLocalStop && hasB2BSignal(tags || []) &&
+    [...(zipCandidates || [])].length > 0);
 }
 
 // A ZIP can represent more than one picking stop (Brookfield and Fishkill
