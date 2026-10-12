@@ -1463,7 +1463,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
   const variant = matches[0];
   const barcode = String(variant.barcode || "").trim();
   const validBarcode = /^[0-9]{12,14}$/.test(barcode);
-  if (mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
+  if (requireSellable && mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
     throw new Error(`POS sell-unit SKU ${sku} no longer matches its approved Shopify variant`);
   }
   if (mapping?.caseVariantId && !requireSellable && variant.id !== mapping.caseVariantId) {
