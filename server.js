@@ -1523,7 +1523,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
   try {
     const ledger = loadPosLedger();
     const previous = ledger[key];
-    if (previous?.status === "posted") return { sku: line.caseSku, status: "already_posted", units: previous.units };
+    if (previous?.status === "posted") return { sku: line.caseSku, status: "already_posted", units: previous.units, adjustmentId: previous.adjustmentId };
     if (previous?.status === "failed") return { sku: line.caseSku, status: "requires_review", error: previous.error };
     if (!line.receivedCases) return { sku: line.caseSku, status: "zero_received", units: 0 };
     if (line.error) return { sku: line.caseSku, status: "requires_mapping", error: line.error };
@@ -1556,7 +1556,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
       return { sku: line.caseSku, status: "requires_review", error };
     }
     writePosLedgerEntry(key, { status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id });
-    return { sku: line.caseSku, status: "posted", units: plan.units };
+    return { sku: line.caseSku, status: "posted", units: plan.units, adjustmentId: adjustment.inventoryAdjustmentGroup.id };
   } finally {
     posReceiptInFlight.delete(key);
   }
