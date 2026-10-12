@@ -28,7 +28,7 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
   assert.equal(caseMapping(dreamwich).allowMissingBarcode, true);
   assert.equal(caseMapping(dreamwich).requirePosSellUnitTag, true);
   assert.equal(caseMapping({ ...dreamwich, sku: "SS-8806002023472-CS24" }).allowMissingBarcode, true);
-  assert.equal(caseMapping({ ...dreamwich, sku: "SD-PEACH-60G-CS8" }).allowMissingBarcode, true);
+  assert.equal(caseMapping({ ...dreamwich, sku: "SD-PEACH-60G-CS8" }).unitBarcode, "860014183430");
   const celsius = caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-141-C12" });
   assert.deepEqual({ unitSku: celsius.unitSku, unitsPerCase: celsius.unitsPerCase,
     caseVariantId: celsius.caseVariantId, unitVariantId: celsius.unitVariantId,
@@ -49,6 +49,29 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
   assert.equal(caseMapping(food), null);
   assert.match(caseMapping({ ...coca, sku: "unmapped" }).error, /mapping/);
   assert.match(caseMapping({ ...coca, sku: "UNVERIFIED-CS8" }).error, /approved/);
+});
+
+test("East Islip's nine blocked cases have exact approved POS identities and pack sizes", () => {
+  const expected = [
+    ["HF-NYB-CELL-4909-C12", "842595141467", 12, "51259609546999", "51279794733303"],
+    ["HF-NYB-CELSIUS-131-C12", "889392001563", 12, "51259609809143", "51279794667767"],
+    ["HF-NYB-CELSIUS-1004-C12", "889392000320", 12, "51259609841911", "51279794700535"],
+    ["HF-NYB-GHOST-1000-C12", "810169606339", 12, "51259609940215", "51280871325943"],
+    ["MOODZ-BERRY-CS10", "850075436262", 10, "51284140753143", "51284140884215"],
+    ["PS-075720000814-CS48", "075720000814", 48, "50514177261815", "50301570744567"],
+    ["HF-NYB-QUEST3100-C8", "888849006649", 8, "51259610235127", "50344585953527"],
+    ["HF-NYB-QUEST3104-C8", "888849011063", 8, "51259610267895", "50344586019063"],
+    ["SD-PEACH-60G-CS8", "860014183430", 8, "51242444226807", "51259503444215"],
+  ];
+  for (const [sku, barcode, pack, caseId, unitId] of expected) {
+    const line = caseMapping({ ...coca, sku });
+    assert.equal(line.unitsPerCase, pack);
+    assert.equal(line.unitBarcode, barcode);
+    assert.equal(line.caseVariantId, `gid://shopify/ProductVariant/${caseId}`);
+    assert.equal(line.unitVariantId, `gid://shopify/ProductVariant/${unitId}`);
+    assert.equal(line.allowMissingBarcode, undefined);
+  }
+  assert.equal(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-140-C12" }).error.includes("mapping"), true);
 });
 
 test("Ronkonkoma's confirmed one-case receipts plan exact same-location case-to-unit exchanges", () => {
