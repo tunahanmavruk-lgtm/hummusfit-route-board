@@ -29,10 +29,50 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
   assert.equal(caseMapping(dreamwich).requirePosSellUnitTag, true);
   assert.equal(caseMapping({ ...dreamwich, sku: "SS-8806002023472-CS24" }).allowMissingBarcode, true);
   assert.equal(caseMapping({ ...dreamwich, sku: "SD-PEACH-60G-CS8" }).allowMissingBarcode, true);
+  const celsius = caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-141-C12" });
+  assert.deepEqual({ unitSku: celsius.unitSku, unitsPerCase: celsius.unitsPerCase,
+    caseVariantId: celsius.caseVariantId, unitVariantId: celsius.unitVariantId,
+    unitBarcode: celsius.unitBarcode }, {
+    unitSku: "889392002379", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51259609678071",
+    unitVariantId: "gid://shopify/ProductVariant/50500192633079",
+    unitBarcode: "889392002379",
+  });
+  assert.equal(celsius.allowSharedProductMappingPendingTag, true);
+  assert.match(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-140-C12" }).error, /mapping/);
+  const moodz = caseMapping({ ...coca, sku: "MOODZ-STRAWBERRY-CS10" });
+  assert.equal(moodz.unitSku, "MOODZ-STRAWBERRY-EA");
+  assert.equal(moodz.unitsPerCase, 10);
+  assert.equal(moodz.unitBarcode, "850075436248");
+  assert.equal(moodz.requirePosSellUnitTag, true);
   assert.equal(caseMapping(supplies), null);
   assert.equal(caseMapping(food), null);
   assert.match(caseMapping({ ...coca, sku: "unmapped" }).error, /mapping/);
   assert.match(caseMapping({ ...coca, sku: "UNVERIFIED-CS8" }).error, /approved/);
+});
+
+test("Ronkonkoma's confirmed one-case receipts plan exact same-location case-to-unit exchanges", () => {
+  const cases = [
+    { sku: "HF-NYB-CELSIUS-141-C12", unitCost: 14, unitPrice: 3.50, unitAvailable: 4, units: 12 },
+    { sku: "MOODZ-STRAWBERRY-CS10", unitCost: 29.90, unitPrice: 5.99, unitAvailable: 0, units: 10 },
+  ];
+  for (const item of cases) {
+    const line = { ...caseMapping({ ...coca, sku: item.sku }), receivedCases: 1 };
+    const plan = adjustmentPlan(line,
+      { id: `case:${item.sku}`, available: 1, unitCost: item.unitCost },
+      { id: `unit:${item.sku}`, available: item.unitAvailable, price: item.unitPrice },
+      "ronkonkoma-pos-location", receiptKey("Ronkonkoma", "gid://shopify/Order/8068796645623", item.sku));
+    assert.equal(plan.units, item.units);
+    assert.deepEqual(plan.input.changes.map(({ locationId, delta }) => ({ locationId, delta })), [
+      { locationId: "ronkonkoma-pos-location", delta: -1 },
+      { locationId: "ronkonkoma-pos-location", delta: item.units },
+    ]);
+    if (item.sku === "HF-NYB-CELSIUS-141-C12") {
+      assert.doesNotThrow(() => validateCaseAndUnit(line,
+        { id: "case", available: 1, unitCost: 14, mappingPending: true },
+        { id: "unit", available: 4, price: 3.50 }));
+    }
+  }
 });
 
 test("uses separate Essentials pick state and excludes food and Other Essentials", () => {

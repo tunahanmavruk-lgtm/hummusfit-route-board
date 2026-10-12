@@ -5,6 +5,23 @@ const { essentialsTypeFor } = require("./essentials-shadow");
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  "HF-NYB-CELSIUS-141-C12": Object.freeze({
+    unitSku: "889392002379", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51259609678071",
+    unitVariantId: "gid://shopify/ProductVariant/50500192633079",
+    unitBarcode: "889392002379",
+    // The six CELSIUS flavors share one case product and its product-level
+    // mapping-pending tag. Approve only this exact variant; the other five
+    // flavors still have no case mapping and remain blocked.
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "MOODZ-STRAWBERRY-CS10": Object.freeze({
+    unitSku: "MOODZ-STRAWBERRY-EA", unitsPerCase: 10,
+    caseVariantId: "gid://shopify/ProductVariant/51284140654839",
+    unitVariantId: "gid://shopify/ProductVariant/51284140785911",
+    unitBarcode: "850075436248",
+    requirePosSellUnitTag: true,
+  }),
   "SS-4890008101306-CS8": Object.freeze({
     unitSku: "4890008101306", unitsPerCase: 8,
     caseVariantId: "gid://shopify/ProductVariant/51242421289207",
@@ -105,7 +122,9 @@ function receiptKey(store, orderId, caseSku) {
 }
 
 function validateCaseAndUnit(line, caseItem, unitItem) {
-  if (caseItem.mappingPending) throw new Error("Case-to-unit mapping is still pending catalog verification");
+  if (caseItem.mappingPending && !line.allowSharedProductMappingPendingTag) {
+    throw new Error("Case-to-unit mapping is still pending catalog verification");
+  }
   if (!(caseItem.unitCost > 0) || !(unitItem.price > 0)) {
     throw new Error("Case cost and POS sell-unit price must be verified before conversion");
   }
