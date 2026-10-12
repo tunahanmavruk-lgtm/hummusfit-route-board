@@ -311,6 +311,7 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   // This path has its own short-lived service-token check, not board access.
   "/api/essentials-pos-receipt",
   "/api/receiving-barcode-lookup",
+  "/api/receiving-adjustment-proof",
 ]);
 
 app.use((req, res, next) => {
@@ -1120,6 +1121,29 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
 // Only the separate Hummus Fit Receiving service may commit a verified
 // store receipt. This endpoint never touches food, Other Essentials, the
 // picking record, warehouse stock, or any B2B location.
+// Read-only verification through the existing inventory service. Receiving
+// remains without inventory credentials or new Shopify scopes.
+app.post("/api/receiving-adjustment-proof", async (req, res) => {
+  const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
+  const identity = verifyLogisticsToken(bearer, "essentials.receive");
+  if (!identity || identity.sub !== "hummusfit-receiving") return res.status(403).json({ error: "Receiving service authorization required" });
+  const { groupId, orderId } = req.body || {};
+  if (!/^gid:\/\/shopify\/InventoryAdjustmentGroup\/\d+$/.test(groupId || "") ||
+      !/^gid:\/\/shopify\/Order\/\d+$/.test(orderId || "")) return res.status(400).json({ error: "Exact Shopify identifiers required" });
+  try {
+    const orderData = await shopifyGraphQL(`query CorrectionOrder($orderId:ID!){order(id:$orderId){id name displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku quantity variant{inventoryItem{id}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`, { orderId });
+    const tags = (orderData.order?.customer?.tags || []).map(t => t.toLowerCase());
+    const local = Object.keys(POS_STORE_LOCATIONS).some(store => tags.includes(`hummus fit ${store.toLowerCase()}`) || (store === "Islip" && tags.includes("hummus fit east islip")));
+    if (!tags.includes("hummus fit store") || !local) return res.status(403).json({ error: "Hummus Fit store order required" });
+    const proof = await posShopifyGraphQL(`query CorrectionGroup($groupId:ID!){node(id:$groupId){... on InventoryAdjustmentGroup{id createdAt referenceDocumentUri changes{name delta item{id sku} location{id name}}}}}`, { groupId });
+    if (!proof.node?.referenceDocumentUri?.startsWith("gid://agent-hazar-receiving/FoodCorrection/")) return res.status(409).json({ error: "Receiving food correction proof required" });
+    return res.json({ node: proof.node, order: orderData.order });
+  } catch (error) {
+    console.error("[receiving-adjustment-proof]", error.message);
+    return res.status(502).json({ error: "Shopify correction verification failed" });
+  }
+});
+
 app.post("/api/essentials-pos-receipt", async (req, res) => {
   if (!ESSENTIALS_POS_CONVERSION_ENABLED || !ESSENTIALS_SEPARATION_ENABLED ||
       !POS_SHOPIFY_CLIENT_ID || !POS_SHOPIFY_CLIENT_SECRET) {
