@@ -47,7 +47,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitSku: "GHOST-YOOHOO-11OZ-EA", unitsPerCase: 12,
     caseVariantId: "gid://shopify/ProductVariant/51259609940215",
     unitVariantId: "gid://shopify/ProductVariant/51280871325943",
-    unitBarcode: "810169606339",
+    // Verified against the physical Yoo-hoo can photographed at Ronkonkoma.
+    unitBarcode: "810169606353",
     requirePosSellUnitTag: true,
     allowSharedProductMappingPendingTag: true,
   }),
