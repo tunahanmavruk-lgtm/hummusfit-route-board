@@ -26,3 +26,4 @@ test('rejects malformed resource identifiers',async()=>{const h=handler(authoriz
 test('refuses non-store orders before reading inventory proof',async()=>{const h=handler(authorized,['wholesale'],group);assert.equal((await invoke(h)).code,403);assert.equal(h.calls(),1);});
 test('returns only receiving correction proof for approved store orders',async()=>{const h=handler(authorized,['HUMMUS FIT STORE','Hummus Fit Miller Place'],group);assert.equal((await invoke(h)).code,200);assert.equal(h.calls(),2);});
 test('unrelated adjustment cannot be imported',async()=>{const h=handler(authorized,['HUMMUS FIT STORE','Hummus Fit Miller Place'],'gid://shopify/Order/123');assert.equal((await invoke(h)).code,409);});
+test('canonical store tag works without generic marketing tag',async()=>{const h=handler(authorized,['Hummus Fit Miller Place'],group);assert.equal((await invoke(h)).code,200);});
