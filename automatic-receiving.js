@@ -121,7 +121,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
         item.orderDiff===delta,'Exact food order line and received count required');
       variantId=line[0].variant.id;
     } else {
-      assert(item.source==='scan'&&item.catalogVerified===true&&item.catalogStatus==='matched'&&
+      assert(['scan','entered'].includes(item.source)&&item.catalogVerified===true&&item.catalogStatus==='matched'&&
         Number.isSafeInteger(item.qty)&&item.qty>0&&line.length===0&&!report.items.some(i=>i.sku===sku)&&
         report.extraItems.filter(i=>i.sku===sku).length===1,'Wrong/extra item needs a unique scanned catalog identity');
       variantId=item.variantId;

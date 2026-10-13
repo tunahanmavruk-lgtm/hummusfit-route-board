@@ -57,6 +57,10 @@ test('typed unknown extra is held but valid shortage posts',async t=>{
   const f=setup(t);await f.proof();f.report.extraItems=[{sku:'BOWL',qty:7,code:'bowl',source:'manual'}];
   assert.deepEqual((await f.service.reconcile(f.report)).results.map(x=>x.status),['posted','requires_review']);assert.equal(f.mutations.length,1);
 });
+test('handheld barcode entry must pass the same exact catalog and quantity proof',async t=>{
+  const f=setup(t);await f.proof();f.report.extraItems=[{sku:'BOWL',qty:2,code:'123456789012',variantId:gid('ProductVariant',33),source:'entered',catalogVerified:true,catalogStatus:'matched'}];
+  assert.deepEqual((await f.service.reconcile(f.report)).results.map(x=>x.status),['posted','posted']);
+});
 test('lost response retries identical persisted key and input after restart',async t=>{
   const f=setup(t);await f.proof();f.timeout();assert.equal((await f.service.reconcile(f.report)).results[0].status,'retry');
   const restarted=createAutomaticReceiving(f.deps);assert.equal((await restarted.reconcile(f.report)).results[0].status,'posted');
