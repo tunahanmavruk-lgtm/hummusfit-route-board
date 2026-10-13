@@ -312,6 +312,9 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/essentials-pos-receipt",
   "/api/receiving-barcode-lookup",
   "/api/receiving-adjustment-proof",
+  "/api/store-flow-credit-proof",
+  "/api/holbrook-flow-credit-proof",
+  "/api/automatic-receiving-correction",
 ]);
 
 app.use((req, res, next) => {
@@ -4268,6 +4271,11 @@ async function checkForNewOrdersAndNotify() {
 }
 setInterval(checkForNewOrdersAndNotify, 60 * 1000);
 checkForNewOrdersAndNotify();
+
+require('./automatic-receiving').registerAutomaticReceiving(app, {
+  dir: PERSISTENT_DIR, orderQuery: shopifyGraphQL, inventoryQuery: posShopifyGraphQL,
+  exactLocation: exactStoreLocation, verifyToken: verifyLogisticsToken,
+});
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Route board running on port ${PORT}`);
