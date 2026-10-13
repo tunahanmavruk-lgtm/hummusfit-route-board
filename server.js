@@ -1,3 +1,4 @@
+const { dataDirectory, readJson, writeJson, listeningPort, createRuntime } = require("./runtime-safety");
 const express = require("express");
 const { barcodeCodesForProduct, barcodeMatches } = require("./barcode");
 const path = require("path");
@@ -27,15 +28,8 @@ const {
 } = require("./order-lifecycle.js");
 const webpush = require("web-push");
 
-// Railway rebuilds this service's container fresh on every deploy — any
-// file written to the app's own directory does not survive that (this is
-// exactly what wiped Lynbrook's picking progress on the 8/6/2026 deploy).
-// /data is a persistent Volume mounted onto this service specifically so
-// runtime state (picking progress, push subscriptions) survives deploys
-// and restarts alike. Falls back to the app directory if that mount is
-// ever missing (e.g. running locally without the volume) so the app
-// still works — just without the durability.
-const PERSISTENT_DIR = fs.existsSync("/data") ? "/data" : __dirname;
+// Railway must use its existing persistent volume; local tests can select DATA_DIR.
+const PERSISTENT_DIR = dataDirectory(__dirname);
 
 // The crate label printer is black-ink-only (thermal) — no brand colors
 // on the physical label, so "professional" has to come from real
@@ -112,14 +106,10 @@ if (VAPID_CONFIGURED) webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, V
 
 const SUBSCRIPTIONS_FILE = path.join(PERSISTENT_DIR, "push-subscriptions.json");
 function loadSubscriptions() {
-  try {
-    return JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, "utf8"));
-  } catch (e) {
-    return [];
-  }
+  return readJson(SUBSCRIPTIONS_FILE, []);
 }
 function saveSubscriptions(subs) {
-  fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subs, null, 2));
+  writeJson(SUBSCRIPTIONS_FILE, subs);
 }
 
 // Sends one push notification to every subscribed device. If a specific
@@ -160,7 +150,8 @@ function fitTextFontSize(doc, text, maxWidth, maxSize, minSize) {
 }
 
 const app = express();
-const PORT = 3000;
+const runtime = createRuntime(app, { directory: PERSISTENT_DIR, files: ["data.json", "push-subscriptions.json", "completed-orders-archive.json", "essentials-pos-receipts.json"] });
+const PORT = listeningPort();
 const DATA_FILE = path.join(PERSISTENT_DIR, "data.json");
 
 // state.picking gets wiped every day at midnight so today's board
@@ -172,14 +163,10 @@ const DATA_FILE = path.join(PERSISTENT_DIR, "data.json");
 // currently is when someone actually checks it in.
 const ARCHIVE_FILE = path.join(PERSISTENT_DIR, "completed-orders-archive.json");
 function loadArchive() {
-  try {
-    return JSON.parse(fs.readFileSync(ARCHIVE_FILE, "utf8"));
-  } catch (e) {
-    return {};
-  }
+  return readJson(ARCHIVE_FILE, {});
 }
 function saveArchive(archive) {
-  fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archive, null, 2));
+  writeJson(ARCHIVE_FILE, archive);
 }
 function archiveCompletedOrder(stopKey, record, order, essentialsRecord = null) {
   const archive = loadArchive();
@@ -912,11 +899,12 @@ function loadState() {
 
     return state;
   } catch (e) {
+    if (e.code !== "ENOENT") throw e;
     return defaultState();
   }
 }
 function saveState(state) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
+  writeJson(DATA_FILE, state);
 }
 
 app.get("/api/push-vapid-key", (req, res) => {
@@ -1434,13 +1422,10 @@ const getPosToken = createPosTokenProvider({
 });
 
 function loadPosLedger() {
-  try { return JSON.parse(fs.readFileSync(POS_LEDGER_FILE, "utf8")); }
-  catch { return {}; }
+  return readJson(POS_LEDGER_FILE, {});
 }
 function savePosLedger(ledger) {
-  const temporary = `${POS_LEDGER_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2));
-  fs.renameSync(temporary, POS_LEDGER_FILE);
+  writeJson(POS_LEDGER_FILE, ledger);
 }
 function writePosLedgerEntry(key, update) {
   // Read immediately before each synchronous write. Two stores can complete
@@ -4254,9 +4239,8 @@ async function checkForNewOrdersAndNotify() {
     console.error("checkForNewOrdersAndNotify failed:", err.message);
   }
 }
-setInterval(checkForNewOrdersAndNotify, 60 * 1000);
-checkForNewOrdersAndNotify();
+runtime.schedule(checkForNewOrdersAndNotify, 60 * 1000);
 
-app.listen(PORT, "0.0.0.0", () => {
+runtime.listen(PORT, () => {
   console.log(`Route board running on port ${PORT}`);
 });
