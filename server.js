@@ -1127,17 +1127,23 @@ app.post("/api/receiving-adjustment-proof", async (req, res) => {
   const bearer = String(req.get("authorization") || "").replace(/^Bearer /, "");
   const identity = verifyLogisticsToken(bearer, "essentials.receive");
   if (!identity || identity.sub !== "hummusfit-receiving") return res.status(403).json({ error: "Receiving service authorization required" });
-  const { groupId, orderId } = req.body || {};
+  const { groupId, orderId, variantId } = req.body || {};
   if (!/^gid:\/\/shopify\/InventoryAdjustmentGroup\/\d+$/.test(groupId || "") ||
-      !/^gid:\/\/shopify\/Order\/\d+$/.test(orderId || "")) return res.status(400).json({ error: "Exact Shopify identifiers required" });
+      !/^gid:\/\/shopify\/Order\/\d+$/.test(orderId || "") ||
+      (variantId && !/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(variantId))) return res.status(400).json({ error: "Exact Shopify identifiers required" });
   try {
     const orderData = await shopifyGraphQL(`query CorrectionOrder($orderId:ID!){order(id:$orderId){id name displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku quantity variant{inventoryItem{id}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`, { orderId });
     const tags = (orderData.order?.customer?.tags || []).map(t => t.toLowerCase());
     const local = Object.keys(POS_STORE_LOCATIONS).filter(store => tags.includes(`hummus fit ${store.toLowerCase()}`) || (store === "Islip" && tags.includes("hummus fit east islip")));
     if (local.length !== 1) return res.status(403).json({ error: "One exact Hummus Fit store destination required" });
     const proof = await posShopifyGraphQL(`query CorrectionGroup($groupId:ID!){node(id:$groupId){... on InventoryAdjustmentGroup{id createdAt referenceDocumentUri changes{name delta item{id sku} location{id name}}}}}`, { groupId });
-    if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
-    return res.json({ node: proof.node, order: orderData.order });
+    if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage|ExtraCorrection)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
+    let variant;
+    if(variantId) {
+      const data=await posShopifyGraphQL(`query ExtraVariantProof($id:ID!){productVariant(id:$id){id sku barcode inventoryItem{id sku} product{title tags}}}`,{id:variantId});
+      variant=data.productVariant;
+    }
+    return res.json({ node: proof.node, order: orderData.order,variant });
   } catch (error) {
     console.error("[receiving-adjustment-proof]", error.message);
     return res.status(502).json({ error: "Shopify correction verification failed" });
