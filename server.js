@@ -1137,7 +1137,7 @@ app.post("/api/receiving-adjustment-proof", async (req, res) => {
     const local = Object.keys(POS_STORE_LOCATIONS).filter(store => tags.includes(`hummus fit ${store.toLowerCase()}`) || (store === "Islip" && tags.includes("hummus fit east islip")));
     if (local.length !== 1) return res.status(403).json({ error: "One exact Hummus Fit store destination required" });
     const proof = await posShopifyGraphQL(`query CorrectionGroup($groupId:ID!){node(id:$groupId){... on InventoryAdjustmentGroup{id createdAt referenceDocumentUri changes{name delta item{id sku} location{id name}}}}}`, { groupId });
-    if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage|ExtraCorrection)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
+    if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage|ExtraCorrection|ExtraCountConfirmation)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
     let variant;
     if(variantId) {
       const data=await posShopifyGraphQL(`query ExtraVariantProof($id:ID!){productVariant(id:$id){id sku barcode inventoryItem{id sku} product{title tags}}}`,{id:variantId});
