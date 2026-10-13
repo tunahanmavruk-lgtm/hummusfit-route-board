@@ -18,6 +18,17 @@ const food = { title: "Chicken meal", sku: "MEAL-001", quantity: 4 };
 const key = (item) => `${item.title}::${item.sku || ""}`;
 const read = (dict, item, index) => dict?.[key(item)] ?? dict?.[index];
 
+test('restored verified catalog remains available without reverting physical barcode fixes', () => {
+  for (const mapping of require('../verified-retail-case-mappings-2026-10-12.json')) {
+    const actual=caseMapping({...coca,sku:mapping.caseSku});
+    assert.equal(actual.unitsPerCase,mapping.unitsPerCase);
+    assert.equal(actual.unitVariantId,mapping.unitVariantId);
+    assert.equal(actual.unitBarcode,mapping.unitBarcode);
+  }
+  assert.equal(caseMapping({...coca,sku:'HF-NYB-GHOST-1000-C12'}).unitBarcode,'810169606353');
+  assert.equal(caseMapping({...coca,sku:'SD-PEACH-60G-CS8'}).unitSku,'860014183430');
+});
+
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
   assert.equal(caseMapping(coca).unitSku, "4890008101306");
   assert.equal(caseMapping(coca).unitsPerCase, 8);
@@ -39,7 +50,7 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
     unitBarcode: "889392002379",
   });
   assert.equal(celsius.allowSharedProductMappingPendingTag, true);
-  assert.match(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-140-C12" }).error, /mapping/);
+  assert.match(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-UNVERIFIED-C12" }).error, /mapping/);
   const moodz = caseMapping({ ...coca, sku: "MOODZ-STRAWBERRY-CS10" });
   assert.equal(moodz.unitSku, "MOODZ-STRAWBERRY-EA");
   assert.equal(moodz.unitsPerCase, 10);
@@ -71,7 +82,7 @@ test("East Islip's nine blocked cases have exact approved POS identities and pac
     assert.equal(line.unitVariantId, `gid://shopify/ProductVariant/${unitId}`);
     assert.equal(line.allowMissingBarcode, undefined);
   }
-  assert.equal(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-140-C12" }).error.includes("mapping"), true);
+  assert.equal(caseMapping({ ...coca, sku: "HF-NYB-CELSIUS-UNVERIFIED-C12" }).error.includes("mapping"), true);
 });
 
 test("Ronkonkoma's confirmed one-case receipts plan exact same-location case-to-unit exchanges", () => {

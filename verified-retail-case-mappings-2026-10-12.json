@@ -1,0 +1,434 @@
+[
+  {
+    "caseSku": "HF-NYB-CELL-4905-C12",
+    "unitSku": "842595138214",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609514231",
+    "unitVariantId": "gid://shopify/ProductVariant/50344684093687",
+    "unitBarcode": "842595138214",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELL-4903-C12",
+    "unitSku": "842595135091",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609579767",
+    "unitVariantId": "gid://shopify/ProductVariant/50344684191991",
+    "unitBarcode": "842595135091",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-141-C12",
+    "unitSku": "889392002379",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609678071",
+    "unitVariantId": "gid://shopify/ProductVariant/50500192633079",
+    "unitBarcode": "889392002379",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-140-C12",
+    "unitSku": "889392002355",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609710839",
+    "unitVariantId": "gid://shopify/ProductVariant/50500194795767",
+    "unitBarcode": "889392002355",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-1003-C12",
+    "unitSku": "889392000313",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609743607",
+    "unitVariantId": "gid://shopify/ProductVariant/50338625421559",
+    "unitBarcode": "889392000313",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-113-C12",
+    "unitSku": "889392021394",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609776375",
+    "unitVariantId": "gid://shopify/ProductVariant/50338417836279",
+    "unitBarcode": "889392021394",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-LF-602-C7",
+    "unitSku": "810035972858",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610071287",
+    "unitVariantId": "gid://shopify/ProductVariant/50344732426487",
+    "unitBarcode": "810035972858",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3000-C8",
+    "unitSku": "888849000272",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610136823",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585789687",
+    "unitBarcode": "888849000272",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3109-C8",
+    "unitSku": "888849017157",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610202359",
+    "unitVariantId": "gid://shopify/ProductVariant/50968906563831",
+    "unitBarcode": "888849017157",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3100-C8",
+    "unitSku": "888849006649",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610235127",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585953527",
+    "unitBarcode": "888849006649",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3003-C8",
+    "unitSku": "888849000319",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610169591",
+    "unitVariantId": "gid://shopify/ProductVariant/50613940682999",
+    "unitBarcode": "888849000319",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3104-C8",
+    "unitSku": "888849011063",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610267895",
+    "unitVariantId": "gid://shopify/ProductVariant/50344586019063",
+    "unitBarcode": "888849011063",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "EL-887725001280-CS12",
+    "unitSku": "887725001280",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51278318797047",
+    "unitVariantId": "gid://shopify/ProductVariant/50339142500599",
+    "unitBarcode": "887725001280",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "EL-887725000702-CS12",
+    "unitSku": "887725000702",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51278318829815",
+    "unitVariantId": "gid://shopify/ProductVariant/50339142566135",
+    "unitBarcode": "887725000702",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "EL-887725001297-CS12",
+    "unitSku": "887725001297",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51278318862583",
+    "unitVariantId": "gid://shopify/ProductVariant/50339142598903",
+    "unitBarcode": "887725001297",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-131-C12",
+    "unitSku": "889392001563",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609809143",
+    "unitVariantId": "gid://shopify/ProductVariant/51279794667767",
+    "unitBarcode": "889392001563",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELSIUS-1004-C12",
+    "unitSku": "889392000320",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609841911",
+    "unitVariantId": "gid://shopify/ProductVariant/51279794700535",
+    "unitBarcode": "889392000320",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELL-4909-C12",
+    "unitSku": "842595141467",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609546999",
+    "unitVariantId": "gid://shopify/ProductVariant/51279794733303",
+    "unitBarcode": "842595141467",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-GHOST-113-C12",
+    "unitSku": "810169600023",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609972983",
+    "unitVariantId": "gid://shopify/ProductVariant/51279794766071",
+    "unitBarcode": "810169600023",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-BUCKEDUP-700-C6",
+    "unitSku": "810203842808",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609612535",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797092599",
+    "unitBarcode": "810203842808",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-BUCKEDUP-701-C6",
+    "unitSku": "810203842815",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609645303",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797125367",
+    "unitBarcode": "810203842815",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-FL-102-C12",
+    "unitSku": "811620021425",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609874679",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797158135",
+    "unitBarcode": "811620021425",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-FL-100-C12",
+    "unitSku": "811620020657",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609907447",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797190903",
+    "unitBarcode": "811620020657",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "DP-RTD-CHOC-C12",
+    "unitSku": "810218180100",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51278319386871",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797223671",
+    "unitBarcode": "810218180100",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "DP-RTD-VAN-C12",
+    "unitSku": "810218180087",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51278319419639",
+    "unitVariantId": "gid://shopify/ProductVariant/51279797256439",
+    "unitBarcode": "810218180087",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-LF-700-C6",
+    "unitSku": "810035973633",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610038519",
+    "unitVariantId": "gid://shopify/ProductVariant/50872529322231",
+    "unitBarcode": "810035973633",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-LF-701-C6",
+    "unitSku": "810035973800",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610005751",
+    "unitVariantId": "gid://shopify/ProductVariant/50905152684279",
+    "unitBarcode": "810035973800",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-SINFIT-102-C7",
+    "unitSku": "625486500211",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610300663",
+    "unitVariantId": "gid://shopify/ProductVariant/51281071014135",
+    "unitBarcode": "625486500211",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-SINFIT-103-C7",
+    "unitSku": "625486500242",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610333431",
+    "unitVariantId": "gid://shopify/ProductVariant/51281071046903",
+    "unitBarcode": "625486500242",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-800-C14",
+    "unitSku": "850084224089",
+    "unitsPerCase": 14,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609415927",
+    "unitVariantId": "gid://shopify/ProductVariant/51279804236023",
+    "unitBarcode": "850084224089",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-801-C14",
+    "unitSku": "850084224041",
+    "unitsPerCase": 14,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609448695",
+    "unitVariantId": "gid://shopify/ProductVariant/51279804268791",
+    "unitBarcode": "850084224041",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-802-C14",
+    "unitSku": "850084224065",
+    "unitsPerCase": 14,
+    "caseVariantId": "gid://shopify/ProductVariant/51259609481463",
+    "unitVariantId": "gid://shopify/ProductVariant/51279804301559",
+    "unitBarcode": "850084224065",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "ZEN-CLASSIC-3PK-CS",
+    "unitSku": "ZEN-CLASSIC-3PK-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51242720329975",
+    "unitVariantId": "gid://shopify/ProductVariant/51280743825655",
+    "unitBarcode": "741365421221",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "ZEN-CHOCC-3PK-CS",
+    "unitSku": "ZEN-CHOCC-3PK-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51242719740151",
+    "unitVariantId": "gid://shopify/ProductVariant/51280743858423",
+    "unitBarcode": "741365421245",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "ZEN-COCONUT-3PK-CS",
+    "unitSku": "ZEN-COCONUT-3PK-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51242719314167",
+    "unitVariantId": "gid://shopify/ProductVariant/51280743891191",
+    "unitBarcode": "741365421269",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "ZEN-BLUE-3PK-CS",
+    "unitSku": "ZEN-BLUE-3PK-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51236532682999",
+    "unitVariantId": "gid://shopify/ProductVariant/51280743923959",
+    "unitBarcode": "741365421252",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-LF-600-C7",
+    "unitSku": "810035972049",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51259610104055",
+    "unitVariantId": "gid://shopify/ProductVariant/51280871850231",
+    "unitBarcode": "810035972049",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-BBC-CS8",
+    "unitSku": "860011065708",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045520631",
+    "unitVariantId": "gid://shopify/ProductVariant/51137499726071",
+    "unitBarcode": "860011065708",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-SHB-CS8",
+    "unitSku": "860011065722",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045553399",
+    "unitVariantId": "gid://shopify/ProductVariant/51281044930807",
+    "unitBarcode": "860011065722",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-SHM-CS8",
+    "unitSku": "860011065715",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045586167",
+    "unitVariantId": "gid://shopify/ProductVariant/51137499758839",
+    "unitBarcode": "860011065715",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-TPK-CS8",
+    "unitSku": "850073158197",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045618935",
+    "unitVariantId": "gid://shopify/ProductVariant/51137499693303",
+    "unitBarcode": "850073158197",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-FMH-CS8",
+    "unitSku": "850073158081",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045651703",
+    "unitVariantId": "gid://shopify/ProductVariant/51137499791607",
+    "unitBarcode": "850073158081",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "TASTE-HHS-CS8",
+    "unitSku": "860011065739",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51281045684471",
+    "unitVariantId": "gid://shopify/ProductVariant/51137499824375",
+    "unitBarcode": "860011065739",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "MOODZ-STRAWBERRY-CS10",
+    "unitSku": "MOODZ-STRAWBERRY-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51284140654839",
+    "unitVariantId": "gid://shopify/ProductVariant/51284140785911",
+    "unitBarcode": "850075436248",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "MOODZ-CITRUS-CS10",
+    "unitSku": "MOODZ-CITRUS-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51284140687607",
+    "unitVariantId": "gid://shopify/ProductVariant/51284140818679",
+    "unitBarcode": "850075436231",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "MOODZ-MANGO-CS10",
+    "unitSku": "MOODZ-MANGO-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51284140720375",
+    "unitVariantId": "gid://shopify/ProductVariant/51284140851447",
+    "unitBarcode": "850075436255",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "MOODZ-BERRY-CS10",
+    "unitSku": "MOODZ-BERRY-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51284140753143",
+    "unitVariantId": "gid://shopify/ProductVariant/51284140884215",
+    "unitBarcode": "850075436262",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-049000077834-CS24",
+    "unitSku": "049000077834",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51284320256247",
+    "unitVariantId": "gid://shopify/ProductVariant/50344151089399",
+    "unitBarcode": "049000077834",
+    "allowSharedProductMappingPendingTag": true
+  }
+]

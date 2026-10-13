@@ -1,10 +1,14 @@
 const crypto = require("crypto");
 const { essentialsTypeFor } = require("./essentials-shadow");
+const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.json");
 
 // Only catalog pairs that have been reviewed against the actual Shopify
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
+  // Explicit entries below retain newer physical-barcode corrections.
+  ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
   "HF-NYB-CELSIUS-141-C12": Object.freeze({
     unitSku: "889392002379", unitsPerCase: 12,
     caseVariantId: "gid://shopify/ProductVariant/51259609678071",
