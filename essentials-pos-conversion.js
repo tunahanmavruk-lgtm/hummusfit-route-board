@@ -168,6 +168,9 @@ function receiptLines(order, essentialsRecord, receivedCounts, readItemState) {
     const status = readItemState(essentialsRecord.itemStatus, item, workflowIndex);
     const scanned = Number(readItemState(essentialsRecord.itemScannedCount, item, workflowIndex)) || 0;
     const receivedCases = Number(receivedCounts[receiptCountKey(item)]);
+    if(status==='missing' && scanned===0 && receivedCases===0) {
+      return {...caseMapping(item),title:item.title,pickedCases:0,receivedCases:0,index};
+    }
     if (status !== "picked" || scanned !== item.quantity) {
       throw new Error(`Essentials picking is not fully verified: ${item.sku || item.title}`);
     }

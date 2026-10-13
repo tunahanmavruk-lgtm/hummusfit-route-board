@@ -1136,7 +1136,7 @@ app.post("/api/receiving-adjustment-proof", async (req, res) => {
     const local = Object.keys(POS_STORE_LOCATIONS).filter(store => tags.includes(`hummus fit ${store.toLowerCase()}`) || (store === "Islip" && tags.includes("hummus fit east islip")));
     if (local.length !== 1) return res.status(403).json({ error: "One exact Hummus Fit store destination required" });
     const proof = await posShopifyGraphQL(`query CorrectionGroup($groupId:ID!){node(id:$groupId){... on InventoryAdjustmentGroup{id createdAt referenceDocumentUri changes{name delta item{id sku} location{id name}}}}}`, { groupId });
-    if (!proof.node?.referenceDocumentUri?.startsWith("gid://agent-hazar-receiving/FoodCorrection/")) return res.status(409).json({ error: "Receiving food correction proof required" });
+    if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
     return res.json({ node: proof.node, order: orderData.order });
   } catch (error) {
     console.error("[receiving-adjustment-proof]", error.message);
@@ -1155,18 +1155,24 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     return res.status(403).json({ error: "Receiving service authorization required" });
   }
   try {
-    const { store, orderId, receivedCounts } = req.body || {};
+    const { store, orderId, receivedCounts, receiptEvidence } = req.body || {};
     const stopKey = String(store || "").trim().toLowerCase();
     const stop = VALID_STOP_NAMES.get(stopKey);
     if (!stop || stop.isB2B || !POS_STORE_LOCATIONS[store] || !orderId || !Number.isFinite(ESSENTIALS_POS_CUTOVER)) {
       return res.status(400).json({ error: "A valid Hummus Fit store, order and cutover are required" });
     }
     const archive = loadArchive()[stopKey];
-    if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||
-        Date.parse(archive.createdAt) < ESSENTIALS_POS_CUTOVER) {
-      return res.status(409).json({ error: "This is not a post-cutover fulfilled Hummus Fit Essentials order" });
+    let lines;
+    if (receiptEvidence) {
+      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku title quantity variant{product{tags}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`,{id:orderId});
+      lines=require('./saved-receipt-proof').savedReceiptLines(store,orderId,receivedCounts,receiptEvidence,data.order,ESSENTIALS_POS_CUTOVER);
+    } else {
+      if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||
+          Date.parse(archive.createdAt) < ESSENTIALS_POS_CUTOVER) {
+        return res.status(409).json({ error: "This is not a post-cutover fulfilled Hummus Fit Essentials order" });
+      }
+      lines = receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState);
     }
-    const lines = receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState);
     if (!lines.length) return res.json({ ok: true, results: [] });
     const locationId = await exactStoreLocation(store);
     const results = [];
