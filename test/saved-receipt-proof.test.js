@@ -10,3 +10,13 @@ test('wrong stores, warehouse, fulfillment, dates, IDs and changed counts fail c
   }
 });
 test('zero picked and zero received is receipt-only, never invented unit stock',()=>{const f=fixture();f.evidence.items[0].expectedFromPicking=0;f.evidence.items[0].actuallyReceived=0;f.counts['HF-NYB-CELL-4905-C12']=0;assert.equal(run(f)[0].receivedCases,0);});
+test('collection-only retail uses the same classification as receiving',()=>{
+  const f=fixture(),product=f.order.lineItems.nodes[0].variant.product;
+  product.tags=['hidden'];product.collections={nodes:[{title:'Retail Essentials',handle:'retail-essentials'}],pageInfo:{hasNextPage:false}};
+  assert.equal(run(f)[0].unitsPerCase,12);
+  product.collections.pageInfo.hasNextPage=true;assert.throws(()=>run(f),/Complete product classification/);
+});
+test('product name or known SKU alone never authorizes a conversion',()=>{
+  const f=fixture();f.order.lineItems.nodes[0].variant.product.tags=[];
+  assert.throws(()=>run(f),/Complete unique retail/);
+});

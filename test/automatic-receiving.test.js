@@ -99,3 +99,39 @@ test('damaged persisted ledger fails closed',async t=>{
   const f=setup(t);await f.proof();fs.writeFileSync(path.join(f.dir,'automatic-receiving-v1.json'),'broken');
   assert.equal((await f.service.reconcile(f.report)).results[0].status,'retry');assert.equal(f.mutations.length,0);
 });
+test('combined receipt resolves unique source order and restart does not duplicate',async t=>{
+  const f=setup(t,'Lake Grove');await f.proof();
+  const second={...f.order,id:gid('Order',9),name:'#9',lineItems:{pageInfo:{hasNextPage:false},nodes:[]}};
+  f.deps.orderQuery=async(q,v)=>({order:v.id===f.order.id?f.order:second});
+  f.report.orderId+=','+second.id;f.report.orderName+=', '+second.name;
+  let service=createAutomaticReceiving(f.deps);
+  const r=await service.reconcile(f.report);
+  assert.equal(r.results[0].orderId,f.order.id);assert.equal(r.results[0].status,'posted');
+  service=createAutomaticReceiving(f.deps);await service.reconcile(f.report);
+  assert.equal(f.mutations.length,1);
+  const ledger=Object.values(JSON.parse(fs.readFileSync(path.join(f.dir,'automatic-receiving-v1.json'))));
+  assert.equal(ledger[0].orderId,f.order.id);
+  const standalone={...f.report,id:'Lake Grove::duplicate',orderId:f.order.id,orderName:f.order.name};
+  assert.equal((await service.reconcile(standalone)).results[0].status,'requires_review');
+  assert.equal(f.mutations.length,1);
+});
+test('combined shared SKU and off-order extras are held without inventory writes',async t=>{
+  const f=setup(t);await f.proof();const second={...f.order,id:gid('Order',9),name:'#9'};
+  f.deps.orderQuery=async(q,v)=>({order:v.id===f.order.id?f.order:second});
+  f.report.orderId+=','+second.id;f.report.orderName+=', '+second.name;
+  f.report.extraItems=[{sku:'BOWL',qty:2,source:'scan'}];
+  const r=await createAutomaticReceiving(f.deps).reconcile(f.report);
+  assert.deepEqual(r.results.map(x=>x.status),['requires_review','requires_review']);assert.equal(f.mutations.length,0);
+});
+test('all combined orders must pass warehouse and destination checks before writing',async t=>{
+  const f=setup(t);await f.proof();const second={...f.order,id:gid('Order',9),name:'#9',customer:{tags:['Hummus Fit Bellmore']}};
+  f.deps.orderQuery=async(q,v)=>({order:v.id===f.order.id?f.order:second});
+  f.report.orderId+=','+second.id;f.report.orderName+=', '+second.name;
+  await assert.rejects(createAutomaticReceiving(f.deps).reconcile(f.report),/destination/);assert.equal(f.mutations.length,0);
+});
+test('malformed and repeated combined IDs stop before Shopify requests',async t=>{
+  for(const id of ['bad','gid://shopify/Order/1,gid://shopify/Order/1']) {
+    const f=setup(t);let calls=0;f.deps.orderQuery=async()=>{calls++;};f.report.orderId=id;
+    await assert.rejects(createAutomaticReceiving(f.deps).reconcile(f.report),/unique receipt/);assert.equal(calls,0);
+  }
+});

@@ -1,4 +1,5 @@
 const {caseMapping,POS_STORE_LOCATIONS}=require('./essentials-pos-conversion');
+const {essentialsTypeFor}=require('./essentials-shadow');
 
 // A new completed delivery can replace the stop's latest archive. An older
 // receipt must use its own saved evidence, never the new delivery's pick data.
@@ -15,7 +16,12 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
   const tags=(order.customer?.tags||[]).map(t=>t.toLowerCase());
   const destinations=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes('hummus fit '+s.toLowerCase()) || (s==='Islip'&&tags.includes('hummus fit east islip')));
   if(destinations.length!==1 || destinations[0]!==store) throw new Error('Shopify order destination differs from saved receipt');
-  const retail=order.lineItems.nodes.filter(i=>(i.variant?.product?.tags||[]).includes('retail-essentials'));
+  if(order.lineItems.nodes.some(i=>i.variant?.product?.collections?.pageInfo?.hasNextPage)) {
+    throw new Error('Complete product classification required');
+  }
+  const classified=order.lineItems.nodes.map(i=>({...i,productTags:i.variant?.product?.tags||[],
+    productCollections:i.variant?.product?.collections?.nodes||[]}));
+  const retail=classified.filter(i=>essentialsTypeFor(i)==='retail');
   if(!Array.isArray(evidence.items) || !counts || new Set(retail.map(i=>i.sku)).size!==retail.length ||
     retail.length!==evidence.items.length || retail.length!==Object.keys(counts).length) throw new Error('Complete unique retail receipt required');
   return retail.map(item=>{
@@ -25,7 +31,7 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
       !Number.isSafeInteger(saved.actuallyReceived) || saved.actuallyReceived<0 ||
       saved.actuallyReceived!==saved.expectedFromPicking || saved.actuallyReceived!==counts[item.sku] ||
       !(saved.actuallyReceived===item.quantity || saved.actuallyReceived===0)) throw new Error('Saved retail quantities do not match exact Shopify order');
-    const mapping=caseMapping({...item,productTags:item.variant.product.tags});
+    const mapping=caseMapping(item);
     return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,receivedCases:saved.actuallyReceived};
   });
 }

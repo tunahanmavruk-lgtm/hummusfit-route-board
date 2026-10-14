@@ -1173,7 +1173,7 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     const archive = loadArchive()[stopKey];
     let lines;
     if (receiptEvidence) {
-      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku title quantity variant{product{tags}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`,{id:orderId});
+      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku title quantity variant{product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage}}}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`,{id:orderId});
       lines=require('./saved-receipt-proof').savedReceiptLines(store,orderId,receivedCounts,receiptEvidence,data.order,ESSENTIALS_POS_CUTOVER);
     } else {
       if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||

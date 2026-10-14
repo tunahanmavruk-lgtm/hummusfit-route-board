@@ -3,6 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { verifiedStoreFlowCredit } = require('./store-flow-credit-proof');
 const { POS_STORE_LOCATIONS } = require('./essentials-pos-conversion');
+const { receiptOrders,receiptForOrder } = require('./receipt-orders');
 
 const RELEASE = 'receiving-auto-2026-10-13-v1';
 const CUTOVER = Date.parse('2026-10-13T20:21:19Z');
@@ -177,21 +178,36 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     return {kind,sku,status:'posted',adjustmentId:proof.node.id,variantId:kind==='extra'?variantId:undefined};
   }
   async function process(report) {
-    const {order}=await orderQuery(ORDER_QUERY,{id:report?.orderId}); checkOrder(report,order);
+    let references;
+    try { references=receiptOrders(report); } catch(e) { throw new Review(e.message); }
+    const orders=[];
+    // Validate every destination and fulfillment before any mutation.
+    for(const reference of references) {
+      const {order}=await orderQuery(ORDER_QUERY,{id:reference.id});
+      checkOrder(receiptForOrder(report,reference.id),order); orders.push(order);
+    }
     const locationId=await exactLocation(report.store),results=[];
     const jobs=[...(report.items||[]).filter(i=>i.receivingCategory==='food'&&i.orderDiff!==0).map(item=>({item,kind:'food'})),
       ...(report.extraItems||[]).map(item=>({item,kind:'extra'}))];
     for(const {item,kind}of jobs) {
-      try { results.push(await correct(report,order,locationId,item,kind)); }
+      try {
+        const owners=kind==='food'?orders.filter(o=>o.lineItems.nodes.some(l=>l.sku===item.sku)):orders;
+        assert(owners.length===1,'Combined receipt item requires one unambiguous source order; allocation needs review');
+        const order=owners[0],scoped=receiptForOrder(report,order.id);
+        results.push({...await correct(scoped,order,locationId,item,kind),orderId:order.id});
+      }
       catch(error) { results.push({kind,sku:item.sku||'',code:item.code,status:error instanceof Review?'requires_review':'retry',error:error.message}); }
     }
     return {ok:true,results};
   }
   async function reconcile(report) {
     if(env.RECEIVING_AUTOMATION_ENABLED==='false') throw new Retry('Automatic receiving corrections are paused');
-    const key=`${report?.store}:${report?.orderId}`;
-    if(flights.has(key)) throw new Retry('This order is already processing');
-    const promise=process(report).finally(()=>flights.delete(key)); flights.set(key,promise); return promise;
+    let references;
+    try { references=receiptOrders(report); } catch(e) { throw new Review(e.message); }
+    const keys=references.map(o=>`${report?.store}:${o.id}`);
+    if(keys.some(key=>flights.has(key))) throw new Retry('This order is already processing');
+    const promise=process(report).finally(()=>keys.forEach(key=>flights.delete(key)));
+    keys.forEach(key=>flights.set(key,promise)); return promise;
   }
   return {flowProof,reconcile};
 }
