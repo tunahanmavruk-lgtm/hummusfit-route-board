@@ -9,6 +9,26 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // Single-bar UPCs independently verified against distributor/retailer
+  // catalogs; manufacturer and retailer distinguish the 12-bar display box.
+  "HF-BUILT-SOURPUFF-GREENAPPLE-CS12": Object.freeze({
+    unitSku: "840229306558", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893366007",
+    unitVariantId: "gid://shopify/ProductVariant/51317895364855",
+    unitBarcode: "840229306558", lookupByVariantId: true,
+    requirePosSellUnitTag: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-BUILT-SOURPUFF-PINKLEMONADE-CS12": Object.freeze({
+    // Preserve the existing internal SKU; it is NOT the scannable UPC.
+    // 840229306800 is a four-pack code, not an individual wrapper barcode.
+    unitSku: "840229306800", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893398775",
+    unitVariantId: "gid://shopify/ProductVariant/51317895397623",
+    unitBarcode: "840229306794", lookupByVariantId: true,
+    requirePosSellUnitTag: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
   // Exact single-bag variants and UPCs verified in the connected catalog and
   // manufacturer's listings. One display case contains 12 retail bags.
   "HF-SOURSTRIPS-LEMONBERRY-CS12": Object.freeze({

@@ -8,13 +8,15 @@ const conversion = require('../essentials-pos-conversion');
 const history = require('../retail-conversion-ledger');
 const source = fs.readFileSync(require.resolve('../server'), 'utf8');
 const pairs = [
-  ['LEMONBERRY', '51317893234935', '51317895069943', '860004712527'],
-  ['APPLEBERRY', '51317893267703', '50348807389431', '860001800593'],
-  ['GREENAPPLE', '51317893300471', '50348807323895', '860001800548'],
-  ['STRAWBERRY', '51317893333239', '50348807422199', '860001800517'],
+  ['HF-SOURSTRIPS-LEMONBERRY-CS12', '51317893234935', '51317895069943', '860004712527'],
+  ['HF-SOURSTRIPS-APPLEBERRY-CS12', '51317893267703', '50348807389431', '860001800593'],
+  ['HF-SOURSTRIPS-GREENAPPLE-CS12', '51317893300471', '50348807323895', '860001800548'],
+  ['HF-SOURSTRIPS-STRAWBERRY-CS12', '51317893333239', '50348807422199', '860001800517'],
+  ['HF-BUILT-SOURPUFF-GREENAPPLE-CS12', '51317893366007', '51317895364855', '840229306558'],
+  ['HF-BUILT-SOURPUFF-PINKLEMONADE-CS12', '51317893398775', '51317895397623', '840229306794'],
 ];
 
-function harness(t, line, { loseResponse = false, inactive = false } = {}) {
+function harness(t, line, { loseResponse = false, inactive = false, unitBarcode = line.unitBarcode } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'retail-safe-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'history.json');
@@ -33,8 +35,8 @@ function harness(t, line, { loseResponse = false, inactive = false } = {}) {
           const isCase = variables.id === line.caseVariantId;
           const kind = isCase ? 'CASE' : 'UNIT';
           return { productVariant: { id: variables.id, sku: isCase ? line.caseSku : line.unitSku,
-            barcode: isCase ? null : line.unitBarcode, price: isCase ? '0' : '4.15',
-            product: { status: 'ACTIVE', tags: isCase ? ['mapping-pending'] : [] },
+            barcode: isCase ? null : unitBarcode, price: isCase ? '0' : '4.15',
+            product: { status: 'ACTIVE', tags: isCase ? ['mapping-pending'] : ['pos-sell-unit'] },
             inventoryItem: { id: kind, duplicateSkuCount: 0, unitCost: { amount: isCase ? '26' : '2.17' },
               inventoryLevel: isCase || active ? { quantities: [{ name: 'available', quantity: quantities[kind] }] } : null } } };
         }
@@ -69,9 +71,9 @@ function harness(t, line, { loseResponse = false, inactive = false } = {}) {
   return { createContext, file, quantities, requests, writes: () => writes, calls: () => calls, advance: ms => { clock += ms; } };
 }
 
-for (const [flavor, caseId, unitId, barcode] of pairs) {
-  test(`Sour Strips ${flavor}: all 14 stores, actual persisted history, retry/restart and zero-stock activation`, async t => {
-    const line = { ...conversion.caseMapping({ sku: `HF-SOURSTRIPS-${flavor}-CS12`, productTags: ['retail-essentials'] }), receivedCases: 2 };
+for (const [sku, caseId, unitId, barcode] of pairs) {
+  test(`${sku}: all 14 stores, actual persisted history, retry/restart and zero-stock activation`, async t => {
+    const line = { ...conversion.caseMapping({ sku, productTags: ['retail-essentials'] }), receivedCases: 2 };
     assert.equal(line.unitsPerCase, 12);
     assert.equal(line.caseVariantId, `gid://shopify/ProductVariant/${caseId}`);
     assert.equal(line.unitVariantId, `gid://shopify/ProductVariant/${unitId}`);
@@ -91,6 +93,16 @@ for (const [flavor, caseId, unitId, barcode] of pairs) {
 }
 
 const line = { ...conversion.caseMapping({ sku: 'HF-SOURSTRIPS-LEMONBERRY-CS12', productTags: ['retail-essentials'] }), receivedCases: 2 };
+test('BUILT Pink Lemonade refuses four-pack and box codes on its single-bar variant', async t => {
+  const built = { ...conversion.caseMapping({ sku: 'HF-BUILT-SOURPUFF-PINKLEMONADE-CS12', productTags: ['retail-essentials'] }), receivedCases: 2 };
+  for (const unitBarcode of ['840229306800', '840229306886']) {
+    const h = harness(t, built, { unitBarcode });
+    await assert.rejects(h.createContext().convertOneReceivedLine('Holbrook', 'test-order', 'Holbrook', built), /barcode/i);
+    assert.equal(h.writes(), 0);
+    assert.deepEqual(history.readConversionLedger(h.file), {});
+  }
+});
+
 test('missing, unreadable, malformed and invalid-shaped history stop BEFORE any Shopify call', async t => {
   for (const bad of ['missing', 'directory', '', '{', 'null', '[]', '42', '{"bad":{"status":"posted"}}']) {
     const h = harness(t, line);
@@ -134,8 +146,8 @@ test('concurrent same-receipt calls cannot duplicate; failed entries stay held',
   assert.equal(h.writes(), 1);
 });
 
-test('unverified Sprite and BUILT mappings remain blocked', () => {
-  for (const sku of ['HF-SPRITE-ZERO-TEA-350-CS24', 'HF-BUILT-SOURPUFF-GREENAPPLE-CS12', 'HF-BUILT-SOURPUFF-PINKLEMONADE-CS12']) {
+test('unverified Sprite mapping remains blocked', () => {
+  for (const sku of ['HF-SPRITE-ZERO-TEA-350-CS24']) {
     assert.match(conversion.caseMapping({ sku, productTags: ['retail-essentials'] }).error, /approved/);
   }
 });
