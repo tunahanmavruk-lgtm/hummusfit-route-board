@@ -14,6 +14,14 @@ const pairs = [
   ['HF-SOURSTRIPS-STRAWBERRY-CS12', '51317893333239', '50348807422199', '860001800517'],
   ['HF-BUILT-SOURPUFF-GREENAPPLE-CS12', '51317893366007', '51317895364855', '840229306558'],
   ['HF-BUILT-SOURPUFF-PINKLEMONADE-CS12', '51317893398775', '51317895397623', '840229306794'],
+  ["HF-NYB-NOCCO-402-C12","51322016727287","50622668964087","850064950021",12],
+  ["HF-NYB-NOCCO-222-C12","51322016760055","51085963100407","850075778454",12],
+  ["HF-NYB-NOCCO-219-C12","51322016792823","50644958511351","850075778447",12],
+  ["HF-NYB-NOCCO-216-C12","51322016825591","51085963034871","850064950700",12],
+  ["HF-NYB-NOCCO-218-C12","51322016858359","50622667620599","850075778270",12],
+  ["HF-NYB-FL-101-C12","51322014105847","51322121683191","811620020633",12],
+  ["HF-NYB-GHOST-118-C12","51322014171383","51322123616503","810128529853",12],
+  ["HF-NYB-QUEST3106-C8","51322014040311","50344585986295","888849016136",8],
 ];
 
 function harness(t, line, { loseResponse = false, inactive = false, unitBarcode = line.unitBarcode } = {}) {
@@ -71,10 +79,10 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
   return { createContext, file, quantities, requests, writes: () => writes, calls: () => calls, advance: ms => { clock += ms; } };
 }
 
-for (const [sku, caseId, unitId, barcode] of pairs) {
+for (const [sku, caseId, unitId, barcode, unitsPerCase = 12] of pairs) {
   test(`${sku}: all 14 stores, actual persisted history, retry/restart and zero-stock activation`, async t => {
     const line = { ...conversion.caseMapping({ sku, productTags: ['retail-essentials'] }), receivedCases: 2 };
-    assert.equal(line.unitsPerCase, 12);
+    assert.equal(line.unitsPerCase, unitsPerCase);
     assert.equal(line.caseVariantId, `gid://shopify/ProductVariant/${caseId}`);
     assert.equal(line.unitVariantId, `gid://shopify/ProductVariant/${unitId}`);
     assert.equal(line.unitBarcode, barcode);
@@ -84,11 +92,30 @@ for (const [sku, caseId, unitId, barcode] of pairs) {
       const restart = h.createContext();
       assert.equal((await restart.convertOneReceivedLine(store, 'test-order', store, line)).status, 'posted');
       assert.equal((await restart.convertOneReceivedLine(store, 'test-order', store, line)).status, 'already_posted');
-      assert.deepEqual(h.quantities, { CASE: 0, UNIT: 24 });
+      assert.deepEqual(h.quantities, { CASE: 0, UNIT: 2 * unitsPerCase });
       assert.equal(h.writes(), 1);
       assert.equal(h.requests[0].key, h.requests[1].key);
       for (const change of h.requests[0].input.changes) assert.equal(change.locationId, store);
     }
+  });
+}
+
+for (const [sku] of pairs.slice(6)) {
+  test(`${sku}: incoming stock and wrong unit barcode cannot create inventory`, async t => {
+    const line = { ...conversion.caseMapping({ sku, productCollections: [{title: 'Retail Essentials', handle: 'retail-essentials'}] }), receivedCases: 2 };
+    assert.equal(conversion.caseMapping({ sku, productTags: [] }), null);
+    for (const store of Object.keys(conversion.POS_STORE_LOCATIONS)) {
+      const h = harness(t, line, { inactive: true });
+      h.quantities.CASE = 0;
+      await assert.rejects(h.createContext().convertOneReceivedLine(store, 'not-arrived', store, line), /Case stock has not arrived/);
+      assert.equal(h.writes(), 0);
+      assert.deepEqual(h.quantities, {CASE: 0, UNIT: 0});
+      assert.deepEqual(history.readConversionLedger(h.file), {});
+    }
+    const wrong = harness(t, line, {unitBarcode: '000000000000'});
+    await assert.rejects(wrong.createContext().convertOneReceivedLine('Holbrook', 'wrong-barcode', 'Holbrook', line), /barcode/);
+    assert.equal(wrong.writes(), 0);
+    assert.deepEqual(history.readConversionLedger(wrong.file), {});
   });
 }
 

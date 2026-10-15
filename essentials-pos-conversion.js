@@ -9,6 +9,72 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // NYB 2026-10-15: exact catalog pairs; configuration only, never an
+  // incoming-stock credit. Existing verified receipt/ledger guards apply.
+  // Barebells Protein Bars — 12 Bars — Soft Banana Caramel
+  "HF-NYB-NOCCO-402-C12": Object.freeze({
+    unitSku: "850064950021", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322016727287",
+    unitVariantId: "gid://shopify/ProductVariant/50622668964087",
+    unitBarcode: "850064950021", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Barebells Protein Bars — 12 Bars — Banana Bread
+  "HF-NYB-NOCCO-222-C12": Object.freeze({
+    unitSku: "850075778454", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322016760055",
+    unitVariantId: "gid://shopify/ProductVariant/51085963100407",
+    unitBarcode: "850075778454", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Barebells Protein Bars — 12 Bars — Brownie Batter
+  "HF-NYB-NOCCO-219-C12": Object.freeze({
+    unitSku: "850075778447", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322016792823",
+    unitVariantId: "gid://shopify/ProductVariant/50644958511351",
+    unitBarcode: "850075778447", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Barebells Protein Bars — 12 Bars — Coconut Caramel Almond
+  "HF-NYB-NOCCO-216-C12": Object.freeze({
+    unitSku: "850064950700", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322016825591",
+    unitVariantId: "gid://shopify/ProductVariant/51085963034871",
+    unitBarcode: "850064950700", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Barebells Protein Bars — 12 Bars — Peanut Butter & Jelly
+  "HF-NYB-NOCCO-218-C12": Object.freeze({
+    unitSku: "850075778270", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322016858359",
+    unitVariantId: "gid://shopify/ProductVariant/50622667620599",
+    unitBarcode: "850075778270", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Core Power Elite 42g Protein Shakes — 12 × 14 oz Bottles — Chocolate
+  "HF-NYB-FL-101-C12": Object.freeze({
+    unitSku: "HF-NYB-FL-101-U1", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322014105847",
+    unitVariantId: "gid://shopify/ProductVariant/51322121683191",
+    unitBarcode: "811620020633", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // GHOST Energy — 12 × 16 oz Cans — Peach
+  "HF-NYB-GHOST-118-C12": Object.freeze({
+    unitSku: "HF-NYB-GHOST-118-U1", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51322014171383",
+    unitVariantId: "gid://shopify/ProductVariant/51322123616503",
+    unitBarcode: "810128529853", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Quest Tortilla Style Protein Chips — 8 Bags — Salsa Verde
+  "HF-NYB-QUEST3106-C8": Object.freeze({
+    unitSku: "888849016136", unitsPerCase: 8,
+    caseVariantId: "gid://shopify/ProductVariant/51322014040311",
+    unitVariantId: "gid://shopify/ProductVariant/50344585986295",
+    unitBarcode: "888849016136", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
   // Single-bar UPCs independently verified against distributor/retailer
   // catalogs; manufacturer and retailer distinguish the 12-bar display box.
   "HF-BUILT-SOURPUFF-GREENAPPLE-CS12": Object.freeze({
