@@ -9,6 +9,36 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // Exact single-bag variants and UPCs verified in the connected catalog and
+  // manufacturer's listings. One display case contains 12 retail bags.
+  "HF-SOURSTRIPS-LEMONBERRY-CS12": Object.freeze({
+    unitSku: "860004712527", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893234935",
+    unitVariantId: "gid://shopify/ProductVariant/51317895069943",
+    unitBarcode: "860004712527", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SOURSTRIPS-APPLEBERRY-CS12": Object.freeze({
+    unitSku: "860001800593", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893267703",
+    unitVariantId: "gid://shopify/ProductVariant/50348807389431",
+    unitBarcode: "860001800593", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SOURSTRIPS-GREENAPPLE-CS12": Object.freeze({
+    unitSku: "860001800548", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893300471",
+    unitVariantId: "gid://shopify/ProductVariant/50348807323895",
+    unitBarcode: "860001800548", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SOURSTRIPS-STRAWBERRY-CS12": Object.freeze({
+    unitSku: "860001800517", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51317893333239",
+    unitVariantId: "gid://shopify/ProductVariant/50348807422199",
+    unitBarcode: "860001800517", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
   "GLOBAL GT628007-CS6": Object.freeze({
     unitSku: "SS-8801094000455", unitsPerCase: 6,
     caseVariantId: "gid://shopify/ProductVariant/51304197357815",

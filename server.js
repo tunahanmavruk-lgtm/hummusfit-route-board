@@ -10,6 +10,7 @@ const { loadLocationIndex, findLocation } = require("./walkin-locations.js");
 const { buildEssentialsShadow, essentialsTypeFor } = require("./essentials-shadow.js");
 const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS } = require("./essentials-pos-conversion.js");
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
+const { readConversionLedger, writeConversionLedger } = require("./retail-conversion-ledger.js");
 const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
 const { remainingStopEtas } = require("./live-eta.js");
 const {
@@ -1449,13 +1450,10 @@ const getPosToken = createPosTokenProvider({
 });
 
 function loadPosLedger() {
-  try { return JSON.parse(fs.readFileSync(POS_LEDGER_FILE, "utf8")); }
-  catch { return {}; }
+  return readConversionLedger(POS_LEDGER_FILE);
 }
 function savePosLedger(ledger) {
-  const temporary = `${POS_LEDGER_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2));
-  fs.renameSync(temporary, POS_LEDGER_FILE);
+  writeConversionLedger(POS_LEDGER_FILE, ledger);
 }
 function writePosLedgerEntry(key, update) {
   // Read immediately before each synchronous write. Two stores can complete
@@ -1588,6 +1586,13 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
     if (line.error) return { sku: line.caseSku, status: "requires_mapping", error: line.error };
 
     let plan = previous?.plan;
+    // Shopify's idempotency retention is bounded. An uncertain old request
+    // must be reconciled against Shopify proof, never sent again as new stock.
+    if (previous?.status === "pending" &&
+        (!Number.isFinite(previous.startedAt) || previous.startedAt > Date.now() ||
+         Date.now() - previous.startedAt >= 23 * 60 * 60 * 1000)) {
+      return { sku: line.caseSku, status: "requires_review", error: "Uncertain conversion is too old to retry safely; verify its Shopify adjustment before continuing" };
+    }
     if (plan && plan.receivedCases !== line.receivedCases) {
       return { sku: line.caseSku, status: "requires_review", error: "Receipt changed after POS conversion started" };
     }
@@ -1603,7 +1608,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
         unitItem = await exactInventoryItem(line.unitSku, locationId, true, false, line);
       }
       plan = adjustmentPlan(line, caseItem, unitItem, locationId, key);
-      writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan });
+      writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan, startedAt: Date.now() });
     }
 
     const result = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key });
