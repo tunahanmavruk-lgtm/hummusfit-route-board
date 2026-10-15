@@ -22,6 +22,10 @@ const pairs = [
   ["HF-NYB-FL-101-C12","51322014105847","51322121683191","811620020633",12],
   ["HF-NYB-GHOST-118-C12","51322014171383","51322123616503","810128529853",12],
   ["HF-NYB-QUEST3106-C8","51322014040311","50344585986295","888849016136",8],
+  ["HF-SUFFOLK-MON-JP-WHITE-C24","51322197999863","51322304102647","4897036690895",24],
+  ["HF-SUFFOLK-MON-JP-BLUE-C24","51322198032631","51322304135415","4897036690055",24],
+  ["HF-SUFFOLK-MON-JP-PEACH-C24","51322198065399","51322304168183","4897036694466",24],
+  ["HF-SUFFOLK-MON-JP-PARADISE-C24","51322198098167","51322304200951","4897036692707",24],
 ];
 
 function harness(t, line, { loseResponse = false, inactive = false, unitBarcode = line.unitBarcode } = {}) {
@@ -44,7 +48,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
           const kind = isCase ? 'CASE' : 'UNIT';
           return { productVariant: { id: variables.id, sku: isCase ? line.caseSku : line.unitSku,
             barcode: isCase ? null : unitBarcode, price: isCase ? '0' : '4.15',
-            product: { status: 'ACTIVE', tags: isCase ? ['mapping-pending'] : ['pos-sell-unit'] },
+            product: { status: 'ACTIVE', tags: isCase ? (line.allowSharedProductMappingPendingTag ? ['mapping-pending'] : []) : ['pos-sell-unit'] },
             inventoryItem: { id: kind, duplicateSkuCount: 0, unitCost: { amount: isCase ? '26' : '2.17' },
               inventoryLevel: isCase || active ? { quantities: [{ name: 'available', quantity: quantities[kind] }] } : null } } };
         }

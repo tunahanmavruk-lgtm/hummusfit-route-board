@@ -9,6 +9,40 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // Monster Japan: exact 24-can pairs. Configuration only; verified physical
+  // receipt and existing destination case credit are required before posting.
+  "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
+    "unitSku": "HF-SUFFOLK-MON-JP-WHITE-U1",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51322197999863",
+    "unitVariantId": "gid://shopify/ProductVariant/51322304102647",
+    "unitBarcode": "4897036690895",
+    "lookupByVariantId": true
+  }),
+  "HF-SUFFOLK-MON-JP-BLUE-C24": Object.freeze({
+    "unitSku": "HF-SUFFOLK-MON-JP-BLUE-U1",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51322198032631",
+    "unitVariantId": "gid://shopify/ProductVariant/51322304135415",
+    "unitBarcode": "4897036690055",
+    "lookupByVariantId": true
+  }),
+  "HF-SUFFOLK-MON-JP-PEACH-C24": Object.freeze({
+    "unitSku": "HF-SUFFOLK-MON-JP-PEACH-U1",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51322198065399",
+    "unitVariantId": "gid://shopify/ProductVariant/51322304168183",
+    "unitBarcode": "4897036694466",
+    "lookupByVariantId": true
+  }),
+  "HF-SUFFOLK-MON-JP-PARADISE-C24": Object.freeze({
+    "unitSku": "HF-SUFFOLK-MON-JP-PARADISE-U1",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51322198098167",
+    "unitVariantId": "gid://shopify/ProductVariant/51322304200951",
+    "unitBarcode": "4897036692707",
+    "lookupByVariantId": true
+  }),
   // NYB 2026-10-15: exact catalog pairs; configuration only, never an
   // incoming-stock credit. Existing verified receipt/ledger guards apply.
   // Barebells Protein Bars — 12 Bars — Soft Banana Caramel
