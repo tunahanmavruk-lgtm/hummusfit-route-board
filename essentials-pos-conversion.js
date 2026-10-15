@@ -9,6 +9,16 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  "GLOBAL GT628007-CS6": Object.freeze({
+    unitSku: "SS-8801094000455", unitsPerCase: 6,
+    caseVariantId: "gid://shopify/ProductVariant/51304197357815",
+    unitVariantId: "gid://shopify/ProductVariant/51259495874807",
+    unitBarcode: "8801094000455",
+    requirePosSellUnitTag: true,
+    // Exact live pair verified 2026-10-14. Catalog availability stays unchanged.
+    lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
   "HF-NYB-CELSIUS-141-C12": Object.freeze({
     unitSku: "889392002379", unitsPerCase: 12,
     caseVariantId: "gid://shopify/ProductVariant/51259609678071",
