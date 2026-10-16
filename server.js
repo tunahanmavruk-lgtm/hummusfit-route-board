@@ -1136,7 +1136,7 @@ app.post("/api/receiving-adjustment-proof", async (req, res) => {
       !/^gid:\/\/shopify\/Order\/\d+$/.test(orderId || "") ||
       (variantId && !/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(variantId))) return res.status(400).json({ error: "Exact Shopify identifiers required" });
   try {
-    const orderData = await shopifyGraphQL(`query CorrectionOrder($orderId:ID!){order(id:$orderId){id name displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku quantity variant{inventoryItem{id}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`, { orderId });
+    const orderData = await shopifyGraphQL(`query CorrectionOrder($orderId:ID!){order(id:$orderId){id name displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku quantity variant{inventoryItem{id}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`, { orderId });
     const tags = (orderData.order?.customer?.tags || []).map(t => t.toLowerCase());
     const local = Object.keys(POS_STORE_LOCATIONS).filter(store => tags.includes(`hummus fit ${store.toLowerCase()}`) || (store === "Islip" && tags.includes("hummus fit east islip")));
     if (local.length !== 1) return res.status(403).json({ error: "One exact Hummus Fit store destination required" });
@@ -1172,9 +1172,10 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
       return res.status(400).json({ error: "A valid Hummus Fit store, order and cutover are required" });
     }
     const archive = loadArchive()[stopKey];
-    let lines;
+    let lines, receiptOrder;
     if (receiptEvidence) {
-      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{sku title quantity variant{product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage}}}}} pageInfo{hasNextPage}} fulfillments(first:50){status location{id}}}}`,{id:orderId});
+      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku title quantity variant{inventoryItem{id} product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage endCursor}}}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`,{id:orderId});
+      receiptOrder=data.order;
       lines=require('./saved-receipt-proof').savedReceiptLines(store,orderId,receivedCounts,receiptEvidence,data.order,ESSENTIALS_POS_CUTOVER);
     } else {
       if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||
@@ -1187,10 +1188,22 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     const locationId = await exactStoreLocation(store);
     const results = [];
     for (const line of lines) {
-      try { results.push(await convertOneReceivedLine(store, orderId, locationId, line)); }
+      try {
+        if(line.backordered) {
+          results.push({sku:line.caseSku,status:'backordered',units:0,orderId,lineItemId:line.lineItemId,
+            orderedCases:line.orderedCases,shopifyVerified:true,verifiedAt:new Date().toISOString()});
+          continue;
+        }
+        if(store==='Huntington'&&line.receivedCases>0&&receiptOrder?.fulfillments?.every(f=>Date.parse(f.createdAt)>=require('./huntington-fulfillment').CUTOVER)) {
+          const matches=receiptOrder.lineItems.nodes.filter(i=>i.sku===line.caseSku);
+          if(matches.length!==1) throw new Error('Exact Huntington case line required');
+          await receivingService.verifyFulfillmentCredit(receiptOrder,matches[0]);
+        }
+        results.push(await convertOneReceivedLine(store, orderId, locationId, line));
+      }
       catch (error) { results.push({ sku: line.caseSku, status: "requires_review", error: error.message }); }
     }
-    res.json({ ok: results.every((result) => ["posted", "already_posted", "zero_received"].includes(result.status)), results });
+    res.json({ ok: results.every((result) => ["posted", "already_posted", "zero_received", "backordered"].includes(result.status)), results });
   } catch (error) {
     res.status(409).json({ error: error.message });
   }
@@ -4297,7 +4310,7 @@ async function checkForNewOrdersAndNotify() {
 setInterval(checkForNewOrdersAndNotify, 60 * 1000);
 checkForNewOrdersAndNotify();
 
-require('./automatic-receiving').registerAutomaticReceiving(app, {
+const receivingService=require('./automatic-receiving').registerAutomaticReceiving(app, {
   dir: PERSISTENT_DIR, orderQuery: shopifyGraphQL, inventoryQuery: posShopifyGraphQL,
   exactLocation: exactStoreLocation, verifyToken: verifyLogisticsToken,
 });

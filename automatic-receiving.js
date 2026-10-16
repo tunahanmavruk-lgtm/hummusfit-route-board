@@ -4,14 +4,17 @@ const crypto = require('node:crypto');
 const { verifiedStoreFlowCredit } = require('./store-flow-credit-proof');
 const { POS_STORE_LOCATIONS } = require('./essentials-pos-conversion');
 const { receiptOrders,receiptForOrder } = require('./receipt-orders');
+const { partialReceiptAllowed, fullyDelivered, CUTOVER: HUNTINGTON_CUTOVER } = require('./huntington-fulfillment');
+const { createFulfillmentCredit } = require('./huntington-fulfillment-credit');
 
 const RELEASE = 'receiving-auto-2026-10-13-v1';
 const CUTOVER = Date.parse('2026-10-13T20:21:19Z');
 const WAREHOUSE = 'gid://shopify/Location/103133642999';
 const ORDER_QUERY = `query AutomaticReceiptOrder($id: ID!) {
-  order(id: $id) { id name createdAt displayFulfillmentStatus tags customer { tags }
-    fulfillments(first: 100) { id status location { id } }
-    lineItems(first: 250) { pageInfo { hasNextPage } nodes { id sku quantity
+  order(id: $id) { id name createdAt cancelledAt displayFulfillmentStatus tags customer { tags }
+    fulfillments(first: 100) { id createdAt status location { id }
+      fulfillmentLineItems(first:250) { nodes { quantity lineItem { id } } pageInfo { hasNextPage endCursor } } }
+    lineItems(first: 250) { pageInfo { hasNextPage endCursor } nodes { id sku quantity
       variant { id inventoryItem { id } }
     } }
   }
@@ -62,7 +65,7 @@ function checkOrder(report, order) {
   const stores=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes(`hummus fit ${s.toLowerCase()}`)||
     (s==='Islip'&&tags.includes('hummus fit east islip')));
   assert(stores.length===1&&stores[0]===report.store,'Order destination does not match this store');
-  if(order.displayFulfillmentStatus!=='FULFILLED') throw new Retry('Waiting for Shopify warehouse fulfillment');
+  if(order.displayFulfillmentStatus!=='FULFILLED'&&!partialReceiptAllowed(report,order)) throw new Retry('Waiting for Shopify warehouse fulfillment');
   assert(order.fulfillments?.length>0&&order.fulfillments.length<100&&order.fulfillments.every(f=>
     f.status==='SUCCESS'&&f.location?.id===WAREHOUSE),'Warehouse fulfillment is not uniquely proven');
   assert(Array.isArray(order.lineItems?.nodes)&&!order.lineItems.pageInfo?.hasNextPage,'Complete Shopify order lines required');
@@ -80,7 +83,10 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
   const holbrookFile=path.join(dir,'holbrook-flow-credit-proofs.json');
   const flights=new Map();
   const flowAppId=env.HOLBROOK_FLOW_APP_ID;
+  const fulfillmentCredit=createFulfillmentCredit({dir,orderQuery,inventoryQuery,orderQueryText:ORDER_QUERY,
+    groupQuery:GROUP_QUERY,adjustMutation:ADJUST_MUTATION,now});
   async function flowProof(body, holbrook=false) {
+    if(!holbrook&&body.mode==='huntington_fulfillment_v1') return fulfillmentCredit.credit(body);
     const {orderId,lineItemId,adjustmentGroupId}=body;
     const store=holbrook?'Holbrook':body.store;
     assert(Object.hasOwn(POS_STORE_LOCATIONS,store)&&gid('Order',orderId)&&gid('LineItem',lineItemId)&&
@@ -100,6 +106,9 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     return {ok:true,status:'verified',store,adjustmentGroupId:entry.adjustmentId};
   }
   async function creditFor(report,order,line,locationId) {
+    if(report.store==='Huntington'&&order.fulfillments?.every(f=>Date.parse(f.createdAt)>=HUNTINGTON_CUTOVER)) {
+      return fulfillmentCredit.verifyLine(order,line);
+    }
     const source=report.store==='Holbrook'?read(holbrookFile):read(flowFile);
     const entries=Object.values(source).filter(e=>e.orderId===order.id&&e.lineItemId===line.id&&e.locationId===locationId);
     if(!entries.length) throw new Retry('Waiting for original Shopify Flow credit proof');
@@ -117,6 +126,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     assert(Number.isSafeInteger(delta)&&delta!==0&&delta<=10,'Large or invalid overage requires a physical-count confirmation');
     let variantId;
     if(kind==='food') {
+      if(order.displayFulfillmentStatus==='PARTIALLY_FULFILLED') assert(fullyDelivered(order,sku),'Food correction waits for this exact delivered line');
       assert(line.length===1&&report.items.filter(i=>i.sku===sku).length===1&&item.receivingCategory==='food'&&
         Number.isSafeInteger(item.actuallyReceived)&&item.actuallyReceived>=0&&item.orderedQty===line[0].quantity&&
         item.orderDiff===delta,'Exact food order line and received count required');
@@ -209,7 +219,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     const promise=process(report).finally(()=>keys.forEach(key=>flights.delete(key)));
     keys.forEach(key=>flights.set(key,promise)); return promise;
   }
-  return {flowProof,reconcile};
+  return {flowProof,reconcile,verifyFulfillmentCredit:fulfillmentCredit.verifyLine};
 }
 function registerAutomaticReceiving(app,deps) {
   const service=createAutomaticReceiving(deps);
@@ -218,6 +228,7 @@ function registerAutomaticReceiving(app,deps) {
       const supplied=Buffer.from(String(req.get('x-hf-flow-credit-secret')||''));
       const expected=Buffer.from(process.env.HOLBROOK_FLOW_CREDIT_SECRET||'');
       if(!expected.length||supplied.length!==expected.length||!crypto.timingSafeEqual(supplied,expected)) return res.status(403).json({error:'Shopify Flow authorization required'});
+      if(req.body?.mode==='huntington_fulfillment_v1'&&process.env.RAILWAY_ENVIRONMENT_ID&&deps.dir!=='/data') return res.status(503).json({error:'Persistent fulfillment credit ledger unavailable'});
       try { res.json(await service.flowProof(req.body,holbrook)); }
       catch(e) { console.error('[receiving-flow-proof]',e.message); res.status(e instanceof Review?409:503).json({error:e.message}); }
     });

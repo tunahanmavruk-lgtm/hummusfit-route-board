@@ -1,5 +1,6 @@
 const {caseMapping,POS_STORE_LOCATIONS}=require('./essentials-pos-conversion');
 const {essentialsTypeFor}=require('./essentials-shadow');
+const {partialReceiptAllowed,deliveredQuantities}=require('./huntington-fulfillment');
 
 // A new completed delivery can replace the stop's latest archive. An older
 // receipt must use its own saved evidence, never the new delivery's pick data.
@@ -7,7 +8,7 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
   if(!POS_STORE_LOCATIONS[store] || !evidence || evidence.store!==store || evidence.orderId!==orderId ||
     !String(evidence.id||'').startsWith(store+'::') || !Number.isFinite(Date.parse(evidence.submittedAt)) ||
     Date.parse(evidence.submittedAt)<cutover || !order || order.id!==orderId || order.name!==evidence.orderName ||
-    order.displayFulfillmentStatus!=='FULFILLED' || order.cancelledAt ||
+    (order.displayFulfillmentStatus!=='FULFILLED' && !partialReceiptAllowed({...evidence,items:evidence.items?.map(i=>({...i,receivingCategory:'retail_essentials'}))},order)) || order.cancelledAt ||
     !Number.isFinite(Date.parse(order.createdAt)) || Date.parse(order.createdAt)<cutover ||
     order.lineItems?.pageInfo?.hasNextPage || !order.fulfillments?.length ||
     !order.fulfillments.every(f=>f.status==='SUCCESS' && f.location?.id==='gid://shopify/Location/103133642999')) {
@@ -31,8 +32,11 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
       !Number.isSafeInteger(saved.actuallyReceived) || saved.actuallyReceived<0 ||
       saved.actuallyReceived!==saved.expectedFromPicking || saved.actuallyReceived!==counts[item.sku] ||
       !(saved.actuallyReceived===item.quantity || saved.actuallyReceived===0)) throw new Error('Saved retail quantities do not match exact Shopify order');
+    const backordered=store==='Huntington'&&order.displayFulfillmentStatus==='PARTIALLY_FULFILLED'&&
+      saved.actuallyReceived===0&&saved.expectedFromPicking===0&&(deliveredQuantities(order).get(item.id)||0)===0;
     const mapping=caseMapping(item);
-    return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,receivedCases:saved.actuallyReceived};
+    return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,receivedCases:saved.actuallyReceived,
+      ...(backordered?{backordered:true,lineItemId:item.id,orderedCases:item.quantity}: {})};
   });
 }
 module.exports={savedReceiptLines};
