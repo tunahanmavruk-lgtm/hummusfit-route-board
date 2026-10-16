@@ -8,6 +8,14 @@ const conversion = require('../essentials-pos-conversion');
 const history = require('../retail-conversion-ledger');
 const source = fs.readFileSync(require.resolve('../server'), 'utf8');
 const pairs = [
+  ["GLOBAL GT628004-CS6","51304197292279","51331378938103","8801094063283",6],
+  ["Global GT628008-CS24","51317812330743","51331378708727","8801056044503",24],
+  ["GLOBAL GT628019-CS6","51317812297975","51331378675959","8801056911379",6],
+  ["GLOBAL GT628021-CS24","51304197914871","51331379036407","8801056175900",24],
+  ["HF-DRIZZ-BC-4OZ-CS12","51322371768567","51134469701879","857900005402",12],
+  ["HF-DRIZZ-CIN-4OZ-CS12","51322371801335","51322449330423","857900005167",12],
+  ["HF-DRIZZ-VB-4OZ-CS12","51322371834103","51322455228663","853762002900",12],
+  ["BUILT-PFB0374-CS12","51242437738743","51259495022839","840229307418",12],
   ['HF-SOURSTRIPS-LEMONBERRY-CS12', '51317893234935', '51317895069943', '860004712527'],
   ['HF-SOURSTRIPS-APPLEBERRY-CS12', '51317893267703', '50348807389431', '860001800593'],
   ['HF-SOURSTRIPS-GREENAPPLE-CS12', '51317893300471', '50348807323895', '860001800548'],
@@ -49,7 +57,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
           return { productVariant: { id: variables.id, sku: isCase ? line.caseSku : line.unitSku,
             barcode: isCase ? null : unitBarcode, price: isCase ? '0' : '4.15',
             product: { status: 'ACTIVE', tags: isCase ? (line.allowSharedProductMappingPendingTag ? ['mapping-pending'] : []) : ['pos-sell-unit'] },
-            inventoryItem: { id: kind, duplicateSkuCount: 0, unitCost: { amount: isCase ? '26' : '2.17' },
+            inventoryItem: { id: kind, duplicateSkuCount: 0, unitCost: { amount: isCase ? String(line.unitsPerCase * 2.17) : '2.17' },
               inventoryLevel: isCase || active ? { quantities: [{ name: 'available', quantity: quantities[kind] }] } : null } } };
         }
         if (query.includes('mutation ActivateReceivedSellUnit')) {
@@ -104,7 +112,7 @@ for (const [sku, caseId, unitId, barcode, unitsPerCase = 12] of pairs) {
   });
 }
 
-for (const [sku] of pairs.slice(6)) {
+for (const [sku] of pairs) {
   test(`${sku}: incoming stock and wrong unit barcode cannot create inventory`, async t => {
     const line = { ...conversion.caseMapping({ sku, productCollections: [{title: 'Retail Essentials', handle: 'retail-essentials'}] }), receivedCases: 2 };
     assert.equal(conversion.caseMapping({ sku, productTags: [] }), null);

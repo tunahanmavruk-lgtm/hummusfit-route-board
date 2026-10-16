@@ -36,7 +36,9 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
   assert.equal(caseMapping(coca).unitVariantId, "gid://shopify/ProductVariant/51028267499767");
   assert.equal(caseMapping(coca).allowMissingBarcode, undefined);
   assert.equal(caseMapping(dreamwich).unitsPerCase, 12);
-  assert.equal(caseMapping(dreamwich).allowMissingBarcode, true);
+  assert.equal(caseMapping(dreamwich).allowMissingBarcode, undefined);
+  assert.equal(caseMapping(dreamwich).unitSku, "840229307418");
+  assert.equal(caseMapping(dreamwich).unitBarcode, "840229307418");
   assert.equal(caseMapping(dreamwich).requirePosSellUnitTag, true);
   assert.equal(caseMapping({ ...dreamwich, sku: "SS-8806002023472-CS24" }).allowMissingBarcode, true);
   assert.equal(caseMapping({ ...dreamwich, sku: "SD-PEACH-60G-CS8" }).unitBarcode, "860014183430");

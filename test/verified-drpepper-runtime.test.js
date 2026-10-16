@@ -57,7 +57,7 @@ test('verified Dr Pepper pair is exact; pending cans and non-retail items stay b
   assert.equal(line.caseVariantId, 'gid://shopify/ProductVariant/51304197357815');
   assert.equal(line.unitVariantId, 'gid://shopify/ProductVariant/51259495874807');
   assert.equal(line.allowMissingBarcode, undefined);
-  for (const sku of ['GLOBAL GT628021-CS24', 'GLOBAL GT628019-CS6', 'Global GT628008-CS24', 'GLOBAL GT628004-CS6']) {
+  for (const sku of ['HF-SPRITE-ZERO-TEA-350-CS24', 'UNVERIFIED-RETAIL-CASE']) {
     assert.match(conversion.caseMapping({ sku, productTags: ['retail-essentials'] }).error, /approved/);
   }
   assert.equal(conversion.caseMapping({ sku: caseSku }), null);
