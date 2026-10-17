@@ -319,6 +319,7 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/picking-reopen",
   // This path has its own short-lived service-token check, not board access.
   "/api/essentials-pos-receipt",
+  "/api/confirmed-line-receiving",
   "/api/receiving-barcode-lookup",
   "/api/receiving-adjustment-proof",
   "/api/store-flow-credit-proof",
@@ -4417,6 +4418,27 @@ checkForNewOrdersAndNotify();
 const receivingService=require('./automatic-receiving').registerAutomaticReceiving(app, {
   dir: PERSISTENT_DIR, orderQuery: shopifyGraphQL, inventoryQuery: posShopifyGraphQL,
   exactLocation: exactStoreLocation, verifyToken: verifyLogisticsToken,
+});
+
+// Explicit manager-only pilot. Does not alter picking or food reconciliation.
+const confirmedLineService=require('./confirmed-line-receiving').createConfirmedLineReceiving({
+  dir:PERSISTENT_DIR,durable:!process.env.RAILWAY_ENVIRONMENT_ID||PERSISTENT_DIR==='/data',
+  orderQuery:shopifyGraphQL,inventoryQuery:posShopifyGraphQL,exactLocation:exactStoreLocation,
+  exactItem:exactInventoryItem,activate:activateSellUnitAtStore,convert:convertOneReceivedLine,
+  loadCanonical:loadPosLedger,receivingService,
+  hasPriorProof:orderId=>['completion-fulfillments-v1.json','store-flow-credit-proofs.json','holbrook-flow-credit-proofs.json','huntington-fulfillment-credits-v1.json']
+    .some(name=>{const file=path.join(PERSISTENT_DIR,name);if(!fs.existsSync(file))return false;return Object.values(JSON.parse(fs.readFileSync(file,'utf8'))).some(e=>e.orderId===orderId||e.orderIds?.includes(orderId));}),
+});
+function confirmedLineManager(req,res,next){
+  const identity=verifyLogisticsToken(String(req.get('authorization')||'').replace(/^Bearer /,''),'reports.manage');
+  if(!identity||identity.role!=='manager')return res.status(403).json({error:'Receiving manager authorization required'});
+  next();
+}
+app.get('/api/confirmed-line-receiving',confirmedLineManager,(_req,res)=>res.json({receipt:confirmedLineService.get()}));
+app.post('/api/confirmed-line-receiving',confirmedLineManager,async(req,res)=>{
+  if(!ESSENTIALS_POS_CONVERSION_ENABLED||!ESSENTIALS_SEPARATION_ENABLED)return res.status(503).json({error:'Retail conversion is disabled'});
+  try{res.json({ok:true,receipt:await confirmedLineService.run(req.body)});}
+  catch(e){res.status(409).json({ok:false,error:e.message,receipt:confirmedLineService.get()});}
 });
 
 app.listen(PORT, "0.0.0.0", () => {
