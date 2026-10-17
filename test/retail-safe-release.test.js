@@ -8,6 +8,7 @@ const conversion = require('../essentials-pos-conversion');
 const history = require('../retail-conversion-ledger');
 const source = fs.readFileSync(require.resolve('../server'), 'utf8');
 const pairs = [
+  ["POINTS-DARK-CS","51233895842039","51233895612663","860008611826",12],
   ["MF-7171013-CS","51259630059767","51226012680439","850062928794",15],
   ["MF-7171015-CS","51259630125303","51226012942583","850062928510",15],
   ["MF-7700008-CS","51260314616055","51226013434103","860014554520",12],
