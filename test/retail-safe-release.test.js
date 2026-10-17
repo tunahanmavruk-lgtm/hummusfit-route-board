@@ -8,6 +8,8 @@ const conversion = require('../essentials-pos-conversion');
 const history = require('../retail-conversion-ledger');
 const source = fs.readFileSync(require.resolve('../server'), 'utf8');
 const pairs = [
+  ["MF-7171013-CS","51259630059767","51226012680439","850062928794",15],
+  ["MF-7171015-CS","51259630125303","51226012942583","850062928510",15],
   ["MF-7700008-CS","51260314616055","51226013434103","860014554520",12],
   ["MF-6310672-CS","51226013073655","51226013106423","810137322902",12],
   ["MF-7700006-CS","51226013270263","51226013335799","810193920500",12],
@@ -68,6 +70,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
               inventoryLevel: isCase || active ? { quantities: [{ name: 'available', quantity: quantities[kind] }] } : null } } };
         }
         if (query.includes('mutation ActivateReceivedSellUnit')) {
+          assert.doesNotMatch(query, /(?:available|onHand)\s*:/);
           active = true;
           assert.equal(variables.inventoryItemId, 'UNIT');
           return { inventoryActivate: { inventoryLevel: { id: 'level' }, userErrors: [] } };
@@ -139,6 +142,19 @@ for (const [sku] of pairs) {
 }
 
 const line = { ...conversion.caseMapping({ sku: 'HF-SOURSTRIPS-LEMONBERRY-CS12', productTags: ['retail-essentials'] }), receivedCases: 2 };
+test('reactivation preserves retained positive or negative stock before conversion and retry', async t => {
+  for (const retained of [7, -1]) {
+    const h = harness(t, line, { inactive: true, loseResponse: true });
+    h.quantities.UNIT = retained;
+    await assert.rejects(h.createContext().convertOneReceivedLine('Lynbrook', 'preserved-stock', 'Lynbrook', line), /lost response/);
+    const retry = h.createContext();
+    assert.equal((await retry.convertOneReceivedLine('Lynbrook', 'preserved-stock', 'Lynbrook', line)).status, 'posted');
+    assert.equal((await retry.convertOneReceivedLine('Lynbrook', 'preserved-stock', 'Lynbrook', line)).status, 'already_posted');
+    assert.equal(h.quantities.UNIT, retained + 24);
+    assert.equal(h.writes(), 1);
+    assert.equal(h.requests[0].input.changes.find(c => c.inventoryItemId === 'UNIT').changeFromQuantity, retained);
+  }
+});
 test('BUILT Pink Lemonade refuses four-pack and box codes on its single-bar variant', async t => {
   const built = { ...conversion.caseMapping({ sku: 'HF-BUILT-SOURPUFF-PINKLEMONADE-CS12', productTags: ['retail-essentials'] }), receivedCases: 2 };
   for (const unitBarcode of ['840229306800', '840229306886']) {

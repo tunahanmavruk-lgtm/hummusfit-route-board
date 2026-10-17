@@ -1173,7 +1173,7 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     return res.status(403).json({ error: "Receiving service authorization required" });
   }
   try {
-    const { store, orderId, receivedCounts, receiptEvidence } = req.body || {};
+    const { store, orderId, receivedCounts, receiptEvidence, caseSkus } = req.body || {};
     const stopKey = String(store || "").trim().toLowerCase();
     const stop = VALID_STOP_NAMES.get(stopKey);
     if (!stop || stop.isB2B || !POS_STORE_LOCATIONS[store] || !orderId || !Number.isFinite(ESSENTIALS_POS_CUTOVER)) {
@@ -1196,6 +1196,7 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
       }
       batches=[{orderId,lines:receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState)}];
     }
+    batches = require('./retail-retry-selection').selectedRetailBatches(batches, caseSkus);
     if (!batches.some(batch=>batch.lines.length)) return res.json({ ok: true, results: [] });
     const locationId = await exactStoreLocation(store);
     const results = [];
@@ -1581,14 +1582,16 @@ const POS_ADJUST_MUTATION = `mutation ConvertReceivedCases($input: InventoryAdju
 }`;
 
 const POS_ACTIVATE_MUTATION = `mutation ActivateReceivedSellUnit($inventoryItemId: ID!, $locationId: ID!, $key: String!) {
-  inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId, available: 0) @idempotent(key: $key) {
+  inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId) @idempotent(key: $key) {
     inventoryLevel { id }
     userErrors { field message }
   }
 }`;
 
 async function activateSellUnitAtStore(unitItem, locationId, key) {
-  const activationKey = crypto.createHash("sha256").update(`activate:${key}`).digest("hex");
+  // API 2026-04+: omitting BOTH quantities preserves retained inactive stock.
+  // Version the key because the old activation payload explicitly reset it.
+  const activationKey = crypto.createHash("sha256").update(`activate-preserve-v2:${key}`).digest("hex");
   const data = await posShopifyGraphQL(POS_ACTIVATE_MUTATION, {
     inventoryItemId: unitItem.id, locationId, key: activationKey,
   });

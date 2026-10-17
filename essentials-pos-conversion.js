@@ -6,6 +6,9 @@ const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.js
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  // Tony-confirmed individual wrappers; manufacturer confirms 15 bars per box.
+  "MF-7171013-CS": Object.freeze({unitSku:"MF-7171013-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630059767",unitVariantId:"gid://shopify/ProductVariant/51226012680439",unitBarcode:"850062928794",lookupByVariantId:true}),
+  "MF-7171015-CS": Object.freeze({unitSku:"MF-7171015-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630125303",unitVariantId:"gid://shopify/ProductVariant/51226012942583",unitBarcode:"850062928510",lookupByVariantId:true}),
   // 2026-10-17 physical case/can photos: receipt-confirmed conversion only.
   "MF-7700008-CS": Object.freeze({
     unitSku: "MF-7700008-EA", unitsPerCase: 12,
