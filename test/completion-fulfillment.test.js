@@ -68,12 +68,14 @@ test('response lost with no proof: retries only check, never issue a second requ
 test('Shopify rejection does not become a blind retry',async t=>{
   const s=setup(t,{mode:'error'});await s.service.run(s.key);await s.service.run(s.key);assert.equal(s.calls(),1);
 });
-test('all 13 legacy stores hold partial fulfillment before any side effect',async t=>{
+test('all 14 verified stores fulfill delivered items once while missing cases stay backordered',async t=>{
   const {POS_STORE_LOCATIONS}=require('../essentials-pos-conversion');
-  for(const store of Object.keys(POS_STORE_LOCATIONS).filter(s=>s!=='Huntington')){
+  for(const store of Object.keys(POS_STORE_LOCATIONS)){
     const order=fixture(store);order.customer.tags=[POS_STORE_LOCATIONS[store]];
     const s=setup(t,{store,order});const result=await s.service.run(s.key);
-    assert.equal(result.status,'needs_review');assert.match(result.error,/legacy inventory-credit/);assert.equal(s.calls(),0);
+    assert.equal(result.status,'fulfilled_with_backorder',store);assert.equal(s.calls(),1,store);
+    await s.make().run(s.key);assert.equal(s.calls(),1,store);
+    assert.deepEqual(s.order.fulfillments[0].fulfillmentLineItems.nodes,[{quantity:12,lineItem:{id:food}}]);
   }
 });
 test('complete shipments work once without altering food calculations',async t=>{
