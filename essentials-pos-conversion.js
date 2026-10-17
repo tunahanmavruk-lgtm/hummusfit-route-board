@@ -6,6 +6,19 @@ const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.js
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  // 2026-10-17 physical case/can photos: receipt-confirmed conversion only.
+  "MF-7700008-CS": Object.freeze({
+    unitSku: "MF-7700008-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51260314616055",
+    unitVariantId: "gid://shopify/ProductVariant/51226013434103",
+    unitBarcode: "860014554520", lookupByVariantId: true,
+  }),
+  "MF-6310672-CS": Object.freeze({
+    unitSku: "MF-6310672-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51226013073655",
+    unitVariantId: "gid://shopify/ProductVariant/51226013106423",
+    unitBarcode: "810137322902", lookupByVariantId: true,
+  }),
   // 2026-10-17: independently verified single-can UPCs and exact catalog
   // identities. Configuration only: no stock is added until a verified receipt.
   "MF-7700006-CS": Object.freeze({

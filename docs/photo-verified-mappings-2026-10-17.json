@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-17",
+  "scope": "Two verified drink mappings for all 14 POS stores, after store-confirmed receiving only. No stock adjustment, report replay, picking or food calculation change.",
+  "pairs": [
+    {"caseSku":"MF-7700008-CS","unitSku":"MF-7700008-EA","unitsPerCase":12,"caseVariantId":"gid://shopify/ProductVariant/51260314616055","unitVariantId":"gid://shopify/ProductVariant/51226013434103","unitBarcode":"860014554520","productId":"gid://shopify/Product/10113365344503","evidence":["IMG_5231.HEIC: Orange Cream 12Pk473mL case","IMG_5232.HEIC: individual can UPC" ]},
+    {"caseSku":"MF-6310672-CS","unitSku":"MF-6310672-EA","unitsPerCase":12,"caseVariantId":"gid://shopify/ProductVariant/51226013073655","unitVariantId":"gid://shopify/ProductVariant/51226013106423","unitBarcode":"810137322902","productId":"gid://shopify/Product/10113365016823","evidence":["IMG_5235.HEIC: Airheads White Mystery case UPC 810137322919","IMG_5236.HEIC: individual can UPC","Live exact Shopify case description: 12 x 16 oz"]}
+  ],
+  "photoSha256": {
+    "IMG_5231.HEIC":"a465dfeddc40d59c96f7766124230557b0f44c5f43d8ea059e125dcac89ecf5d",
+    "IMG_5232.HEIC":"2c312128ac6f220c9fdb83664f55cfb027d5b1112d5610f68609c8d60a85eaf6",
+    "IMG_5235.HEIC":"75e15a47678136711ea874ac865412ecc61187038c8cab9d70390428c5b27276",
+    "IMG_5236.HEIC":"c1f1e41609370ada6f70d6d786406b1e1b003c14cc3b8a14c7749919339bcac1"
+  },
+  "checks": {"routeTestsPassed":209,"previousMappingsUnchanged":85,"unitStockBefore":0,"noDuplicateSkuOrUnitBarcode":true,"unitPriceExceedsCaseDerivedCost":true,"posPublicationId":"gid://shopify/Publication/115207700727"},
+  "remainingBlocked": [
+    {"caseSku":"MF-7170514-CS","observedUnitBarcode":"850036648932","savedUnitBarcode":"850036648949","reason":"Jalapeno Cheddar individual UPC proven; confirm case count before enabling."},
+    {"caseSku":"MF-7170515-CS","candidateUnitBarcode":"850075829255","reason":"Confirm Honey Chipotle flavor and case count."},
+    {"caseSku":"MF-7171015-CS","candidateUnitBarcode":"850062928510","reason":"Confirm PBJ front/back pairing and case count."},
+    {"caseSku":"MF-7171013-CS","candidateUnitBarcode":"850062928794","reason":"Confirm Cookies and Cream front/back pairing and case count."},
+    {"caseSku":"MF-7171008-CS","reason":"Individual Cookie Dough wrapper UPC missing from this batch."},
+    {"caseSku":"MF-7171000-CS","reason":"Individual Chocolate Peanut Butter Pretzel wrapper UPC missing from this batch."},
+    {"caseSku":"POINTS-DARK-CS","observedUnitBarcode":"860008611826","caseGtin":"10860008611823","reason":"Individual barcode matches; physical case count obscured by shipping label. Confirm 12 bags."}
+  ],
+  "beforeLedgerHashes": {
+    "essentials-pos-receipts.json":"f4aa04e9629c77fab428cbfa1a97d3f3a700c47749ff4c71eefc644176caacdf",
+    "huntington-fulfillment-credits-v1.json":"4e923090e1e18ec3388db0dfe5e8de74082af554f9580b940980b2b18b17f2df",
+    "automatic-receiving-v1.json":"a6c66d5e7e02607514f74cd435fb3275d4e0fd35aa4706c6fc1170fcf45b0596",
+    "store-flow-credit-proofs.json":"19d088cff61f27ded645310557e9e4841a997e1290fbbaa4f713dbaa3ff4287b",
+    "store-food-corrections.json":"63420e9c091a2ff0a47da74ed3367f8893fb3a582c70fdef6b91fcd6ebde45d4"
+  }
+}
