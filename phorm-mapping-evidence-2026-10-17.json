@@ -1,0 +1,50 @@
+{
+  "verifiedAt": "2026-10-17",
+  "mappings": [
+    [
+      "MF-7170515-CS",
+      "51226012811511",
+      "51226012844279",
+      "850075829255",
+      15
+    ],
+    [
+      "MF-7170514-CS",
+      "51260314419447",
+      "51226013008119",
+      "850036648932",
+      15
+    ],
+    [
+      "MF-7171008-CS",
+      "51226012549367",
+      "51226012582135",
+      "850036648581",
+      15
+    ],
+    [
+      "MF-7171000-CS",
+      "51259630092535",
+      "51226012778743",
+      "850026196122",
+      15
+    ]
+  ],
+  "unitProof": {
+    "honeyChipotle": "Tony confirmed physical wrapper 850075829255 IMG_5225",
+    "jalapenoCheddar": "Physical wrapper 850036648932 IMG_5224",
+    "cookieDough": [
+      "https://www.directionsforme.org/product/255521 (GTIN 00850036648581, 2.22oz)",
+      "https://www.kroger.com/p/1st-phorm-cookie-dough-level-1-bar/0085003664858 (single bar 2.2oz, UPC without check digit)"
+    ],
+    "chocolatePbPretzel": [
+      "https://glutenfreemall.com/1st-phorm-chocolate-pb-pretzel-level-1-protein-bar/ (UPC 850026196122, single 2.15oz)",
+      "https://shop.mercaso.com/products/1st-phorm-level-1-protein-bar-chocolate-peanut-butter-pretzel-2-15-oz-15-pack (15pack)"
+    ]
+  },
+  "packProof": [
+    "https://1stphorm.com/products/level-1-bar-15ct",
+    "https://1stphorm.com/products/protein-sticks-15ct"
+  ],
+  "inventoryPolicy": "Mapping only. Credit only on confirmed receipt through existing durable idempotent case-conversion ledger. No backfill or incoming-stock mutation."
+}

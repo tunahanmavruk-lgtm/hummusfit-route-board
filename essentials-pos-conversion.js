@@ -6,6 +6,12 @@ const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.js
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  // 2026-10-17: wrapper-verified sticks; independently verified bar UPCs.
+  // Manufacturer confirms 15ct. Evidence: phorm-mapping-evidence-2026-10-17.json.
+  "MF-7170515-CS": Object.freeze({unitSku:"MF-7170515-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51226012811511",unitVariantId:"gid://shopify/ProductVariant/51226012844279",unitBarcode:"850075829255",lookupByVariantId:true}),
+  "MF-7170514-CS": Object.freeze({unitSku:"MF-7170514-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51260314419447",unitVariantId:"gid://shopify/ProductVariant/51226013008119",unitBarcode:"850036648932",lookupByVariantId:true}),
+  "MF-7171008-CS": Object.freeze({unitSku:"MF-7171008-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51226012549367",unitVariantId:"gid://shopify/ProductVariant/51226012582135",unitBarcode:"850036648581",lookupByVariantId:true}),
+  "MF-7171000-CS": Object.freeze({unitSku:"MF-7171000-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630092535",unitVariantId:"gid://shopify/ProductVariant/51226012778743",unitBarcode:"850026196122",lookupByVariantId:true}),
   // Tony-confirmed wrapper and 12 bags per case; POS unit activated 2026-10-17.
   "POINTS-DARK-CS": Object.freeze({unitSku:"POINTS-DARK-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51233895842039",unitVariantId:"gid://shopify/ProductVariant/51233895612663",unitBarcode:"860008611826",lookupByVariantId:true}),
   // Tony-confirmed individual wrappers; manufacturer confirms 15 bars per box.
