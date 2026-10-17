@@ -27,7 +27,9 @@ test('holds Shopify fulfillment until food and Essentials are both complete', ()
   assert.match(handler, /workflowCompletion\(/);
   assert.match(handler, /if \(allWorkflowsComplete\) \{[\s\S]*autoFulfillPickedOrders\(sourceOrder\)/);
   assert.match(handler, /Essentials item\(s\) still have unverified cases/);
-  assert.match(handler, /item\.verifiedCases < item\.requiredCases/);
+  assert.match(handler, /item\.verifiedCases===item\.requiredCases/);
+  assert.match(handler, /validBackorder\(record,sourceOrder.orderId/);
+  assert.match(handler, /completionFulfillment\.enqueue/);
 });
 
 test('functionally splits one Shopify order without losing or duplicating lines', () => {

@@ -1063,6 +1063,7 @@
 
   function workflowBody(data){
     data.workflow = pickingWorkflow;
+    if(orderDetail && data.stopName === orderDetail.stopName) data.orderId=orderDetail.orderId;
     return JSON.stringify(data);
   }
 
@@ -1202,7 +1203,8 @@
             '<div class="stop-order">' + stop.orderName + ' — ' + done + '/' + total + ' ' + progressNoun + '</div>' +
             '<div class="stop-order-time" style="font-size:11px; color:var(--dim); margin-top:2px;">' + orderTimesLabel(stop) + '</div>' +
             (stop.isB2B ? '<div class="b2b-tag">Out of State</div>' : '') +
-            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.deliveryComplete ? 'Delivered' : stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Complete') + '</div>' : '') +
+            (stop.isComplete ? '<div class="stop-badge-complete" style="margin-top:8px; display:inline-block;">' + (stop.deliveryComplete ? 'Delivered' : stop.retainedAfterFulfillment ? 'Ready for delivery' : 'Picking saved') + '</div>' : '') +
+            (stop.completion && !stop.isB2B?'<div class="order-sub">Food: '+(stop.completion.foodComplete?'saved':'pending')+' · Essentials: '+(stop.completion.essentialsComplete?'saved':'pending')+'<br>Shopify: '+escapeHtml(stop.completion.shopifyStatus.replace(/_/g,' '))+'</div>':'')+
           '</div>' +
           '<div class="stop-progress-ring">' + ringSvg(stop.pickedUnits !== undefined ? stop.pickedUnits : stop.pickedCount, stop.missingUnits !== undefined ? stop.missingUnits : stop.missingCount, total) +
             '<div class="stop-progress-label">' + done + '/' + total + '</div>' +
@@ -1239,6 +1241,7 @@
           '<div class="modal-stat-row"><span>Partial (short)</span><span>' + partial + '</span></div>' +
           '<div class="modal-stat-row"><span>Missing</span><span>' + missing + '</span></div>' +
           '<div class="modal-stat-row"><span>Total items</span><span>' + total + '</span></div>' +
+          (pickingWorkflow === 'essentials' ? '<p>Only scanned cases will ship. Confirmed missing cases remain on backorder. Saving this completion does not confirm store receipt or inventory corrections.</p>' : '') +
           '<div class="modal-actions">' +
             '<div class="modal-btn" id="modalCancelBtn">Cancel</div>' +
             '<div class="modal-btn confirm" id="modalConfirmBtn">Confirm &amp; Finish</div>' +
@@ -1252,6 +1255,8 @@
       if(e.target.id === 'finishModalOverlay') closeModal();
     });
     document.getElementById('modalConfirmBtn').addEventListener('click', function(){
+      this.style.pointerEvents='none';
+      this.textContent='Saving…';
       fetch('/api/picking-finish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1266,6 +1271,7 @@
         }
         orderDetail.completedAt = result.data.completedAt;
         orderDetail.completedBy = result.data.completedBy;
+        orderDetail.completion = result.data.completion;
         if(result.data.closedCrates){ orderDetail.closedCrates = result.data.closedCrates; }
         renderOrder();
         // Print the final crate's label too, so every crate has one by
@@ -1284,7 +1290,8 @@
         }
       }).catch(function(err){
         closeModal();
-        alert('Could not reach the server: ' + err.message);
+        alert('Confirmation response was lost. Your saved scans are not cleared. Reload this order and use Retry / check Shopify status; do not restart or rescan. ' + err.message);
+        openOrder(orderDetail.stopName);
       });
     });
   }
@@ -1973,8 +1980,17 @@
           '✓ Finished by ' + orderDetail.completedBy + ' — ' + fmtTime(orderDetail.completedAt) +
           (isFulfilledSnapshot
             ? '<span>' + (orderDetail.shopifyFulfilled ? 'Shopify fulfilled' : 'Completed') + ' · kept visible for delivery &amp; receiving</span>'
-            : '<span class="reopen-link" id="reopenLink">Reopen</span>') +
+            : (orderDetail.completion && orderDetail.completion.shipment ? '' : '<span class="reopen-link" id="reopenLink">Reopen</span>')) +
         '</div>';
+    }
+
+    if(orderDetail.completion && !orderDetail.isB2B){
+      var completion=orderDetail.completion, shipment=completion.shipment;
+      var stateLabels={queued:'Saved — waiting for Shopify',verifying:'Verifying Shopify response',fulfilled:'Shopify fulfillment verified',fulfilled_with_backorder:'Delivered quantities fulfilled — backorder remains',needs_review:'Saved — logistics review needed',not_confirmed:'Shopify fulfillment not yet confirmed'};
+      html+='<div class="completed-banner"><div>Food picking: '+(completion.foodComplete?'saved':'in progress')+'</div><div>Essentials: '+(completion.essentialsComplete?'saved':'in progress')+'</div><div>'+escapeHtml(stateLabels[completion.shopifyStatus]||'Shopify status needs review')+'</div>'+
+        (shipment && shipment.error?'<p>'+escapeHtml(shipment.error)+'</p>':'')+
+        '<p>Receiving corrections and case-to-unit conversion run after store confirmation. “Picking saved” does not mean inventory is corrected.</p>'+
+        (completion.allComplete?'<button id="retryCompletionBtn">Retry / check Shopify status</button>':'')+'</div>';
     }
 
     html +=
@@ -1996,7 +2012,7 @@
     // day's board) stays untouched. This exists specifically so a bad
     // scan session doesn't force "Reset Today's Board," which wipes
     // literally everything for every stop and every driver.
-    if(!isFulfilledSnapshot){
+    if(!isFulfilledSnapshot && !(orderDetail.completion && orderDetail.completion.shipment)){
       html +=
         '<div style="text-align:right; margin:-8px 0 14px;">' +
           '<span class="reopen-link" id="restartOrderLink" style="cursor:pointer; text-decoration:underline; color:var(--dim); font-size:11px;">&#8635; Restart this order</span>' +
@@ -2043,8 +2059,8 @@
       var icon = status === 'picked' ? '✓' : (status === 'missing' ? '✕' : (status === 'partial' ? '½' : ''));
       var label;
       if(status === 'picked'){ label = 'Picked'; }
-      else if(status === 'missing'){ label = 'Missing'; }
-      else if(status === 'partial'){ label = 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked'; }
+      else if(status === 'missing'){ label = pickingWorkflow==='essentials' && orderDetail.caseBackorders && orderDetail.caseBackorders[idx] ? 'Backordered — no cases ship' : 'Missing'; }
+      else if(status === 'partial'){ label = 'Short — ' + pickedQty + ' of ' + item.quantity + ' picked' + (pickingWorkflow==='essentials'?' · remaining cases backordered':''); }
       else if(scannedSoFar > 0){ label = (pickingWorkflow === 'essentials' ? 'Cases labeled ' : 'Scanned ') + scannedSoFar + ' of ' + item.quantity + (pickingWorkflow === 'essentials' ? '' : ' — keep scanning'); }
       else { label = pickingWorkflow === 'essentials' ? 'Tap below for each physical case' : 'Tap when picked'; }
       var isScanInProgress = status === 'not_picked' && scannedSoFar > 0;
@@ -2060,7 +2076,8 @@
             '<div class="item-title">' + item.title + '</div>' +
             '<div class="item-status-label">' + label + '</div>' +
             (isLocked ? '' : (pickingWorkflow === 'essentials'
-              ? '<button class="case-add-btn" data-case-idx="' + idx + '"' + (status === 'picked' ? ' disabled' : '') + '>+ Label One Case</button>'
+              ? '<button class="case-add-btn" data-case-idx="' + idx + '"' + (status === 'picked' || status==='missing' || status==='partial' ? ' disabled' : '') + '>+ Label One Case</button>'+
+                (scannedSoFar<item.quantity && !orderDetail.isB2B?'<button data-backorder-idx="'+idx+'">'+(orderDetail.caseBackorders && orderDetail.caseBackorders[idx]?'Cancel backorder decision':'Leave '+(item.quantity-scannedSoFar)+' case(s) on backorder')+'</button>':'')
               : '<div class="partial-link" data-partial-idx="' + idx + '">Only had some? Enter partial quantity</div>')) +
           '</div>' +
           (isLocked || pickingWorkflow === 'essentials' ? '' : '<div class="scan-btn" data-scan-idx="' + idx + '" title="Scan barcode">▤</div>') +
@@ -2182,6 +2199,29 @@
         showFinishConfirmation(picked, missing, partial, rowTotal);
       });
     }
+
+    var retryCompletion=document.getElementById('retryCompletionBtn');
+    if(retryCompletion) retryCompletion.addEventListener('click',function(){
+      retryCompletion.disabled=true;retryCompletion.textContent='Checking saved shipment…';
+      var endpoint=orderDetail.completion.shipment?'/api/picking-retry-completion':'/api/picking-finish';
+      fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:workflowBody({stopName:orderDetail.stopName})})
+        .then(function(r){return r.json().then(function(d){if(!r.ok||d.error) throw Error(d.error||'Status check failed');return d;});})
+        .then(function(){openOrder(orderDetail.stopName);})
+        .catch(function(e){alert(e.message+' Saved progress was not cleared.');openOrder(orderDetail.stopName);});
+    });
+    document.querySelectorAll('[data-backorder-idx]').forEach(function(button){
+      button.addEventListener('click',function(){
+        if(!requirePickerSelected()) return;
+        var idx=Number(button.dataset.backorderIdx),item=orderDetail.lineItems[idx],scanned=Number(orderDetail.itemScannedCount[idx]||0);
+        var cancel=Boolean(orderDetail.caseBackorders && orderDetail.caseBackorders[idx]);
+        if(!confirm(cancel?'Cancel this backorder decision and resume scanning? Scanned counts stay saved.':item.title+'\n'+scanned+' case(s) scanned; '+(item.quantity-scanned)+' remain on backorder.\nConfirm these cases are missing and must NOT ship or receive inventory credit?')) return;
+        button.disabled=true;
+        fetch('/api/picking-case-backorder',{method:'POST',headers:{'Content-Type':'application/json'},body:workflowBody({stopName:orderDetail.stopName,itemIndex:idx,itemKey:item.title+'::'+(item.sku||''),scanned:scanned,confirmBackorder:!cancel,cancel:cancel})})
+          .then(function(r){return r.json().then(function(d){if(!r.ok||d.error) throw Error(d.error||'Could not save backorder');});})
+          .then(function(){openOrder(orderDetail.stopName);})
+          .catch(function(e){alert(e.message);openOrder(orderDetail.stopName);});
+      });
+    });
 
     // Reprints use the same print path as newly closed crates.
     document.querySelectorAll('.crate-reprint-link').forEach(function(el){

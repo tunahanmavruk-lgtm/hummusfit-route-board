@@ -13,6 +13,7 @@ const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { readConversionLedger, writeConversionLedger } = require("./retail-conversion-ledger.js");
 const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
 const { remainingStopEtas } = require("./live-eta.js");
+const { createCompletionFulfillment, canonicalStore, backorderDecision, validBackorder, confirmedCaseLines } = require('./completion-fulfillment');
 const {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
@@ -37,6 +38,11 @@ const webpush = require("web-push");
 // ever missing (e.g. running locally without the volume) so the app
 // still works — just without the durability.
 const PERSISTENT_DIR = fs.existsSync("/data") ? "/data" : __dirname;
+const completionFulfillment = createCompletionFulfillment({
+  dir: PERSISTENT_DIR,
+  durable: fs.existsSync('/data'),
+  query: (query, variables) => shopifyGraphQL(query, variables, '2026-07'),
+});
 
 // The crate label printer is black-ink-only (thermal) — no brand colors
 // on the physical label, so "professional" has to come from real
@@ -308,6 +314,8 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/picking-reopen-crate",
   "/api/picking-set-picker",
   "/api/picking-finish",
+  "/api/picking-case-backorder",
+  "/api/picking-retry-completion",
   "/api/picking-reopen",
   // This path has its own short-lived service-token check, not board access.
   "/api/essentials-pos-receipt",
@@ -1190,11 +1198,11 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
     for (const line of lines) {
       try {
         if(line.backordered) {
-          results.push({sku:line.caseSku,status:'backordered',units:0,orderId,lineItemId:line.lineItemId,
+          results.push({store,sku:line.caseSku,status:'backordered',units:0,orderId,lineItemId:line.lineItemId,
             orderedCases:line.orderedCases,shopifyVerified:true,verifiedAt:new Date().toISOString()});
           continue;
         }
-        if(store==='Huntington'&&line.receivedCases>0&&receiptOrder?.fulfillments?.every(f=>Date.parse(f.createdAt)>=require('./huntington-fulfillment').CUTOVER)) {
+        if(line.receivedCases>0&&require('./store-fulfillment-policy').usesSafeCredits(receiptOrder)) {
           const matches=receiptOrder.lineItems.nodes.filter(i=>i.sku===line.caseSku);
           if(matches.length!==1) throw new Error('Exact Huntington case line required');
           await receivingService.verifyFulfillmentCredit(receiptOrder,matches[0]);
@@ -1413,17 +1421,18 @@ const SHOP_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
 const SHOPIFY_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 const API_VERSION = "2025-01";
 
-async function shopifyGraphQL(query, variables) {
+async function shopifyGraphQL(query, variables, apiVersion = API_VERSION) {
   if (!SHOP_DOMAIN || !SHOPIFY_TOKEN) {
     throw new Error("Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN");
   }
-  const res = await fetch(`https://${SHOP_DOMAIN}/admin/api/${API_VERSION}/graphql.json`, {
+  const res = await fetch(`https://${SHOP_DOMAIN}/admin/api/${apiVersion}/graphql.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Shopify-Access-Token": SHOPIFY_TOKEN,
     },
     body: JSON.stringify({ query, variables }),
+    ...(apiVersion === '2026-07' ? { signal: AbortSignal.timeout(30000) } : {}),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -2035,6 +2044,7 @@ app.get("/api/today-orders", async (req, res) => {
           startedAt: record.startedAt,
           completedAt: record.completedAt,
           crateCount,
+          completion: completionView(state,key,order),
         };
         return;
       }
@@ -2450,6 +2460,66 @@ function pickingWorkflowContext(req, state, key, sourceOrder) {
   return { workflow, order, record };
 }
 
+function completionView(state, key, source) {
+  const store=canonicalStore(key);
+  const current = record => record?.orderId===source.orderId ? record : null;
+  const completion=workflowCompletion(source,current(state.picking[key]),current(state.essentialsPicking?.[key]),ESSENTIALS_SEPARATION_ENABLED);
+  const shipment=store ? completionFulfillment.status(store,source.orderId) : null;
+  return {...completion,shipment,shopifyStatus:shipment?.status || (source.shopifyFulfilled?'fulfilled':'not_confirmed'),
+    receivingStatus:'Store confirmation and Shopify correction proof are separate from picking completion'};
+}
+
+// This records a warehouse decision, not a receipt or inventory adjustment.
+app.post('/api/picking-case-backorder', async(req,res)=>{
+  try {
+    const key=pickingKeyFor(req.body.stopName||'');
+    const source=(await fetchTodaysStopOrders()).byStopName[key];
+    if(!source || !canonicalStore(key) || source.isB2B || source.retainedAfterFulfillment) throw Error('An active POS store order is required');
+    if(req.body.orderId!==source.orderId) return res.status(409).json({error:'Order changed. Reload; your saved progress is preserved.'});
+    const state=loadState(), {workflow,order,record}=pickingWorkflowContext(req,state,key,source);
+    if(workflow!=='essentials' || record.completedAt || completionFulfillment.status(canonicalStore(key),source.orderId)) throw Error('This shipment is locked; use completion status instead of changing its counts');
+    const index=Number(req.body.itemIndex), item=order.lineItems[index];
+    if(!item || !Number.isSafeInteger(index) || req.body.itemKey!==lineItemKey(item)) throw Error('Exact case item required');
+    const scanned=Number(readItemState(record.itemScannedCount,item,index)||0);
+    record.caseBackorders ||= {};
+    if(req.body.cancel===true) {
+      delete record.caseBackorders[lineItemKey(item)];
+      record.itemStatus[lineItemKey(item)]=scanned>=item.quantity?'picked':'not_picked';
+      delete record.itemPickedQty[lineItemKey(item)];
+    } else {
+      if(req.body.confirmBackorder!==true || req.body.scanned!==scanned) throw Error('Confirm the current scanned count and backorder quantity');
+      record.caseBackorders[lineItemKey(item)]=backorderDecision(source.orderId,item,scanned,record.pickedBy);
+      record.itemStatus[lineItemKey(item)]=scanned?'partial':'missing';
+      record.itemPickedQty[lineItemKey(item)]=scanned;
+    }
+    saveState(state);
+    res.json({ok:true});
+  }catch(e){res.status(409).json({error:e.message});}
+});
+
+// A completion retry must never reopen/reset or rescan an already submitted
+// shipment. This guard is limited to local POS orders; B2B is unchanged.
+app.use('/api', async(req,res,next)=>{
+  if(req.method!=='POST' || !/^\/picking-(item|case|scan|reopen|reset-order|reopen-crate|new-crate|close-crate|set-picker)$/.test(req.path)) return next();
+  try {
+    const key=pickingKeyFor(req.body.stopName||''), store=canonicalStore(key);
+    if(!store) return next();
+    const source=(await fetchTodaysStopOrders()).byStopName[key];
+    if(source && completionFulfillment.status(store,source.orderId)) return res.status(409).json({error:'Shipment counts are saved and locked. Use Retry / check Shopify status; do not restart or rescan this shipment.'});
+    return next();
+  }catch(e){return res.status(409).json({error:e.message});}
+});
+
+app.post('/api/picking-retry-completion',async(req,res)=>{
+  try {
+    const store=canonicalStore(req.body.stopName), saved=store&&completionFulfillment.status(store,req.body.orderId);
+    if(!saved) return res.status(404).json({error:'No saved completion found for that exact order'});
+    const shipment=await completionFulfillment.run(saved.key);
+    if(shipment.status==='fulfilled') markArchivedOrderFulfilled(pickingKeyFor(req.body.stopName),req.body.orderId);
+    res.json({ok:true,shipment});
+  }catch(e){res.status(409).json({error:e.message});}
+});
+
 // Whether a given crate has ANYTHING physically in it yet — used to
 // block "New Crate" on an empty box and to size crateCount for the
 // driver/receiving side. Split-aware: checks the real per-crate
@@ -2636,6 +2706,7 @@ app.get("/api/picking-list", async (req, res) => {
         retainedAfterFulfillment: Boolean(order.retainedAfterFulfillment),
         shopifyFulfilled: Boolean(order.shopifyFulfilled),
         deliveryComplete: Boolean(order.deliveryComplete),
+        completion: completionView(state,key,sourceOrder),
       };
     }).filter((entry) => entry.totalItems > 0);
     saveState(state); // persist any freshly-seeded records
@@ -2676,6 +2747,8 @@ app.get("/api/picking-order/:stopName", async (req, res) => {
       itemNotes: toIndexKeyedDict(record.itemNotes, order.lineItems),
       itemPickedQty: toIndexKeyedDict(record.itemPickedQty, order.lineItems),
       itemScannedCount: toIndexKeyedDict(record.itemScannedCount, order.lineItems),
+      caseBackorders: toIndexKeyedDict(record.caseBackorders, order.lineItems),
+      completion: completionView(state,key,sourceOrder),
       itemCrateNumber: toIndexKeyedDict(record.itemCrateNumber, order.lineItems),
       itemCrateBreakdown: toIndexKeyedDict(record.itemCrateBreakdown, order.lineItems),
       currentCrateNumber: record.currentCrateNumber,
@@ -3200,6 +3273,18 @@ app.post("/api/picking-finish", async (req, res) => {
     const sourceOrder = cache.byStopName[key];
     if (!sourceOrder) return res.status(404).json({ error: "No order found for this stop." });
     if (sourceOrder.retainedAfterFulfillment) return res.status(409).json({ error: "This order is fulfilled and locked for delivery." });
+    const store=canonicalStore(key);
+    if(store && req.body.orderId!==sourceOrder.orderId) return res.status(409).json({error:'Order changed or the app needs a reload. Saved picking progress is preserved; reload before finishing.'});
+
+    const priorShipment=store&&completionFulfillment.status(store,sourceOrder.orderId);
+    if(priorShipment) {
+      const shipment=await completionFulfillment.run(priorShipment.key);
+      const state=loadState(),workflow=normalizedPickingWorkflow(req.body.workflow);
+      const record=workflow==='essentials'?state.essentialsPicking?.[key]:state.picking[key];
+      if(shipment.status==='fulfilled') markArchivedOrderFulfilled(key,sourceOrder.orderId);
+      return res.json({ok:true,completedAt:record?.completedAt,completedBy:record?.completedBy,
+        finalCrateNumber:null,workflow,shipment,fulfillment:shipment.orders,completion:completionView(state,key,sourceOrder),waitingForWorkflow:null});
+    }
 
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
@@ -3217,13 +3302,14 @@ app.post("/api/picking-finish", async (req, res) => {
         requiredCases: Number(item.quantity) || 0,
       }))
       .filter((item) => workflow === "essentials"
-        ? item.status !== "picked" || item.verifiedCases < item.requiredCases
+        ? !(Number.isSafeInteger(item.verifiedCases) && item.verifiedCases===item.requiredCases && item.status==='picked') &&
+          !validBackorder(record,sourceOrder.orderId,order.lineItems[item.idx],item.verifiedCases)
         : item.status === "not_picked");
 
     if (outstanding.length > 0) {
       return res.status(400).json({
         error: workflow === "essentials"
-          ? `${outstanding.length} Essentials item(s) still have unverified cases. Verify every case before finishing.`
+          ? `${outstanding.length} Essentials item(s) still have unverified cases. Scan the cases present or explicitly leave the remaining cases on backorder.`
           : `${outstanding.length} item(s) still need to be marked before finishing.`,
         outstanding,
       });
@@ -3237,8 +3323,8 @@ app.post("/api/picking-finish", async (req, res) => {
       record.closedCrates.push(finalCrateNumber);
     }
 
-    record.completedAt = new Date().toISOString();
-    record.completedBy = record.pickedBy;
+    record.completedAt ||= new Date().toISOString();
+    record.completedBy ||= record.pickedBy;
     saveState(state);
 
     const foodOrder = orderForPickingWorkflow(sourceOrder, "orders");
@@ -3268,9 +3354,17 @@ app.post("/api/picking-finish", async (req, res) => {
     // any failure is logged (Railway logs) and returned in the
     // response so it can be handled by hand if it ever comes up.
     let fulfillmentResults = [];
+    let shipment = null;
     if (allWorkflowsComplete) {
       try {
-        fulfillmentResults = await autoFulfillPickedOrders(sourceOrder);
+        if(store && !sourceOrder.isB2B) {
+          const caseLines=ESSENTIALS_SEPARATION_ENABLED ? confirmedCaseLines(sourceOrder,{lineItems:essentialsOrder.lineItems,record:essentialsRecord},readItemState) : [];
+          const jobKey=completionFulfillment.enqueue({store,source:sourceOrder,caseLines,confirmedBy:record.completedBy});
+          shipment=await completionFulfillment.run(jobKey);
+          fulfillmentResults=shipment.orders;
+        } else {
+          fulfillmentResults = await autoFulfillPickedOrders(sourceOrder);
+        }
       } catch (err) {
         console.error(`[auto-fulfill] unexpected failure for stop ${key}:`, err.message);
         fulfillmentResults = [{ ok: false, error: err.message }];
@@ -3279,7 +3373,7 @@ app.post("/api/picking-finish", async (req, res) => {
 
     // Shopify removes fulfilled orders from its picking feed. Keep the
     // archived snapshot visible on the route board until delivery instead.
-    const shopifyFulfilled = allWorkflowsComplete &&
+    const shopifyFulfilled = (!store || shipment?.status==='fulfilled') && allWorkflowsComplete &&
       fulfillmentResults.length > 0 && fulfillmentResults.every((result) => result.ok);
     if (shopifyFulfilled) {
       markArchivedOrderFulfilled(key, sourceOrder.orderId);
@@ -3297,6 +3391,8 @@ app.post("/api/picking-finish", async (req, res) => {
       finalCrateNumber: finalCrateHasItems ? finalCrateNumber : null,
       closedCrates: workflow === "essentials" ? [] : record.closedCrates,
       fulfillment: fulfillmentResults,
+      shipment,
+      completion: completionView(loadState(),key,sourceOrder),
       removedFromBoard: false,
       workflow,
       waitingForWorkflow: completion.waitingForWorkflow,

@@ -6,6 +6,7 @@ const { POS_STORE_LOCATIONS } = require('./essentials-pos-conversion');
 const { receiptOrders,receiptForOrder } = require('./receipt-orders');
 const { partialReceiptAllowed, fullyDelivered, CUTOVER: HUNTINGTON_CUTOVER } = require('./huntington-fulfillment');
 const { createFulfillmentCredit } = require('./huntington-fulfillment-credit');
+const {usesSafeCredits}=require('./store-fulfillment-policy');
 
 const RELEASE = 'receiving-auto-2026-10-13-v1';
 const CUTOVER = Date.parse('2026-10-13T20:21:19Z');
@@ -84,9 +85,9 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
   const flights=new Map();
   const flowAppId=env.HOLBROOK_FLOW_APP_ID;
   const fulfillmentCredit=createFulfillmentCredit({dir,orderQuery,inventoryQuery,orderQueryText:ORDER_QUERY,
-    groupQuery:GROUP_QUERY,adjustMutation:ADJUST_MUTATION,now});
+    groupQuery:GROUP_QUERY,adjustMutation:ADJUST_MUTATION,exactLocation,now});
   async function flowProof(body, holbrook=false) {
-    if(!holbrook&&body.mode==='huntington_fulfillment_v1') return fulfillmentCredit.credit(body);
+    if(['huntington_fulfillment_v1','store_fulfillment_v1'].includes(body.mode)) return fulfillmentCredit.credit(body);
     const {orderId,lineItemId,adjustmentGroupId}=body;
     const store=holbrook?'Holbrook':body.store;
     assert(Object.hasOwn(POS_STORE_LOCATIONS,store)&&gid('Order',orderId)&&gid('LineItem',lineItemId)&&
@@ -106,7 +107,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     return {ok:true,status:'verified',store,adjustmentGroupId:entry.adjustmentId};
   }
   async function creditFor(report,order,line,locationId) {
-    if(report.store==='Huntington'&&order.fulfillments?.every(f=>Date.parse(f.createdAt)>=HUNTINGTON_CUTOVER)) {
+    if(usesSafeCredits(order)) {
       return fulfillmentCredit.verifyLine(order,line);
     }
     const source=report.store==='Holbrook'?read(holbrookFile):read(flowFile);
@@ -228,7 +229,7 @@ function registerAutomaticReceiving(app,deps) {
       const supplied=Buffer.from(String(req.get('x-hf-flow-credit-secret')||''));
       const expected=Buffer.from(process.env.HOLBROOK_FLOW_CREDIT_SECRET||'');
       if(!expected.length||supplied.length!==expected.length||!crypto.timingSafeEqual(supplied,expected)) return res.status(403).json({error:'Shopify Flow authorization required'});
-      if(req.body?.mode==='huntington_fulfillment_v1'&&process.env.RAILWAY_ENVIRONMENT_ID&&deps.dir!=='/data') return res.status(503).json({error:'Persistent fulfillment credit ledger unavailable'});
+      if(['huntington_fulfillment_v1','store_fulfillment_v1'].includes(req.body?.mode)&&process.env.RAILWAY_ENVIRONMENT_ID&&deps.dir!=='/data') return res.status(503).json({error:'Persistent fulfillment credit ledger unavailable'});
       try { res.json(await service.flowProof(req.body,holbrook)); }
       catch(e) { console.error('[receiving-flow-proof]',e.message); res.status(e instanceof Review?409:503).json({error:e.message}); }
     });

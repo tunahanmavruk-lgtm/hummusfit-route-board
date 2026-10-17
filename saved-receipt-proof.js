@@ -32,7 +32,7 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
       !Number.isSafeInteger(saved.actuallyReceived) || saved.actuallyReceived<0 ||
       saved.actuallyReceived!==saved.expectedFromPicking || saved.actuallyReceived!==counts[item.sku] ||
       !(saved.actuallyReceived===item.quantity || saved.actuallyReceived===0)) throw new Error('Saved retail quantities do not match exact Shopify order');
-    const backordered=store==='Huntington'&&order.displayFulfillmentStatus==='PARTIALLY_FULFILLED'&&
+    const backordered=order.displayFulfillmentStatus==='PARTIALLY_FULFILLED'&&
       saved.actuallyReceived===0&&saved.expectedFromPicking===0&&(deliveredQuantities(order).get(item.id)||0)===0;
     const mapping=caseMapping(item);
     return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,receivedCases:saved.actuallyReceived,

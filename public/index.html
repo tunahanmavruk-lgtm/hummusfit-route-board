@@ -931,6 +931,11 @@
             timeRange = ' — ' + fmtTime(pickingInfo.startedAt) + ' to ' + fmtTime(pickingInfo.completedAt);
           }
           pickingChip = '<span class="picking-done-chip">✓ Picked' + (pickingInfo.pickedBy ? ' by ' + pickingInfo.pickedBy : '') + timeRange + '</span>';
+          if(pickingInfo.completion){
+            var completion=pickingInfo.completion;
+            var fulfillmentLabels={queued:'Shopify pending',verifying:'Shopify verification pending',fulfilled:'Shopify fulfilled',fulfilled_with_backorder:'Partial shipment — backorder remains',needs_review:'Shopify needs logistics review',not_confirmed:'Shopify not confirmed'};
+            pickingChip='<span class="picking-done-chip">Food: '+(completion.foodComplete?'saved':'pending')+' · Essentials: '+(completion.essentialsComplete?'saved':'pending')+' · '+(fulfillmentLabels[completion.shopifyStatus]||'Shopify needs review')+'</span>';
+          }
         }
 
         // Crate count — how many physical boxes exist for this order so

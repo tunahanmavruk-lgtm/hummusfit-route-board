@@ -3,13 +3,15 @@ const {createFulfillmentCredit}=require('../huntington-fulfillment-credit');
 const {deliveredQuantities,partialReceiptAllowed,fullyDelivered,WAREHOUSE,LOCATION}=require('../huntington-fulfillment');
 const {ORDER_QUERY,GROUP_QUERY,ADJUST_MUTATION,checkOrder,RELEASE}=require('../automatic-receiving');
 const gid=(t,n)=>`gid://shopify/${t}/${n}`;
-function fixture(t) {
+function fixture(t, store='Huntington') {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'huntington-credit-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const lines=[{id:gid('LineItem',1),sku:'food',quantity:2,variant:{id:gid('ProductVariant',1),inventoryItem:{id:gid('InventoryItem',1)}}},
     {id:gid('LineItem',2),sku:'ghost',quantity:1,variant:{id:gid('ProductVariant',2),inventoryItem:{id:gid('InventoryItem',2)}}}];
   const order={id:gid('Order',1),name:'#1',createdAt:'2026-10-16T10:00:00Z',displayFulfillmentStatus:'PARTIALLY_FULFILLED',customer:{tags:['Hummus Fit Huntington']},lineItems:{nodes:lines,pageInfo:{hasNextPage:false}},
     fulfillments:[{id:gid('Fulfillment',1),createdAt:'2026-10-16T22:00:00Z',status:'SUCCESS',location:{id:WAREHOUSE},fulfillmentLineItems:{nodes:[{quantity:2,lineItem:{id:lines[0].id}}],pageInfo:{hasNextPage:false}}}]};
-  let writes=0,lose=false,clock=Date.parse('2026-10-16T22:01:00Z');const groups=new Map(),keys=new Map();
+  order.customer.tags=['Hummus Fit '+store];
+  if(store!=='Huntington') order.fulfillments[0].createdAt='2026-10-18T22:00:00Z';
+  let writes=0,lose=false,clock=Date.parse(store==='Huntington'?'2026-10-16T22:01:00Z':'2026-10-18T22:01:00Z');const groups=new Map(),keys=new Map();
   const query=async(q,v)=>{
     if(q===GROUP_QUERY)return {node:groups.get(v.id)};
     if(q===ADJUST_MUTATION){
@@ -20,7 +22,7 @@ function fixture(t) {
     return {inventoryItem:{id:v.id,sku:lines.find(l=>l.variant.inventoryItem.id===v.id).sku,tracked:true,inventoryLevel:{quantities:[{name:'available',quantity:10}]}}};
   };
   const make=()=>createFulfillmentCredit({dir,orderQuery:async()=>({order}),inventoryQuery:query,orderQueryText:ORDER_QUERY,groupQuery:GROUP_QUERY,adjustMutation:ADJUST_MUTATION,now:()=>clock});
-  const body={store:'Huntington',orderId:order.id,fulfillmentId:order.fulfillments[0].id,lineItemId:lines[0].id};
+  const body={store,orderId:order.id,fulfillmentId:order.fulfillments[0].id,lineItemId:lines[0].id};
   return {dir,order,lines,body,make,groups,writes:()=>writes,lose:()=>lose=true,advance:()=>clock+=7200000};
 }
 test('delivered items reconcile while GHOST stays uncredited; duplicate and concurrent events write once',async t=>{
@@ -55,4 +57,20 @@ test('legacy credits, wrong location, incomplete evidence and pre-cutover fulfil
 });
 test('wrong or missing Shopify credit proof cannot authorize corrections',async t=>{
   const f=fixture(t),s=f.make();await s.credit(f.body);f.groups.values().next().value.changes[0].delta=5;await assert.rejects(s.verifyLine(f.order,f.lines[0]),/proof/);
+});
+test('all 14 stores credit exact destination once and later backorders never replay delivered lines',async t=>{
+  const {LOCATIONS}=require('../store-fulfillment-policy');
+  for(const [store,location] of Object.entries(LOCATIONS)) {
+    const f=fixture(t,store),s=f.make();
+    await Promise.all([s.credit(f.body),s.credit(f.body)]);await f.make().credit(f.body);
+    assert.equal(f.writes(),1,store);
+    assert.equal(f.groups.values().next().value.changes[0].location.id,gid('Location',location));
+    assert.equal((await s.credit({...f.body,lineItemId:f.lines[1].id})).status,'not_in_fulfillment');
+    f.order.fulfillments.push({...f.order.fulfillments[0],id:gid('Fulfillment',2),fulfillmentLineItems:{nodes:[{quantity:1,lineItem:{id:f.lines[1].id}}],pageInfo:{hasNextPage:false}}});
+    f.order.displayFulfillmentStatus='FULFILLED';
+    const later={...f.body,fulfillmentId:gid('Fulfillment',2),lineItemId:f.lines[1].id};
+    await s.credit(later);await f.make().credit(later);
+    assert.equal((await s.credit({...later,lineItemId:f.lines[0].id})).status,'not_in_fulfillment');
+    assert.equal(f.writes(),2,store);await s.verifyLine(f.order,f.lines[0]);await s.verifyLine(f.order,f.lines[1]);
+  }
 });
