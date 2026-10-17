@@ -1,0 +1,108 @@
+{
+  "verifiedAt": "2026-10-17T13:57:46.711Z",
+  "scope": "Configuration-only release, all14POS stores, receipt-confirmed conversion. No inventory or fulfillment mutations.",
+  "pairs": [
+    {
+      "caseSku": "MF-7700006-CS",
+      "unitSku": "MF-7700006-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51226013270263",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013335799",
+      "unitBarcode": "810193920500",
+      "lookupByVariantId": true,
+      "productId": "gid://shopify/Product/10113365246199"
+    },
+    {
+      "caseSku": "MF-7700004-CS",
+      "unitSku": "MF-7700004-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51260314648823",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013565175",
+      "unitBarcode": "850069104801",
+      "lookupByVariantId": true,
+      "productId": "gid://shopify/Product/10113365442807"
+    },
+    {
+      "caseSku": "MF-7700005-CS",
+      "unitSku": "MF-7700005-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51260314681591",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013630711",
+      "unitBarcode": "850069104993",
+      "lookupByVariantId": true,
+      "productId": "gid://shopify/Product/10113365508343"
+    },
+    {
+      "caseSku": "MF-7320011-CS",
+      "unitSku": "MF-7320011-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51226012418295",
+      "unitVariantId": "gid://shopify/ProductVariant/51226012483831",
+      "unitBarcode": "850063790383",
+      "lookupByVariantId": true,
+      "productId": "gid://shopify/Product/10113364394231"
+    },
+    {
+      "caseSku": "MF-6310019-CS",
+      "unitSku": "MF-6310019-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51259630158071",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013171959",
+      "unitBarcode": "850041914749",
+      "lookupByVariantId": true,
+      "productId": "gid://shopify/Product/10113365082359"
+    }
+  ],
+  "evidence": [
+    {
+      "sku": "MF-7700006-CS",
+      "unitSource": "https://fitcookie.co.uk/product/3d-energy-drink-473ml-citrus-frost/",
+      "packSource": "https://3denergydrinks.com/collections/energy-drinks"
+    },
+    {
+      "sku": "MF-7700004-CS",
+      "unitSource": "https://proteinpackage.co.uk/products/3d-strawberry-lemonade-energy-drink",
+      "packSource": "https://3denergydrinks.com/collections/energy-drinks"
+    },
+    {
+      "sku": "MF-7700005-CS",
+      "unitSource": "https://proteinpackage.co.uk/products/3d-energy-drinks-purple",
+      "packSource": "https://3denergydrinks.com/collections/energy-drinks"
+    },
+    {
+      "sku": "MF-7320011-CS",
+      "unitSource": "https://www.target.com/p/-/A-1006327656",
+      "packSource": "Shopify exact active case Product/10113364361463 description and pack-12 tag"
+    },
+    {
+      "sku": "MF-6310019-CS",
+      "unitSource": "https://xnsupps.com/ryse-fuel-energy-drink-sour-punch-blue-raspberry/",
+      "packSource": "Shopify exact active case Product/10113364984055 description and pack-12 tag"
+    }
+  ],
+  "blockedCaseSkus": [
+    "MF-7171008-CS",
+    "MF-7171000-CS",
+    "MF-7171013-CS",
+    "MF-7171015-CS",
+    "MF-7170515-CS",
+    "MF-7170514-CS",
+    "MF-7700008-CS",
+    "MF-6310672-CS",
+    "POINTS-DARK-CS"
+  ],
+  "blockedReason": "Need exact individual wrapper/can/bag UPC proof; some catalog unit UPCs match boxes or conflicting package sizes. Do not guess or activate.",
+  "checks": {
+    "routeTests": 205,
+    "receivingTests": 126,
+    "barcodeDuplicates": 0,
+    "caseAndUnitSkusUnique": true,
+    "pricesAndCostsValid": true
+  },
+  "beforeLedgerHashes": {
+    "retail": "f4aa04e9629c77fab428cbfa1a97d3f3a700c47749ff4c71eefc644176caacdf",
+    "credits": "4e923090e1e18ec3388db0dfe5e8de74082af554f9580b940980b2b18b17f2df",
+    "food": "a3a201f33ee1c5c372b68c22ae116ac07f5dbc1b0b6ed59b2e91a30b892153b6"
+  },
+  "backup": "/data/backups/verified-five-mappings-20261017-before.tgz"
+}

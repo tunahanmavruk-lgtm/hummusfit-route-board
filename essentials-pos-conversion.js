@@ -6,6 +6,48 @@ const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.js
 // variants may change store inventory. The SKU suffix alone is not proof of
 // a physical pack count or of which POS product should receive the units.
 const VERIFIED_CASE_MAPPINGS = Object.freeze({
+  // 2026-10-17: independently verified single-can UPCs and exact catalog
+  // identities. Configuration only: no stock is added until a verified receipt.
+  "MF-7700006-CS": Object.freeze({
+      "unitSku": "MF-7700006-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51226013270263",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013335799",
+      "unitBarcode": "810193920500",
+      "lookupByVariantId": true
+  }),
+  "MF-7700004-CS": Object.freeze({
+      "unitSku": "MF-7700004-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51260314648823",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013565175",
+      "unitBarcode": "850069104801",
+      "lookupByVariantId": true
+  }),
+  "MF-7700005-CS": Object.freeze({
+      "unitSku": "MF-7700005-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51260314681591",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013630711",
+      "unitBarcode": "850069104993",
+      "lookupByVariantId": true
+  }),
+  "MF-7320011-CS": Object.freeze({
+      "unitSku": "MF-7320011-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51226012418295",
+      "unitVariantId": "gid://shopify/ProductVariant/51226012483831",
+      "unitBarcode": "850063790383",
+      "lookupByVariantId": true
+  }),
+  "MF-6310019-CS": Object.freeze({
+      "unitSku": "MF-6310019-EA",
+      "unitsPerCase": 12,
+      "caseVariantId": "gid://shopify/ProductVariant/51259630158071",
+      "unitVariantId": "gid://shopify/ProductVariant/51226013171959",
+      "unitBarcode": "850041914749",
+      "lookupByVariantId": true
+  }),
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
