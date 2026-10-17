@@ -1180,22 +1180,27 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
       return res.status(400).json({ error: "A valid Hummus Fit store, order and cutover are required" });
     }
     const archive = loadArchive()[stopKey];
-    let lines, receiptOrder;
+    let batches;
     if (receiptEvidence) {
-      const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku title quantity variant{inventoryItem{id} product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage endCursor}}}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`,{id:orderId});
-      receiptOrder=data.order;
-      lines=require('./saved-receipt-proof').savedReceiptLines(store,orderId,receivedCounts,receiptEvidence,data.order,ESSENTIALS_POS_CUTOVER);
+      const {receiptOrderIds,savedReceiptBatches}=require('./combined-retail-receipt');
+      const orders=[];
+      for(const id of receiptOrderIds(orderId)) {
+        const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku title quantity variant{inventoryItem{id} product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage endCursor}}}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`,{id});
+        orders.push(data.order);
+      }
+      batches=savedReceiptBatches(store,orderId,receivedCounts,receiptEvidence,orders,ESSENTIALS_POS_CUTOVER,loadPosLedger());
     } else {
       if (!archive || archive.orderId !== orderId || archive.isB2B || !archive.shopifyFulfilled ||
           Date.parse(archive.createdAt) < ESSENTIALS_POS_CUTOVER) {
         return res.status(409).json({ error: "This is not a post-cutover fulfilled Hummus Fit Essentials order" });
       }
-      lines = receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState);
+      batches=[{orderId,lines:receiptLines(archive, archive.essentialsRecord, receivedCounts, readItemState)}];
     }
-    if (!lines.length) return res.json({ ok: true, results: [] });
+    if (!batches.some(batch=>batch.lines.length)) return res.json({ ok: true, results: [] });
     const locationId = await exactStoreLocation(store);
     const results = [];
-    for (const line of lines) {
+    for (const batch of batches) for (const line of batch.lines) {
+      const orderId=batch.orderId,receiptOrder=batch.order;
       try {
         if(line.backordered) {
           results.push({store,sku:line.caseSku,status:'backordered',units:0,orderId,lineItemId:line.lineItemId,
