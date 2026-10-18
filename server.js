@@ -4434,6 +4434,14 @@ function confirmedLineManager(req,res,next){
   if(!identity||identity.role!=='manager')return res.status(403).json({error:'Receiving manager authorization required'});
   next();
 }
+require('./facts-report-export').registerFactsReportExport(app, {
+  readReports:()=>[],
+  readLineReceipts:()=>{
+    const file=path.join(PERSISTENT_DIR,'confirmed-line-receipts-v1.json');
+    try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch(error){if(error.code==='ENOENT')return {};throw error;}
+  },
+  verifyToken:verifyLogisticsToken,
+});
 app.get('/api/confirmed-line-receiving',confirmedLineManager,(_req,res)=>res.json({receipt:confirmedLineService.get()}));
 app.post('/api/confirmed-line-receiving',confirmedLineManager,async(req,res)=>{
   if(!ESSENTIALS_POS_CONVERSION_ENABLED||!ESSENTIALS_SEPARATION_ENABLED)return res.status(503).json({error:'Retail conversion is disabled'});
