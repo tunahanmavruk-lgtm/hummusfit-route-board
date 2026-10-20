@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {createFulfillmentCredit}=require('../huntington-fulfillment-credit');
+const {createFulfillmentCredit,ACTIVATE_CASE_MUTATION}=require('../huntington-fulfillment-credit');
 const {deliveredQuantities,partialReceiptAllowed,fullyDelivered,WAREHOUSE,LOCATION}=require('../huntington-fulfillment');
 const {ORDER_QUERY,GROUP_QUERY,ADJUST_MUTATION,checkOrder,RELEASE}=require('../automatic-receiving');
 const gid=(t,n)=>`gid://shopify/${t}/${n}`;
@@ -11,20 +11,34 @@ function fixture(t, store='Huntington') {
     fulfillments:[{id:gid('Fulfillment',1),createdAt:'2026-10-16T22:00:00Z',status:'SUCCESS',location:{id:WAREHOUSE},fulfillmentLineItems:{nodes:[{quantity:2,lineItem:{id:lines[0].id}}],pageInfo:{hasNextPage:false}}}]};
   order.customer.tags=['Hummus Fit '+store];
   if(store!=='Huntington') order.fulfillments[0].createdAt='2026-10-18T22:00:00Z';
-  let writes=0,lose=false,clock=Date.parse(store==='Huntington'?'2026-10-16T22:01:00Z':'2026-10-18T22:01:00Z');const groups=new Map(),keys=new Map();
+  let writes=0,lose=false,inactive=false,activatedLevel=false,activations=0,clock=Date.parse(store==='Huntington'?'2026-10-16T22:01:00Z':'2026-10-18T22:01:00Z');const groups=new Map(),keys=new Map();
   const query=async(q,v)=>{
+    if(q===ACTIVATE_CASE_MUTATION){activations++;inactive=false;activatedLevel=true;return {inventoryActivate:{inventoryLevel:{id:gid('InventoryLevel',1)},userErrors:[]}};}
     if(q===GROUP_QUERY)return {node:groups.get(v.id)};
     if(q===ADJUST_MUTATION){
       if(!keys.has(v.key)) {const id=gid('InventoryAdjustmentGroup',++writes);keys.set(v.key,id);groups.set(id,{id,createdAt:new Date(clock).toISOString(),referenceDocumentUri:v.input.referenceDocumentUri,changes:v.input.changes.map(c=>({name:'available',delta:c.delta,item:{id:c.inventoryItemId},location:{id:c.locationId}}))});}
       if(lose){lose=false;throw new Error('network lost');}
       return {inventoryAdjustQuantities:{inventoryAdjustmentGroup:{id:keys.get(v.key)},userErrors:[]}};
     }
-    return {inventoryItem:{id:v.id,sku:lines.find(l=>l.variant.inventoryItem.id===v.id).sku,tracked:true,inventoryLevel:{quantities:[{name:'available',quantity:10}]}}};
+    return {inventoryItem:{id:v.id,sku:lines.find(l=>l.variant.inventoryItem.id===v.id).sku,tracked:true,inventoryLevel:inactive?null:{quantities:[{name:'available',quantity:activatedLevel?0:10}]}}};
   };
   const make=()=>createFulfillmentCredit({dir,orderQuery:async()=>({order}),inventoryQuery:query,orderQueryText:ORDER_QUERY,groupQuery:GROUP_QUERY,adjustMutation:ADJUST_MUTATION,now:()=>clock});
   const body={store,orderId:order.id,fulfillmentId:order.fulfillments[0].id,lineItemId:lines[0].id};
-  return {dir,order,lines,body,make,groups,writes:()=>writes,lose:()=>lose=true,advance:()=>clock+=7200000};
+  return {dir,order,lines,body,make,groups,writes:()=>writes,activations:()=>activations,setInactive:()=>inactive=true,lose:()=>lose=true,advance:()=>clock+=7200000};
 }
+test('only an exact approved case activates a missing destination level before one credit',async t=>{
+  const f=fixture(t,'Lake Grove');
+  f.lines[0].sku='MF-7171015-CS';
+  f.lines[0].variant.id='gid://shopify/ProductVariant/51259630125303';
+  f.setInactive();
+  await f.make().credit(f.body);
+  await f.make().credit(f.body);
+  assert.equal(f.activations(),1);
+  assert.equal(f.writes(),1);
+  const g=fixture(t,'Lake Grove');g.setInactive();
+  await assert.rejects(g.make().credit(g.body),/activation needs review/);
+  assert.equal(g.activations(),0);assert.equal(g.writes(),0);
+});
 test('delivered items reconcile while GHOST stays uncredited; duplicate and concurrent events write once',async t=>{
   const f=fixture(t),service=f.make();
   await Promise.all([service.credit(f.body),service.credit(f.body)]);

@@ -508,4 +508,4 @@ function adjustmentPlan(line, caseItem, unitItem, locationId, key) {
   };
 }
 
-module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS };
+module.exports = { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPlan, POS_STORE_LOCATIONS, VERIFIED_CASE_MAPPINGS };

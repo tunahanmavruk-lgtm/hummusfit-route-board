@@ -3,9 +3,11 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { deliveredQuantities, LOCATION } = require('./huntington-fulfillment');
 const {storePolicy,orderPolicy}=require('./store-fulfillment-policy');
+const {VERIFIED_CASE_MAPPINGS}=require('./essentials-pos-conversion');
 const hash = v => crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const read = file => { try { const r = JSON.parse(fs.readFileSync(file, 'utf8')); if (!r || Array.isArray(r)) throw new Error('Invalid credit ledger'); return r; } catch(e) { if(e.code === 'ENOENT') return {}; throw e; } };
 const STOCK_QUERY = `query HuntingtonCreditStock($id:ID!,$locationId:ID!){inventoryItem(id:$id){id sku tracked inventoryLevel(locationId:$locationId){quantities(names:["available"]){name quantity}}}}`;
+const ACTIVATE_CASE_MUTATION = `mutation ActivateFulfilledCase($inventoryItemId:ID!,$locationId:ID!,$key:String!){inventoryActivate(inventoryItemId:$inventoryItemId,locationId:$locationId) @idempotent(key:$key){inventoryLevel{id} userErrors{field message}}}`;
 function verifyCredit(group, entry) {
   const changes = (group?.changes || []).filter(c => c.name === 'available');
   if (!/^gid:\/\/shopify\/InventoryAdjustmentGroup\/\d+$/.test(group?.id || '') ||
@@ -45,8 +47,19 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
       let entry=read(file)[key];
       if(entry && (entry.quantity!==fulfilled.quantity || entry.inventoryItemId!==inventoryItemId || entry.sku!==line.sku)) throw new Error('Fulfillment changed after credit started');
       if(!entry) {
-        const stock=(await inventoryQuery(STOCK_QUERY,{id:inventoryItemId,locationId})).inventoryItem;
-        const available=stock?.inventoryLevel?.quantities?.find(q=>q.name==='available')?.quantity;
+        let stock=(await inventoryQuery(STOCK_QUERY,{id:inventoryItemId,locationId})).inventoryItem;
+        let available=stock?.inventoryLevel?.quantities?.find(q=>q.name==='available')?.quantity;
+        // Only an exact, approved Retail Essentials case may have a missing store
+        // inventory level activated. Activation omits quantities: it credits zero.
+        const mapping=VERIFIED_CASE_MAPPINGS[line.sku];
+        if(stock?.id===inventoryItemId&&stock.sku===line.sku&&stock.tracked===true&&
+           !stock.inventoryLevel&&mapping?.caseVariantId===line.variant?.id) {
+          const activationKey=hash(['activate-fulfilled-case-v1',locationId,inventoryItemId]);
+          const activated=(await inventoryQuery(ACTIVATE_CASE_MUTATION,{inventoryItemId,locationId,key:activationKey})).inventoryActivate;
+          if(!activated?.inventoryLevel?.id||activated.userErrors?.length) throw new Error('Verified case destination activation failed');
+          stock=(await inventoryQuery(STOCK_QUERY,{id:inventoryItemId,locationId})).inventoryItem;
+          available=stock?.inventoryLevel?.quantities?.find(q=>q.name==='available')?.quantity;
+        }
         if(stock?.id!==inventoryItemId||stock.sku!==line.sku||stock.tracked!==true||!Number.isSafeInteger(available)) throw new Error('Destination inventory identity or activation needs review');
         entry={status:'pending',store,locationId,orderId,fulfillmentId,lineItemId,sku:line.sku,inventoryItemId,quantity:fulfilled.quantity,startedAt:now(),key,
           input:{name:'available',reason:'correction',referenceDocumentUri:`gid://agent-hazar-receiving/FulfillmentCredit/${key}`,
@@ -82,4 +95,4 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
   }
   return {credit,verifyLine};
 }
-module.exports={createFulfillmentCredit,verifyCredit,STOCK_QUERY};
+module.exports={createFulfillmentCredit,verifyCredit,STOCK_QUERY,ACTIVATE_CASE_MUTATION};
