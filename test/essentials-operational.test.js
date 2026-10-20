@@ -9,7 +9,17 @@ const {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
   workflowCompletion,
+  shouldStartNewPickingRecord,
 } = require('../picking-workflow');
+
+test('a new local delivery does not inherit yesterday’s Essentials or meal scans', () => {
+  const previous = { orderId: 'yesterday', startedAt: '2026-10-19T21:30:00Z', completedAt: null };
+  const today = { orderId: 'today', createdAt: '2026-10-20T21:27:46Z', isB2B: false };
+  assert.equal(shouldStartNewPickingRecord(previous, today), true);
+  assert.equal(shouldStartNewPickingRecord({ ...previous, orderId: 'today' }, today), false);
+  assert.equal(shouldStartNewPickingRecord({ ...previous, startedAt: '2026-10-20T21:30:00Z' }, today), false);
+  assert.equal(shouldStartNewPickingRecord(previous, { ...today, isB2B: true }), false);
+});
 
 test('guards operational Essentials separation behind its own feature flag', () => {
   const server = read('server.js');

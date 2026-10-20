@@ -18,12 +18,14 @@ const {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
   workflowCompletion,
+  shouldStartNewPickingRecord,
 } = require("./picking-workflow.js");
 const {
   hasB2BSignal,
   hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
+  localOrderVisible,
   completedOrderVisible,
   mergeRecentCompletedOrders,
 } = require("./order-lifecycle.js");
@@ -1681,6 +1683,21 @@ async function fetchTodaysStopOrders() {
       delete ordersCache.byStopName[key];
     }
   });
+  // A cached local stop may contain both an expired order and a new one.
+  // Refresh the merged stop before returning it, so the older order leaves
+  // without hiding today's order or serving stale quantities to a picker.
+  const hasExpiredLocalOrder = Object.entries(ordersCache.byStopName).some(([key, order]) =>
+    !VALID_STOP_NAMES.get(key)?.isB2B && !order.retainedAfterFulfillment &&
+    (order.orders?.length ? order.orders : [order]).some((part) => !localOrderVisible(part, now))
+  );
+  if (hasExpiredLocalOrder) {
+    if (!ordersRefreshInFlight) {
+      ordersRefreshInFlight = refreshOrdersCache().finally(() => {
+        ordersRefreshInFlight = null;
+      });
+    }
+    return ordersRefreshInFlight;
+  }
   const isStale = now - ordersCache.fetchedAt >= ORDERS_CACHE_MS;
   const hasData = ordersCache.fetchedAt > 0;
 
@@ -1755,7 +1772,8 @@ async function refreshOrdersCache() {
 
     const edges = data.orders.edges;
     orders = orders.concat(
-      edges.map((e) => e.node).filter((order) => order.displayFulfillmentStatus !== "FULFILLED")
+      edges.map((e) => e.node).filter((order) =>
+        order.displayFulfillmentStatus !== "FULFILLED" && localOrderVisible(order, now))
     );
     hasNextPage = data.orders.pageInfo.hasNextPage;
     cursor = edges.length ? edges[edges.length - 1].cursor : null;
@@ -2370,7 +2388,7 @@ function getPickingRecord(state, stopName, order) {
   // completed yet), the merged orderId string is allowed to keep
   // drifting underneath it without ever wiping anything — only the
   // order reference (name/id shown in the UI) gets kept current.
-  const needsFreshRecord = !existing || (existing.completedAt && existing.orderId !== order.orderId);
+  const needsFreshRecord = shouldStartNewPickingRecord(existing, order);
   if (needsFreshRecord) {
     state.picking[key] = {
       orderId: order.orderId,
@@ -2440,7 +2458,7 @@ function getEssentialsPickingRecord(state, stopName, order) {
   const key = pickingKeyFor(stopName);
   if (!state.essentialsPicking) state.essentialsPicking = {};
   const existing = state.essentialsPicking[key];
-  if (!existing || (existing.completedAt && existing.orderId !== order.orderId)) {
+  if (shouldStartNewPickingRecord(existing, order)) {
     state.essentialsPicking[key] = newWorkflowPickingRecord(order);
   } else {
     existing.orderId = order.orderId;

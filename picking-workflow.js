@@ -28,8 +28,26 @@ function workflowCompletion(sourceOrder, foodRecord, essentialsRecord, separatio
   };
 }
 
+// A second order placed during the same picking day may change the merged
+// order ID without invalidating scans. A new local order on a later Eastern
+// calendar day is a different delivery cycle and must start fresh.
+const easternDay = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+function shouldStartNewPickingRecord(existing, order) {
+  if (!existing) return true;
+  if (existing.orderId === order.orderId) return false;
+  if (existing.completedAt || !existing.startedAt) return true;
+  if (order.isB2B) return false;
+  const startedAt = Date.parse(existing.startedAt);
+  const createdAt = Date.parse(order.createdAt);
+  return Number.isFinite(startedAt) && Number.isFinite(createdAt) &&
+    startedAt < createdAt && easternDay.format(startedAt) !== easternDay.format(createdAt);
+}
+
 module.exports = {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
   workflowCompletion,
+  shouldStartNewPickingRecord,
 };

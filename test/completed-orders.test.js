@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { mergeRecentCompletedOrders } = require('../order-lifecycle.js');
+const { localOrderVisible, mergeRecentCompletedOrders } = require('../order-lifecycle.js');
 
 const validStops = new Map([
   ['meriden', { isB2B: true, deliveryDays: [4] }],
@@ -9,6 +9,7 @@ const validStops = new Map([
 const completed = {
   orderId: 'gid://shopify/Order/123',
   orderName: '#123',
+  createdAt: '2026-10-01T14:00:00Z',
   completedAt: '2026-10-01T14:00:00Z',
   archivedAt: '2026-10-01T14:00:00Z',
   fulfilledAt: '2026-10-01T16:00:00Z', // Thursday noon EDT
@@ -48,9 +49,24 @@ test('actual fulfillment day controls cutoff, not picking or scheduled delivery 
 });
 
 test('cutoff follows Eastern local day across fall daylight-saving change', () => {
-  const archive = { islip: { ...completed, fulfilledAt: '2026-10-31T20:00:00Z' } };
+  const archive = { islip: { ...completed, createdAt: '2026-10-31T20:00:00Z', fulfilledAt: '2026-10-31T20:00:00Z' } };
   assert.ok(mergeRecentCompletedOrders({}, archive, validStops, Date.parse('2026-11-01T17:59:59Z')).islip);
   assert.deepEqual(mergeRecentCompletedOrders({}, archive, validStops, Date.parse('2026-11-01T18:00:00Z')), {});
+});
+
+test('unfulfilled local orders expire at 1 PM Eastern the following day, one order at a time', () => {
+  const yesterday = { createdAt: '2026-10-19T21:19:09Z' };
+  const today = { createdAt: '2026-10-20T21:27:46Z' };
+  assert.equal(localOrderVisible(yesterday, Date.parse('2026-10-20T16:59:59Z')), true);
+  assert.equal(localOrderVisible(yesterday, Date.parse('2026-10-20T17:00:00Z')), false);
+  assert.equal(localOrderVisible(today, Date.parse('2026-10-20T22:30:00Z')), true);
+});
+
+test('late Shopify fulfillment does not restore an expired local order', () => {
+  const saved = { ...completed, createdAt: '2026-10-19T21:19:09Z',
+    completedAt: '2026-10-20T18:00:00Z', fulfilledAt: '2026-10-20T19:00:00Z' };
+  assert.deepEqual(mergeRecentCompletedOrders({}, { islip: saved }, validStops,
+    Date.parse('2026-10-20T22:30:00Z')), {});
 });
 
 test('incomplete and invalid snapshots do not appear', () => {

@@ -60,9 +60,22 @@ function easternCalendar(timestamp) {
   };
 }
 
+// Local orders leave the board at 1 PM Eastern on the day after they were
+// placed, even if Shopify still lists them as unfulfilled. B2B orders have a
+// separate delivery schedule and do not use this cutoff.
+function localOrderVisible(order, now = Date.now()) {
+  const createdAt = Date.parse(order?.createdAt);
+  if (!Number.isFinite(createdAt) || createdAt > now) return false;
+  const placed = easternCalendar(createdAt);
+  const current = easternCalendar(now);
+  return current.day <= placed.day ||
+    (current.day === placed.day + 1 && current.hour < 13);
+}
+
 function completedOrderVisible(saved, stopMeta, now = Date.now()) {
   if (!stopMeta || !saved?.completedAt || !saved.shopifyFulfilled ||
       !saved.orderId || !Array.isArray(saved.lineItems)) return false;
+  if (!stopMeta.isB2B && !localOrderVisible(saved, now)) return false;
   // Older archives predate fulfilledAt; use their archive time only as a
   // compatibility fallback, never the route's scheduled delivery day.
   const fulfilledAt = Date.parse(saved.fulfilledAt || saved.archivedAt || saved.completedAt);
@@ -103,6 +116,7 @@ module.exports = {
   hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
+  localOrderVisible,
   completedOrderVisible,
   mergeRecentCompletedOrders,
 };
