@@ -75,6 +75,21 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // Bucked Up future 3-bag store packs use new case variants. Keep historical
+  // C6 mappings in RESTORED_MAPPINGS unchanged. The draft product retains its
+  // mapping-pending tag, so conversion stays blocked until catalog release.
+  "HF-NYB-BUCKEDUP-700-P3": Object.freeze({
+    unitSku: "810203842808", unitsPerCase: 3,
+    caseVariantId: "gid://shopify/ProductVariant/51376821272823",
+    unitVariantId: "gid://shopify/ProductVariant/51279797092599",
+    unitBarcode: "810203842808", lookupByVariantId: true,
+  }),
+  "HF-NYB-BUCKEDUP-701-P3": Object.freeze({
+    unitSku: "810203842815", unitsPerCase: 3,
+    caseVariantId: "gid://shopify/ProductVariant/51376821305591",
+    unitVariantId: "gid://shopify/ProductVariant/51279797125367",
+    unitBarcode: "810203842815", lookupByVariantId: true,
+  }),
   // Monster Japan: exact 24-can pairs. Configuration only; verified physical
   // receipt and existing destination case credit are required before posting.
   "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({

@@ -29,6 +29,28 @@ test('restored verified catalog remains available without reverting physical bar
   assert.equal(caseMapping({...coca,sku:'SD-PEACH-60G-CS8'}).unitSku,'860014183430');
 });
 
+test('Bucked Up P3 packs stay distinct from historical C6 orders and pending catalog stays blocked', () => {
+  const variants = [
+    ['700', '810203842808', '51376821272823', '51279797092599', '51259609612535'],
+    ['701', '810203842815', '51376821305591', '51279797125367', '51259609645303'],
+  ];
+  for (const [flavor, unitSku, p3Id, unitId, c6Id] of variants) {
+    const p3Sku = `HF-NYB-BUCKEDUP-${flavor}-P3`;
+    const c6Sku = `HF-NYB-BUCKEDUP-${flavor}-C6`;
+    const p3 = caseMapping({ ...coca, sku: p3Sku });
+    const c6 = caseMapping({ ...coca, sku: c6Sku });
+    assert.deepEqual([p3.unitSku, p3.unitsPerCase, p3.caseVariantId, p3.unitVariantId, p3.unitBarcode],
+      [unitSku, 3, `gid://shopify/ProductVariant/${p3Id}`, `gid://shopify/ProductVariant/${unitId}`, unitSku]);
+    assert.deepEqual([c6.unitSku, c6.unitsPerCase, c6.caseVariantId, c6.unitVariantId],
+      [unitSku, 6, `gid://shopify/ProductVariant/${c6Id}`, `gid://shopify/ProductVariant/${unitId}`]);
+    assert.notEqual(receiptKey('Island Park', 'same-order', p3Sku), receiptKey('Island Park', 'same-order', c6Sku));
+    assert.equal(p3.allowSharedProductMappingPendingTag, undefined);
+    assert.throws(() => adjustmentPlan({ ...p3, receivedCases: 1 },
+      { id: 'new-case', available: 1, unitCost: 6.51, mappingPending: true },
+      { id: 'pos-unit', available: 0, price: 4.99 }, 'store-location', 'receipt-key'), /mapping is still pending/);
+  }
+});
+
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
   assert.equal(caseMapping(coca).unitSku, "4890008101306");
   assert.equal(caseMapping(coca).unitsPerCase, 8);
