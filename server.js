@@ -1595,6 +1595,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
   try {
     const ledger = loadPosLedger();
     const previous = ledger[key];
+    const requestKey=require("./conversion-request-key").conversionRequestKey(key,path.join(PERSISTENT_DIR,"invalid-diagnostic-reversals.json"));
     if (previous?.status === "posted") return { sku: line.caseSku, status: "already_posted", units: previous.units, adjustmentId: previous.adjustmentId };
     if (previous?.status === "failed") return { sku: line.caseSku, status: "requires_review", error: previous.error };
     if (!line.receivedCases) return { sku: line.caseSku, status: "zero_received", units: 0 };
@@ -1626,7 +1627,7 @@ async function convertOneReceivedLine(store, orderId, locationId, line) {
       writePosLedgerEntry(key, { status: "pending", store, orderId, caseSku: line.caseSku, plan, startedAt: Date.now() });
     }
 
-    const result = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key });
+    const result = await posShopifyGraphQL(POS_ADJUST_MUTATION, { input: plan.input, key: requestKey });
     const adjustment = result.inventoryAdjustQuantities;
     const errors = adjustment?.userErrors || [];
     if (!adjustment?.inventoryAdjustmentGroup?.id || errors.length) {

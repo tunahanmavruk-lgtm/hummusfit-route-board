@@ -63,7 +63,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
   const requests = [];
   let writes = 0, calls = 0, clock = Date.now(), active = !inactive;
   const createContext = () => {
-    const context = vm.createContext({ ...conversion, ...history, fs, process, crypto: require('node:crypto'),
+    const context = vm.createContext({ ...conversion, ...history, fs, process, require:require("node:module").createRequire(require.resolve("../server.js")), path, PERSISTENT_DIR:dir, crypto: require('node:crypto'),
       Date: { now: () => clock }, POS_LEDGER_FILE: file, posReceiptInFlight: new Set(),
       posShopifyGraphQL: async (query, variables) => {
         calls++;
@@ -85,7 +85,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
         assert.match(query, /inventoryAdjustQuantities/);
         assert.match(query, /@idempotent/);
         // Actual durable history must exist before the mutation is sent.
-        const saved = history.readConversionLedger(file)[variables.key];
+        const saved = history.readConversionLedger(file)[variables.input.referenceDocumentUri.split('/').at(-1)];
         assert.equal(saved.status, 'pending');
         assert.deepEqual(JSON.parse(JSON.stringify(variables.input)), saved.plan.input);
         requests.push(variables);
@@ -105,7 +105,7 @@ function harness(t, line, { loseResponse = false, inactive = false, unitBarcode 
     vm.runInContext(source.slice(source.indexOf('async function exactInventoryItem('), source.indexOf('// In-memory cache, refreshed on demand')), context);
     return context;
   };
-  return { createContext, file, quantities, requests, writes: () => writes, calls: () => calls, advance: ms => { clock += ms; } };
+  return { createContext, file, dir, quantities, requests, writes: () => writes, calls: () => calls, advance: ms => { clock += ms; } };
 }
 
 for (const [sku, caseId, unitId, barcode, unitsPerCase = 12] of pairs) {
@@ -237,4 +237,15 @@ test('failure saving pending history stops mutation; failure saving posted proof
     assert.equal(h.writes(), 1);
     assert.deepEqual(h.quantities, { CASE: 0, UNIT: 24 });
   }
+});
+
+test('verified diagnostic reversal permits exactly one real conversion with a new Shopify request key',async t=>{
+ const base={caseSku:pairs[0][0],...conversion.VERIFIED_CASE_MAPPINGS[pairs[0][0]],receivedCases:2};
+ const h=harness(t,base),store='Holbrook',orderId='real-receipt-after-reversal',key=conversion.receiptKey(store,orderId,base.caseSku);
+ await h.createContext().convertOneReceivedLine(store,orderId,store,base);assert.equal(h.writes(),1);
+ h.quantities.CASE=2;h.quantities.UNIT=0;
+ const ledger=JSON.parse(fs.readFileSync(h.file));delete ledger[key];fs.writeFileSync(h.file,JSON.stringify(ledger));
+ const {nextConversionKey}=require('../conversion-request-key');fs.writeFileSync(path.join(h.dir,'invalid-diagnostic-reversals.json'),JSON.stringify({[key]:{status:'reversed_verified',originalAdjustmentId:'gid://shopify/InventoryAdjustmentGroup/1',reversalAdjustmentId:'gid://shopify/InventoryAdjustmentGroup/2',nextRequestKey:nextConversionKey(key)}}));
+ await h.createContext().convertOneReceivedLine(store,orderId,store,base);assert.equal(h.writes(),2);assert.equal(h.quantities.CASE,0);assert.equal(h.quantities.UNIT,base.unitsPerCase*2);
+ await h.createContext().convertOneReceivedLine(store,orderId,store,base);assert.equal(h.writes(),2);
 });

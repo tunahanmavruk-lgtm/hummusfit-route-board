@@ -15,7 +15,7 @@ function harness({ changeVariant, loseResponse = false } = {}) {
   const mutations = [];
   const shopifyKeys = new Map();
   let writes = 0;
-  const context = vm.createContext({ ...conversion, posReceiptInFlight: new Set(),
+  const context = vm.createContext({ ...conversion, require:require("node:module").createRequire(require.resolve("../server.js")), path:require("node:path"),PERSISTENT_DIR:require("node:os").tmpdir(), posReceiptInFlight: new Set(),
     loadPosLedger: () => ledger,
     writePosLedgerEntry: (key, entry) => { ledger[key] = { ...ledger[key], ...entry }; },
     posShopifyGraphQL: async (query, variables) => {
