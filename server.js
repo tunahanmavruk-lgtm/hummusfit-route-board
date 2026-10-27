@@ -1042,50 +1042,29 @@ app.get("/api/sku-coverage", async (req, res) => {
   }
 });
 
-// Read-only export for the separate Receiving Check app — exposes what
-// was ACTUALLY picked (not just what was ordered) for a given stop's
-// most recent completed order, so receiving can compare against real
-// ground truth. Purely additive: doesn't change any existing behavior,
-// just exposes data that already exists here.
+// Read-only receiving manifest: current local delivery, exact completed
+// snapshot, or independently verified shipping plus saved physical scans.
 app.get("/api/picked-summary/:stopName", async (req, res) => {
+  res.set("Cache-Control", "private, no-store");
   try {
     const key = pickingKeyFor(decodeURIComponent(req.params.stopName));
     const cache = await fetchTodaysStopOrders();
     const order = cache.byStopName[key];
     const state = loadState();
-    const liveRecord = order ? state.picking[key] : null;
-
-    let record, orderName, isB2B, lineItems, essentialsRecord;
-    if (liveRecord && liveRecord.completedAt) {
-      // Today's live data has a completed record for this stop — trust
-      // it regardless of whether the merged orderId string has since
-      // drifted (e.g. a new, unrelated order arrived for this stop
-      // after this one was finished, but nobody's touched picking for
-      // it yet) — this endpoint is specifically about "the most recent
-      // COMPLETED order," and a completed record's items are locked in
-      // at completion time either way.
-      record = liveRecord;
-      orderName = order.orderName;
-      isB2B = Boolean(order.isB2B);
-      lineItems = order.lineItems;
-      essentialsRecord = state.essentialsPicking?.[key];
-    } else {
-      // Not in today's live data — either the calendar has moved past
-      // midnight since this was picked, or the order fell out of
-      // today's fetch window. Fall back to the permanent archive,
-      // which was written the moment this order was actually finished
-      // and never gets touched by the daily reset.
-      const archive = loadArchive();
-      const archived = archive[key];
-      if (!archived) {
-        return res.status(404).json({ error: "No completed order found for this stop yet." });
-      }
-      record = archived;
-      orderName = archived.orderName;
-      isB2B = archived.isB2B;
-      lineItems = archived.lineItems;
-      essentialsRecord = archived.essentialsRecord || state.essentialsPicking?.[key];
+    const store=Object.keys(POS_STORE_LOCATIONS).find(name=>name.toLowerCase()===key);
+    const {selectReceivingDelivery,deliveryDate}=require('./receiving-selection');
+    const archived=loadArchive()[key];
+    let selected=selectReceivingDelivery({order,liveRecord:state.picking[key],essentialsRecord:state.essentialsPicking?.[key],archive:archived,localStore:Boolean(store)});
+    if(!selected&&store&&/^gid:\/\/shopify\/Order\/\d+$/.test(state.picking[key]?.orderId||'')){
+      try{
+        const {QUERY,recoverFulfilledPick}=require('./fulfilled-pick-recovery');
+        const data=await shopifyGraphQL(QUERY,{id:state.picking[key].orderId},'2026-07');
+        selected=recoverFulfilledPick(data.order,state.picking[key],store);
+      }catch(error){console.log('[receiving-delivery] '+key+': '+error.message);}
     }
+    if(!selected)return res.status(409).json({code:'current_delivery_unavailable',error:'Today’s delivery is not yet verified for receiving. This page will check again automatically. Contact logistics if the delivery has already arrived.'});
+    const {record,source,essentialsRecord}=selected;
+    const orderName=source.orderName,isB2B=Boolean(source.isB2B),lineItems=source.lineItems;
 
     const items = lineItems.map((item, idx) => {
       const essentialsType = ESSENTIALS_SEPARATION_ENABLED ? essentialsTypeFor(item) : null;
@@ -1103,6 +1082,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       const mapping = essentialsType === "retail" ? caseMapping(item) : null;
       return {
         title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status,
+        scanCodes: item.scanCodes || [item.sku].filter(Boolean),
         imageUrl: item.imageUrl || null, productTags: item.productTags || [],
         productCollections: item.productCollections || [], essentialsType,
         unitsPerCase: mapping?.unitsPerCase || 0,
@@ -1124,6 +1104,8 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       orderName: orderName,
       pickedBy: record.completedBy || record.pickedBy,
       completedAt: record.completedAt,
+      deliveryDate: store ? deliveryDate(source) : null,
+      shipmentVerifiedAt: selected.shipmentVerifiedAt || null,
       isB2B: isB2B,
       crateCount,
       items,
