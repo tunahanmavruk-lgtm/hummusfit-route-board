@@ -1054,13 +1054,13 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     const store=Object.keys(POS_STORE_LOCATIONS).find(name=>name.toLowerCase()===key);
     const {selectReceivingDelivery,deliveryDate}=require('./receiving-selection');
     const archived=loadArchive()[key];
-    let selected=selectReceivingDelivery({order,liveRecord:state.picking[key],essentialsRecord:state.essentialsPicking?.[key],archive:archived,localStore:Boolean(store)});
-    if(!selected&&store&&/^gid:\/\/shopify\/Order\/\d+$/.test(state.picking[key]?.orderId||'')){
-      try{
-        const {QUERY,recoverFulfilledPick}=require('./fulfilled-pick-recovery');
-        const data=await shopifyGraphQL(QUERY,{id:state.picking[key].orderId},'2026-07');
-        selected=recoverFulfilledPick(data.order,state.picking[key],store);
-      }catch(error){console.log('[receiving-delivery] '+key+': '+error.message);}
+    let selected=selectReceivingDelivery({order,liveRecord:state.picking[key],essentialsRecord:state.essentialsPicking?.[key],archive:archived,localStore:Boolean(store),separationEnabled:ESSENTIALS_SEPARATION_ENABLED});
+    if(store){
+      const {automaticFulfilledDelivery}=require('./fulfilled-pick-recovery');
+      selected=await automaticFulfilledDelivery({selected,store,
+        records:{picking:state.picking[key],essentials:state.essentialsPicking?.[key]},
+        separationEnabled:ESSENTIALS_SEPARATION_ENABLED,query:shopifyGraphQL,
+        onError:error=>console.log('[receiving-delivery] '+key+': '+error.message)});
     }
     if(!selected)return res.status(409).json({code:'current_delivery_unavailable',error:'Today’s delivery is not yet verified for receiving. This page will check again automatically. Contact logistics if the delivery has already arrived.'});
     const {record,source,essentialsRecord}=selected;

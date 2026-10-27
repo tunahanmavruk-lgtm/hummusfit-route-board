@@ -29,3 +29,12 @@ test('delivery date follows Eastern calendar across DST and rejects mixed daily 
  assert.equal(deliveryDate(archived('2026-11-01T22:00:00Z')),'2026-11-02');
  assert.equal(deliveryDate({orders:[{createdAt:'2026-10-26T20:00:00Z'},{createdAt:'2026-10-27T20:00:00Z'}]}),null);
 });
+
+test('food completion alone cannot expose unconfirmed Essentials as zero received',()=>{
+ const order=archived();order.lineItems.push({title:'Drink case',sku:'CASE-X',quantity:1,productTags:['Retail Essentials']});
+ const liveRecord={orderId:order.orderId,completedAt:'2026-10-27T01:00:00Z'};
+ assert.equal(select({order,liveRecord,separationEnabled:true}),null);
+ assert.equal(select({order,liveRecord,separationEnabled:true,essentialsRecord:{orderId:'gid://shopify/Order/999',completedAt:'2026-10-27T02:00:00Z'}}),null);
+ const essentialsRecord={orderId:order.orderId,completedAt:'2026-10-27T02:00:00Z'};
+ assert.equal(select({order,liveRecord,essentialsRecord,separationEnabled:true}).source,order);
+});

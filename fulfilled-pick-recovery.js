@@ -1,36 +1,103 @@
-const {deliveryDate}=require('./receiving-selection');
+const {deliveryDate,orderKey}=require('./receiving-selection');
 const {POS_STORE_LOCATIONS}=require('./essentials-pos-conversion');
-const QUERY=`query ReceivingFulfilledPick($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id title variantTitle sku quantity variant{barcode image{url} product{tags featuredImage{url} collections(first:100){nodes{title handle} pageInfo{hasNextPage}}}}} pageInfo{hasNextPage}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage}}}}}`;
+const {essentialsTypeFor}=require('./essentials-shadow');
+const QUERY=`query ReceivingFulfilledPick($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id title variantTitle sku quantity variant{id barcode image{url} product{tags featuredImage{url} collections(first:100){nodes{title handle} pageInfo{hasNextPage}}}}} pageInfo{hasNextPage}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage}}}}}`;
 
-// A Shopify fulfillment may remove an order from the feed before the picker
-// presses Finish. Recover only when every saved physical scan agrees with the
-// exact, fully shipped warehouse order. This never writes picking or inventory.
-function recoverFulfilledPick(order,record,store,now=new Date()){
-  const fail=()=>new Error('The shipped order and saved picking counts could not be verified for receiving.');
-  if(!order||order.id!==record?.orderId||order.cancelledAt||order.displayFulfillmentStatus!=='FULFILLED'||
-      !/^gid:\/\/shopify\/Order\/\d+$/.test(order.id)||order.lineItems?.pageInfo?.hasNextPage||
-      !order.lineItems?.nodes?.length||!order.fulfillments?.length||deliveryDate(order)!==new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now))throw fail();
-  const tags=(order.customer?.tags||[]).map(t=>t.toLowerCase());
-  const destinations=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes('hummus fit '+s.toLowerCase())||(s==='Islip'&&tags.includes('hummus fit east islip')));
-  if(destinations.length!==1||destinations[0]!==store)throw fail();
-  const shipped=new Map();
-  for(const f of order.fulfillments){
-    if(f.status!=='SUCCESS'||f.location?.id!=='gid://shopify/Location/103133642999'||f.fulfillmentLineItems?.pageInfo?.hasNextPage||!Number.isFinite(Date.parse(f.createdAt))||Date.parse(f.createdAt)>now.getTime())throw fail();
-    for(const l of f.fulfillmentLineItems?.nodes||[]){if(!Number.isSafeInteger(l.quantity)||l.quantity<1)throw fail();shipped.set(l.lineItem.id,(shipped.get(l.lineItem.id)||0)+l.quantity);}
-  }
-  const keys=new Set(),skus=new Set();
-  const lineItems=order.lineItems.nodes.map(i=>{
-    const title=i.variantTitle&&i.variantTitle.toLowerCase()!=='default title'?i.title+' — '+i.variantTitle:i.title;
-    const key=title+'::'+(i.sku||'');
-    if(!i.variant?.product||!Array.isArray(i.variant.product.tags)||!i.sku||keys.has(key)||skus.has(i.sku)||!Number.isSafeInteger(i.quantity)||i.quantity<1||shipped.get(i.id)!==i.quantity||
-        record.itemStatus?.[key]!=='picked'||record.itemScannedCount?.[key]!==i.quantity||i.variant?.product?.collections?.pageInfo?.hasNextPage)throw fail();
-    keys.add(key);skus.add(i.sku);
-    return {title,sku:i.sku,quantity:i.quantity,imageUrl:i.variant?.image?.url||i.variant?.product?.featuredImage?.url||null,
-      productTags:i.variant?.product?.tags||[],productCollections:i.variant?.product?.collections?.nodes||[],scanCodes:[i.sku,i.variant?.barcode].filter(Boolean)};
-  });
-  if(Object.keys(record.itemStatus||{}).some(k=>!keys.has(k)))throw fail();
-  const verifiedAt=order.fulfillments.map(f=>f.createdAt).sort().at(-1);
-  return {source:{orderId:order.id,orderName:order.name,createdAt:order.createdAt,lineItems,isB2B:false},
-    record:{...record,completedAt:verifiedAt},essentialsRecord:null,shipmentVerifiedAt:verifiedAt};
+function recoveryOrderIds(value){
+  const ids=String(value||'').split(',').map(id=>id.trim());
+  if(!ids.length||ids.length>20||new Set(ids).size!==ids.length||ids.some(id=>!/^gid:\/\/shopify\/Order\/\d+$/.test(id)))return null;
+  return ids.sort();
 }
-module.exports={QUERY,recoverFulfilledPick};
+
+// Shipping must prove every quantity on every exact order. Food and
+// Essentials retain their own physical counts even if Finish was never saved.
+// Recovery derives a receiving manifest; it never writes picking or inventory.
+function recoverFulfilledDelivery(orders,records,store,now=new Date(),separationEnabled=true){
+  const fail=()=>new Error('The shipped order and saved picking counts could not be verified for receiving.');
+  if(!Array.isArray(orders)||!orders.length||orders.length>20||!POS_STORE_LOCATIONS[store])throw fail();
+  orders=[...orders].sort((a,b)=>String(a?.id).localeCompare(String(b?.id)));
+  const ids=recoveryOrderIds(orders.map(o=>o?.id).join(','));
+  if(!ids)throw fail();
+  const identity=ids.join(','),today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  const matching=record=>record&&orderKey(record.orderId)===identity?record:null;
+  const foodRecord=matching(records?.picking),essentialsRecord=matching(records?.essentials);
+  const merged=new Map(),skuKeys=new Map(),fulfillmentTimes=[];
+  for(const order of orders){
+    if(order.cancelledAt||order.displayFulfillmentStatus!=='FULFILLED'||order.lineItems?.pageInfo?.hasNextPage||
+        !order.lineItems?.nodes?.length||!order.fulfillments?.length||deliveryDate(order)!==today)throw fail();
+    const tags=(order.customer?.tags||[]).map(t=>t.toLowerCase());
+    const destinations=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes('hummus fit '+s.toLowerCase())||(s==='Islip'&&tags.includes('hummus fit east islip')));
+    if(destinations.length!==1||destinations[0]!==store)throw fail();
+    const shipped=new Map(),lineIds=new Set(order.lineItems.nodes.map(i=>i.id));
+    if(lineIds.size!==order.lineItems.nodes.length)throw fail();
+    for(const f of order.fulfillments){
+      if(f.status!=='SUCCESS'||f.location?.id!=='gid://shopify/Location/103133642999'||f.fulfillmentLineItems?.pageInfo?.hasNextPage||
+          !Number.isFinite(Date.parse(f.createdAt))||Date.parse(f.createdAt)>now.getTime())throw fail();
+      fulfillmentTimes.push(f.createdAt);
+      for(const l of f.fulfillmentLineItems?.nodes||[]){
+        if(!lineIds.has(l.lineItem?.id)||!Number.isSafeInteger(l.quantity)||l.quantity<1)throw fail();
+        shipped.set(l.lineItem.id,(shipped.get(l.lineItem.id)||0)+l.quantity);
+      }
+    }
+    for(const item of order.lineItems.nodes){
+      const title=item.variantTitle&&item.variantTitle.toLowerCase()!=='default title'?item.title+' — '+item.variantTitle:item.title;
+      const key=title+'::'+(item.sku||'');
+      if(!title||!/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(item.variant?.id||'')||!item.variant?.product||!Array.isArray(item.variant.product.tags)||!item.sku||
+          !Number.isSafeInteger(item.quantity)||item.quantity<1||shipped.get(item.id)!==item.quantity||
+          item.variant.product.collections?.pageInfo?.hasNextPage||
+          (skuKeys.has(item.sku)&&skuKeys.get(item.sku)!==key))throw fail();
+      skuKeys.set(item.sku,key);
+      const line={title,sku:item.sku,variantId:item.variant.id,quantity:item.quantity,imageUrl:item.variant.image?.url||item.variant.product.featuredImage?.url||null,
+        productTags:item.variant.product.tags,productCollections:item.variant.product.collections?.nodes||[],scanCodes:[item.sku,item.variant.barcode].filter(Boolean)};
+      if(merged.has(key)){
+        const prior=merged.get(key);
+        if(prior.variantId!==line.variantId||essentialsTypeFor(prior)!==essentialsTypeFor(line))throw fail();
+        prior.quantity+=line.quantity;
+      }else merged.set(key,line);
+    }
+  }
+  const lineItems=[...merged.values()],foodKeys=new Set(),essentialsKeys=new Set();
+  for(const item of lineItems){
+    const key=item.title+'::'+item.sku;
+    const essential=separationEnabled&&Boolean(essentialsTypeFor(item));
+    const record=essential?essentialsRecord:foodRecord;
+    if(!Number.isSafeInteger(item.quantity)||!record||record.itemStatus?.[key]!=='picked'||record.itemScannedCount?.[key]!==item.quantity)throw fail();
+    (essential?essentialsKeys:foodKeys).add(key);
+  }
+  for(const [record,keys] of [[foodRecord,foodKeys],[essentialsRecord,essentialsKeys]]){
+    if(keys.size&&Object.keys(record.itemStatus||{}).some(key=>!keys.has(key)))throw fail();
+  }
+  const verifiedAt=fulfillmentTimes.sort().at(-1),primary=foodKeys.size?foodRecord:essentialsRecord;
+  return {source:{orderId:identity,orderName:orders.map(o=>o.name).join(', '),createdAt:orders.map(o=>o.createdAt).sort()[0],
+      orders:orders.map(o=>({id:o.id,name:o.name,createdAt:o.createdAt})),lineItems,isB2B:false},
+    record:{...primary,orderId:identity,completedAt:verifiedAt},
+    essentialsRecord:essentialsKeys.size?{...essentialsRecord,orderId:identity,completedAt:verifiedAt}:null,
+    shipmentVerifiedAt:verifiedAt};
+}
+
+// Keep the single-workflow interface for existing callers and tests.
+function recoverFulfilledPick(order,record,store,now=new Date()){
+  return recoverFulfilledDelivery([order],{picking:record},store,now,false);
+}
+
+async function automaticFulfilledDelivery({selected,records,store,query,now=new Date(),separationEnabled=true,onError=()=>{}}){
+  const candidates=new Set(),loaded=new Map();
+  for(const record of [records?.picking,records?.essentials]){
+    const ids=recoveryOrderIds(record?.orderId);
+    if(ids)candidates.add(ids.join(','));
+  }
+  for(const identity of candidates){
+    if(selected&&orderKey(selected.source.orderId)===identity)continue;
+    try{
+      const orders=[];
+      for(const id of identity.split(',')){
+        if(!loaded.has(id))loaded.set(id,(await query(QUERY,{id},'2026-07')).order);
+        orders.push(loaded.get(id));
+      }
+      const recovered=recoverFulfilledDelivery(orders,records,store,now,separationEnabled);
+      if(!selected||Date.parse(recovered.shipmentVerifiedAt)>Date.parse(selected.record.completedAt))selected=recovered;
+    }catch(error){onError(error);}
+  }
+  return selected;
+}
+module.exports={QUERY,recoverFulfilledPick,recoverFulfilledDelivery,automaticFulfilledDelivery,recoveryOrderIds};
