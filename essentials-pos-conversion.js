@@ -90,6 +90,30 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitVariantId: "gid://shopify/ProductVariant/51279797125367",
     unitBarcode: "810203842815", lookupByVariantId: true,
   }),
+  // New imported drinks: exact physical case/can barcodes and Shopify variants.
+  // Mapping only. Dunkin's draft sell unit and case mapping-pending tag keep
+  // conversion blocked until catalog release; all stock still requires a
+  // verified store receipt, destination case credit, and idempotent ledger.
+  "HF-DUNKIN-ZERO-PEAR-CS6": Object.freeze({
+    unitSku: "HF-DUNKIN-ZERO-PEAR-EA", unitsPerCase: 6,
+    caseVariantId: "gid://shopify/ProductVariant/51391867322615",
+    unitVariantId: "gid://shopify/ProductVariant/51391867486455",
+    unitBarcode: "8809288634936", lookupByVariantId: true,
+  }),
+  // Fanta Zero Orange: exact physical six-pack and individual-can variants.
+  // The case remains draft and mapping-pending until its store release.
+  "HF-FANTA-KR-ZERO-ORANGE-CS6": Object.freeze({
+    unitSku: "HF-FANTA-KR-ZERO-ORANGE-EA", unitsPerCase: 6,
+    caseVariantId: "gid://shopify/ProductVariant/51392031654135",
+    unitVariantId: "gid://shopify/ProductVariant/51392032309495",
+    unitBarcode: "8801094347208", lookupByVariantId: true,
+  }),
+  "HF-SUFFOLK-MON-KR-STRAWBERRY-C24": Object.freeze({
+    unitSku: "HF-SUFFOLK-MON-KR-STRAWBERRY-U1", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51391900647671",
+    unitVariantId: "gid://shopify/ProductVariant/51391900680439",
+    unitBarcode: "4897036695203", lookupByVariantId: true,
+  }),
   // Monster Japan: exact 24-can pairs. Configuration only; verified physical
   // receipt and existing destination case credit are required before posting.
   "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
@@ -414,6 +438,109 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitVariantId: "gid://shopify/ProductVariant/51259503444215",
     unitBarcode: "860014183430",
     requirePosSellUnitTag: true,
+  }),
+  // 2026-10-22: exact Tea Supreme case/sell-unit variants, live unit UPCs,
+  // unique SKUs, costs and prices verified. Conversion remains receipt-gated.
+  // Glass Zero Sugar Lemon uses the published Diet Lemon bottle UPC now saved
+  // on its exact POS variant; a physical bottle scan is still required before
+  // treating checkout scanning as field-verified.
+  "HF-SNAP-GLASS-DIET-PEACH-CS12": Object.freeze({
+    unitSku: "HF-SNAP-GLASS-DIET-PEACH-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375699460343",
+    unitVariantId: "gid://shopify/ProductVariant/51385414942967",
+    unitBarcode: "076183163573", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-GLASS-DIET-LEMON-CS12": Object.freeze({
+    unitSku: "HF-SNAP-GLASS-DIET-LEMON-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375699493111",
+    unitVariantId: "gid://shopify/ProductVariant/51385414975735",
+    unitBarcode: "076183163764", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-GLASS-APPLE-CS12": Object.freeze({
+    unitSku: "HF-SNAP-GLASS-APPLE-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375699525879",
+    unitVariantId: "gid://shopify/ProductVariant/51385415008503",
+    unitBarcode: "076183168509", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-DIET-PEACH-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-DIET-PEACH-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700214007",
+    unitVariantId: "gid://shopify/ProductVariant/51385415401719",
+    unitBarcode: "076183003145", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-DIET-LEMON-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-DIET-LEMON-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700246775",
+    unitVariantId: "gid://shopify/ProductVariant/51385415434487",
+    unitBarcode: "076183003206", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-RASPBERRY-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-RASPBERRY-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700279543",
+    unitVariantId: "gid://shopify/ProductVariant/51385415467255",
+    unitBarcode: "076183003190", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-DIET-RASPBERRY-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-DIET-RASPBERRY-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700312311",
+    unitVariantId: "gid://shopify/ProductVariant/51385415500023",
+    unitBarcode: "076183003213", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-LEMON-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-LEMON-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700345079",
+    unitVariantId: "gid://shopify/ProductVariant/51385415532791",
+    unitBarcode: "076183003152", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-SNAP-PET-PEACH-CS24": Object.freeze({
+    unitSku: "HF-SNAP-PET-PEACH-EA", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51375700377847",
+    unitVariantId: "gid://shopify/ProductVariant/51385415565559",
+    unitBarcode: "076183003114", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-BAI-CLEMENTINE-CS12": Object.freeze({
+    unitSku: "HF-BAI-CLEMENTINE-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375686713591",
+    unitVariantId: "gid://shopify/ProductVariant/51385415663863",
+    unitBarcode: "813694026887", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-BAI-WATERMELON-CS12": Object.freeze({
+    unitSku: "HF-BAI-WATERMELON-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375686746359",
+    unitVariantId: "gid://shopify/ProductVariant/51385415696631",
+    unitBarcode: "813694026696", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-BAI-CHERRY-CS12": Object.freeze({
+    unitSku: "HF-BAI-CHERRY-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375686779127",
+    unitVariantId: "gid://shopify/ProductVariant/51385415729399",
+    unitBarcode: "813694026672", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-BAI-COCONUT-CS12": Object.freeze({
+    unitSku: "HF-BAI-COCONUT-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375686811895",
+    unitVariantId: "gid://shopify/ProductVariant/51385415762167",
+    unitBarcode: "813694026719", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
+  "HF-VITACOCO-ORIGINAL-CARTON-CS12": Object.freeze({
+    unitSku: "HF-VITACOCO-ORIGINAL-CARTON-EA", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51375700443383",
+    unitVariantId: "gid://shopify/ProductVariant/51385415827703",
+    unitBarcode: "898999010007", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
   }),
 });
 
