@@ -114,6 +114,20 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitVariantId: "gid://shopify/ProductVariant/51391900680439",
     unitBarcode: "4897036695203", lookupByVariantId: true,
   }),
+  // The store-order listing contains only Blue and Strawberry Dreams. Keep
+  // historical case mappings above/below for previously fulfilled orders.
+  "HF-SUFFOLK-MON-JP-BLUE-C24-ORDER": Object.freeze({
+    unitSku: "HF-SUFFOLK-MON-JP-BLUE-U1", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51432898101495",
+    unitVariantId: "gid://shopify/ProductVariant/51322304135415",
+    unitBarcode: "4897036690055", lookupByVariantId: true,
+  }),
+  "HF-SUFFOLK-MON-KR-STRAWBERRY-C24-ORDER": Object.freeze({
+    unitSku: "HF-SUFFOLK-MON-KR-STRAWBERRY-U1", unitsPerCase: 24,
+    caseVariantId: "gid://shopify/ProductVariant/51432898199799",
+    unitVariantId: "gid://shopify/ProductVariant/51391900680439",
+    unitBarcode: "4897036695203", lookupByVariantId: true,
+  }),
   // Monster Japan: exact 24-can pairs. Configuration only; verified physical
   // receipt and existing destination case credit are required before posting.
   "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
