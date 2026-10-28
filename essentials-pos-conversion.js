@@ -86,7 +86,7 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "MF-7610062-CS6": Object.freeze({unitSku:"MF-7610062-EA",unitsPerCase:6,caseVariantId:"gid://shopify/ProductVariant/51510660858103",unitVariantId:"gid://shopify/ProductVariant/51510542074103",unitBarcode:"847644011432",lookupByVariantId:true}),
   // The invoice confirms one 12-can case. Keep the Celsius case unpublished
   // until its physical can barcode is checked against the sell-unit variant.
-  "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51510542172407",unitVariantId:"gid://shopify/ProductVariant/51510542106871",unitBarcode:"889392003185",lookupByVariantId:true}),
+  "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51510542172407",unitVariantId:"gid://shopify/ProductVariant/51510742843639",unitBarcode:"889392003185",lookupByVariantId:true}),
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
