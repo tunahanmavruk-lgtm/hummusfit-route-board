@@ -72,6 +72,18 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
       "unitBarcode": "850041914749",
       "lookupByVariantId": true
   }),
+  // Muscle Foods final invoice 9991193-1 bills these as individual tubs and
+  // bags. Separate one-unit store packs let Flow credit the exact order line
+  // before the verified receipt converts it to the corresponding POS unit.
+  "MF-7760001-P1": Object.freeze({unitSku:"MF-7760001-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660563191",unitVariantId:"gid://shopify/ProductVariant/51510541877495",unitBarcode:"628942370793",lookupByVariantId:true}),
+  "MF-7760004-P1": Object.freeze({unitSku:"MF-7760004-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660595959",unitVariantId:"gid://shopify/ProductVariant/51510541910263",unitBarcode:"628942370755",lookupByVariantId:true}),
+  "MF-7760012-P1": Object.freeze({unitSku:"MF-7760012-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660628727",unitVariantId:"gid://shopify/ProductVariant/51510541943031",unitBarcode:"628942370830",lookupByVariantId:true}),
+  "MF-7760014-P1": Object.freeze({unitSku:"MF-7760014-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660661495",unitVariantId:"gid://shopify/ProductVariant/51510541975799",unitBarcode:"628340660090",lookupByVariantId:true}),
+  "MF-7610061-P1": Object.freeze({unitSku:"MF-7610061-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660825335",unitVariantId:"gid://shopify/ProductVariant/51510542041335",unitBarcode:"847644011449",lookupByVariantId:true}),
+  "MF-7610062-P1": Object.freeze({unitSku:"MF-7610062-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/51510660858103",unitVariantId:"gid://shopify/ProductVariant/51510542074103",unitBarcode:"847644011432",lookupByVariantId:true}),
+  // The invoice confirms one 12-can case. Keep the Celsius case unpublished
+  // until its physical can barcode is checked against the sell-unit variant.
+  "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51510542172407",unitVariantId:"gid://shopify/ProductVariant/51510542106871",unitBarcode:"889392003185",lookupByVariantId:true}),
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
