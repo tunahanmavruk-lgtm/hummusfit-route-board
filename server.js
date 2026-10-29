@@ -13,6 +13,7 @@ const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { readConversionLedger, writeConversionLedger } = require("./retail-conversion-ledger.js");
 const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
 const { remainingStopEtas } = require("./live-eta.js");
+const { createDepartureDetector, routeForDeparture } = require("./automatic-route-start.js");
 const {
   routeHasStarted,
   routeHasEtaPlan,
@@ -3819,11 +3820,16 @@ app.get("/api/van-status", async (req, res) => {
 // ================= GOOGLE MAPS — ROUTE OPTIMIZATION & LIVE ETA =================
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const LIVE_ETA_CACHE_MS = 60 * 1000;
+let mapsHealth = { operational: null, checkedAt: null, error: null };
+function recordMapsHealth(operational, error = null) {
+  mapsHealth = { operational, checkedAt: new Date().toISOString(), error };
+}
 const liveEtaCache = new Map();
 const liveEtaInFlight = new Map();
 const liveEtaUnavailableUntil = new Map();
 let etaVehiclesCache = { fetchedAt: 0, vehicles: [] };
 let etaVehiclesInFlight = null;
+let etaVehiclesAttemptedAt = 0;
 const trackingTripsCache = new Map();
 const trackingTripsInFlight = new Map();
 const trackingTripsFailureUntil = new Map();
@@ -3911,6 +3917,7 @@ async function getEtaVehicles() {
   if (Date.now() - etaVehiclesCache.fetchedAt < VAN_STATUS_CACHE_MS) return etaVehiclesCache.vehicles;
   if (!etaVehiclesInFlight) {
     etaVehiclesInFlight = (async () => {
+      etaVehiclesAttemptedAt = Date.now();
       const token = await getBouncieToken();
       const response = await fetch("https://api.bouncie.dev/v1/vehicles", {
         headers: { Authorization: token }, signal: AbortSignal.timeout(6000),
@@ -3961,12 +3968,22 @@ async function liveEtasForRoute(route, state, vanImei) {
     const response = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`, {
       signal: AbortSignal.timeout(7000),
     });
-    if (!response.ok) throw new Error(`Google Directions lookup failed (${response.status})`);
+    if (!response.ok) {
+      recordMapsHealth(false, `Google Directions HTTP ${response.status}`);
+      throw new Error(`Google Directions lookup failed (${response.status})`);
+    }
     const directions = await response.json();
-    if (directions.status !== "OK") throw new Error(`Google Directions status ${directions.status}`);
+    if (directions.status !== "OK") {
+      recordMapsHealth(false, `Google Directions: ${directions.status}`);
+      throw new Error(`Google Directions status ${directions.status}`);
+    }
+    recordMapsHealth(true);
     const leg = directions.routes?.[0]?.legs?.[0];
     const firstLegSeconds = Number(leg?.duration_in_traffic?.value);
-    if (!Number.isFinite(firstLegSeconds)) return null;
+    if (!Number.isFinite(firstLegSeconds)) {
+      recordMapsHealth(false, "Google live traffic duration is unavailable");
+      return null;
+    }
     const updatedAt = Date.now();
     const value = { firstLegSeconds, updatedAt };
     for (const [cacheKey, entry] of liveEtaCache) {
@@ -4213,14 +4230,14 @@ function extractParkwayMentions(instructionHtml) {
 // Calls Google Directions API to find the fastest stop order for a route,
 // starting and ending at HQ. Returns the optimized stop order plus the
 // estimated drive time (seconds) for each leg of the trip.
-async function optimizeRouteWithGoogle(route) {
+async function planRouteWithGoogle(route, optimize) {
   if (!GOOGLE_MAPS_API_KEY) {
     throw new Error("GOOGLE_MAPS_API_KEY not configured");
   }
   const origin = encodeURIComponent(HQ.address);
   const destination = encodeURIComponent(HQ.address);
   const waypoints =
-    "optimize:true|" + route.stops.map((s) => encodeURIComponent(s.address)).join("|");
+    (optimize ? "optimize:true|" : "") + route.stops.map((s) => encodeURIComponent(s.address)).join("|");
 
   const url =
     `https://maps.googleapis.com/maps/api/directions/json` +
@@ -4230,11 +4247,11 @@ async function optimizeRouteWithGoogle(route) {
   const res = await fetch(url);
   const data = await res.json();
   if (data.status !== "OK" || !data.routes || !data.routes[0]) {
+    recordMapsHealth(false, `Google Directions: ${data.status || res.status}`);
     throw new Error(`Google Directions error: ${data.status} ${data.error_message || ""}`);
   }
-
   const googleRoute = data.routes[0];
-  const waypointOrder = googleRoute.waypoint_order; // indices into route.stops, in optimized visit order
+  const waypointOrder = optimize ? googleRoute.waypoint_order : route.stops.map((_, index) => index);
   const legs = googleRoute.legs; // length = stops.length + 1 (HQ->stop1->stop2->...->HQ)
 
   const optimizedStops = waypointOrder.map((idx) => route.stops[idx]);
@@ -4269,9 +4286,19 @@ async function optimizeRouteWithGoogle(route) {
   };
 }
 
+async function optimizeRouteWithGoogle(route) {
+  return planRouteWithGoogle(route, true);
+}
+
+async function planListedRouteWithGoogle(route) {
+  return planRouteWithGoogle(route, false);
+}
+
 function cachedRouteMatchesDefinition(meta, route) {
   if (!meta || !Array.isArray(meta.optimizedStopIds)) return false;
   if (meta.optimizedStopIds.length !== route.stops.length) return false;
+  if (!Array.isArray(meta.legDurationsSeconds) ||
+      meta.legDurationsSeconds.length < route.stops.length) return false;
   const currentStopIds = new Set(route.stops.map((stop) => stop.id));
   return meta.optimizedStopIds.every((stopId) => currentStopIds.has(stopId));
 }
@@ -4300,7 +4327,8 @@ app.post("/api/start-route", async (req, res) => {
   const route = getRouteById(routeId);
   if (!route) return res.status(404).json({ error: "Route not found" });
 
-  const state = loadState();
+  let state = loadState();
+  if (state.routeMeta[routeId]?.startedAt) return res.json({ ok: true, state });
   const assignedVan = state.assignments[routeId] && state.assignments[routeId].van;
   if (!assignedVan || !VAN_TO_BOUNCIE_IMEI[assignedVan]) {
     return res.status(400).json({ error: "Select the actual Bouncie van before starting this route so stores can track their delivery." });
@@ -4309,6 +4337,10 @@ app.post("/api/start-route", async (req, res) => {
     // Recompute when today's cached route was created from an older permanent definition.
     if (!cachedRouteMatchesDefinition(state.routeMeta[routeId], route)) {
       const optimized = await optimizeRouteWithGoogle(route);
+      // The Maps request can overlap live picking or stop updates. Reload
+      // before persisting so a route start never rolls those updates back.
+      state = loadState();
+      if (state.routeMeta[routeId]?.startedAt) return res.json({ ok: true, state });
       state.routeMeta[routeId] = { ...(state.routeMeta[routeId] || {}), ...optimized };
     }
     state.routeMeta[routeId].startedAt = new Date().toISOString();
@@ -4317,6 +4349,8 @@ app.post("/api/start-route", async (req, res) => {
   } catch (err) {
     // Even if Google Maps isn't configured/fails, still record the start time
     // so the board reflects reality — just without ETAs.
+    state = loadState();
+    if (state.routeMeta[routeId]?.startedAt) return res.json({ ok: true, state });
     state.routeMeta[routeId] = {
       ...(state.routeMeta[routeId] || {}),
       startedAt: new Date().toISOString(),
@@ -4325,6 +4359,102 @@ app.post("/api/start-route", async (req, res) => {
     res.json({ ok: true, state, warning: err.message });
   }
 });
+
+const detectDeparture = createDepartureDetector();
+const pendingDepartures = new Map();
+let automaticRouteCheckInFlight = false;
+
+async function checkAutomaticRouteStarts() {
+  if (automaticRouteCheckInFlight) return;
+  automaticRouteCheckInFlight = true;
+  try {
+    const now = Date.now();
+    const vehicles = await getEtaVehicles();
+    for (const vehicle of vehicles) {
+      const departure = detectDeparture(vehicle, now);
+      if (departure) pendingDepartures.set(departure.imei, departure);
+    }
+    for (const [imei, departure] of pendingDepartures) {
+      if (now - Date.parse(departure.departedAt) > 10 * 60 * 1000) {
+        pendingDepartures.delete(imei);
+        continue;
+      }
+      if (todayEasternFor(new Date(departure.departedAt)) !== todayEastern()) {
+        pendingDepartures.delete(imei);
+        continue;
+      }
+      const state = loadState();
+      const orders = (await fetchTodaysStopOrders()).byStopName;
+      const easternHour = Number(new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York", hour: "numeric", hourCycle: "h23",
+      }).format(new Date()));
+      const route = routeForDeparture([...ROUTES, ...B2B_ROUTES], state, orders,
+        imei, VAN_TO_BOUNCIE_IMEI, getEasternWeekday(), easternHour);
+      if (!route) continue;
+
+      let planned = null;
+      let planError = null;
+      if (!cachedRouteMatchesDefinition(state.routeMeta[route.id], route)) {
+        try {
+          // Follow the board's listed stop order unless dispatch already
+          // created a route. Auto-start must never silently reorder stops.
+          planned = await planListedRouteWithGoogle(route);
+        } catch (error) { planError = error; }
+      }
+      const current = loadState();
+      if (current.routeMeta[route.id]?.startedAt ||
+          String(VAN_TO_BOUNCIE_IMEI[current.assignments[route.id]?.van]) !== imei) {
+        pendingDepartures.delete(imei);
+        continue;
+      }
+      current.routeMeta[route.id] = {
+        ...(current.routeMeta[route.id] || {}), ...(planned || {}),
+        startedAt: departure.departedAt, startSource: "assigned-van-departure",
+      };
+      saveState(current);
+      pendingDepartures.delete(imei);
+      console.log(`[auto-route-start] ${route.id} started from assigned van departure`);
+      if (planError) console.warn(`[auto-route-start] ${route.id} ETA plan unavailable: ${planError.message}`);
+    }
+  } catch (error) {
+    console.warn(`[auto-route-start] ${error.message}`);
+  } finally {
+    automaticRouteCheckInFlight = false;
+  }
+}
+
+async function checkMapsHealth() {
+  if (!GOOGLE_MAPS_API_KEY) {
+    recordMapsHealth(false, "Google Maps key is not configured");
+    return;
+  }
+  const easternHour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "numeric", hourCycle: "h23",
+  }).format(new Date()));
+  if (easternHour < 3 || easternHour > 13 ||
+      (mapsHealth.checkedAt && Date.now() - Date.parse(mapsHealth.checkedAt) < 30 * 60 * 1000)) return;
+  try {
+    const params = new URLSearchParams({ origin: HQ.address, destination: ROUTES[0].stops[0].address,
+      mode: "driving", departure_time: "now", traffic_model: "best_guess", key: GOOGLE_MAPS_API_KEY });
+    const response = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`, {
+      signal: AbortSignal.timeout(7000),
+    });
+    const result = await response.json();
+    if (!response.ok || result.status !== "OK" ||
+        !result.routes?.[0]?.legs?.[0]?.duration_in_traffic) {
+      throw new Error(`Google Directions ${result.status || response.status}`);
+    }
+    recordMapsHealth(true);
+  } catch (error) {
+    recordMapsHealth(false, error.message);
+    console.warn(`[maps-health] ${error.message}`);
+  }
+}
+
+setInterval(checkAutomaticRouteStarts, 30 * 1000);
+setTimeout(checkAutomaticRouteStarts, 5 * 1000);
+setInterval(checkMapsHealth, 30 * 60 * 1000);
+setTimeout(checkMapsHealth, 8 * 1000);
 
 app.get("/api/route-eta/:routeId", (req, res) => {
   const state = loadState();
@@ -4408,10 +4538,30 @@ app.get("/api/store-eta/:stopName", async (req, res) => {
 
 app.get("/api/status", (req, res) => {
   const { windowStart, windowEnd, isOpen } = getOrderWindowEastern(new Date());
+  const state = loadState();
+  const now = Date.now();
+  const gpsStaleRoutes = [...ROUTES, ...B2B_ROUTES].filter((route) => {
+    const meta = state.routeMeta[route.id];
+    const startedAt = Date.parse(meta?.startedAt);
+    if (!Number.isFinite(startedAt) || now - startedAt > 16 * 60 * 60 * 1000 ||
+        route.stops.every((stop) => state.stopStatus[stop.id]?.status === "delivered")) return false;
+    const imei = VAN_TO_BOUNCIE_IMEI[state.assignments[route.id]?.van];
+    if (!imei) return false;
+    const vehicle = etaVehiclesCache.vehicles.find((entry) => String(entry.imei) === String(imei));
+    const gpsAt = Date.parse(vehicle?.stats?.lastUpdated);
+    return now - etaVehiclesCache.fetchedAt > 2 * 60 * 1000 ||
+      !Number.isFinite(gpsAt) || now - gpsAt > 10 * 60 * 1000;
+  }).map((route) => route.name);
   res.json({
     shopifyConfigured: Boolean(SHOP_DOMAIN && SHOPIFY_TOKEN),
     bouncieConfigured: Boolean(BOUNCIE_CLIENT_ID && BOUNCIE_CLIENT_SECRET && BOUNCIE_AUTH_CODE),
+    bouncieOperational: etaVehiclesAttemptedAt === 0 ? null :
+      now - etaVehiclesCache.fetchedAt < 2 * 60 * 1000,
     mapsConfigured: Boolean(GOOGLE_MAPS_API_KEY),
+    mapsOperational: mapsHealth.operational,
+    mapsCheckedAt: mapsHealth.checkedAt,
+    mapsError: mapsHealth.error,
+    gpsStaleRoutes,
     fleetTrackerUrl: FLEET_TRACKER_URL,
     serverTimeEastern: new Date().toISOString(),
     orderWindow: {
