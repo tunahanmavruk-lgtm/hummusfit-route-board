@@ -13,6 +13,14 @@ const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { readConversionLedger, writeConversionLedger } = require("./retail-conversion-ledger.js");
 const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
 const { remainingStopEtas } = require("./live-eta.js");
+const {
+  routeHasStarted,
+  routeHasEtaPlan,
+  knownDestination,
+  censusDestination,
+  firstTripEndNearStore,
+  trackingCutoffAt,
+} = require("./store-tracking-privacy.js");
 const { createCompletionFulfillment, canonicalStore, backorderDecision, validBackorder, confirmedCaseLines } = require('./completion-fulfillment');
 const {
   lineItemsForWorkflow,
@@ -381,7 +389,7 @@ const ROUTES = [
       { id: "r3-total-nutrition-syosset", name: "Total Nutrition Syosset", address: "235 Robbins Ln, Syosset, NY 11791", deliveryDays: [2, 4] },
       { id: "r3-huntington-v2", name: "Huntington", address: "281 Walt Whitman Road, Huntington Station, NY" },
       { id: "r3-farmingdale-v2", name: "Farmingdale", address: "101 Fulton Street, Farmingdale, NY" },
-      { id: "r3-hicksville-v2", name: "Hicksville", brand: "Natural Body", address: "1040 Hicksville Rd, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
+      { id: "r3-hicksville-v2", name: "Hicksville", brand: "Natural Body", address: "1040 S Broadway, Hicksville, NY 11801", deliveryDays: [1, 3, 5] },
     ],
   },
   {
@@ -3816,6 +3824,88 @@ const liveEtaInFlight = new Map();
 const liveEtaUnavailableUntil = new Map();
 let etaVehiclesCache = { fetchedAt: 0, vehicles: [] };
 let etaVehiclesInFlight = null;
+const trackingTripsCache = new Map();
+const trackingTripsInFlight = new Map();
+const trackingTripsFailureUntil = new Map();
+const destinationCoordinatesCache = new Map();
+const destinationCoordinatesFailureUntil = new Map();
+const TRACKING_TRIPS_CACHE_MS = 2 * 60 * 1000;
+
+async function getTrackingTrips(imei) {
+  const cached = trackingTripsCache.get(imei);
+  if (cached && Date.now() - cached.fetchedAt < TRACKING_TRIPS_CACHE_MS) return cached.trips;
+  if (Date.now() < (trackingTripsFailureUntil.get(imei) || 0)) throw new Error("Trip history is temporarily unavailable");
+  if (trackingTripsInFlight.has(imei)) return trackingTripsInFlight.get(imei);
+  const pending = (async () => {
+    const token = await getBouncieToken();
+    const params = new URLSearchParams({ imei: String(imei), "gps-format": "geojson" });
+    const response = await fetch(`https://api.bouncie.dev/v1/trips?${params}`, {
+      headers: { Authorization: token }, signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`Bouncie trip lookup failed (${response.status})`);
+    const trips = await response.json();
+    if (!Array.isArray(trips)) throw new Error("Bouncie trip lookup returned invalid data");
+    const recent = trips.filter((trip) => Date.parse(trip.endTime) >= Date.now() - 48 * 60 * 60 * 1000);
+    trackingTripsCache.set(imei, { fetchedAt: Date.now(), trips: recent });
+    trackingTripsFailureUntil.delete(imei);
+    return recent;
+  })().catch((error) => {
+    trackingTripsFailureUntil.set(imei, Date.now() + 60 * 1000);
+    throw error;
+  }).finally(() => trackingTripsInFlight.delete(imei));
+  trackingTripsInFlight.set(imei, pending);
+  return pending;
+}
+
+async function getStopCoordinates(stop) {
+  const key = stop.address;
+  const known = knownDestination(key);
+  if (known) return known;
+  if (destinationCoordinatesCache.has(key)) return destinationCoordinatesCache.get(key);
+  if (Date.now() < (destinationCoordinatesFailureUntil.get(key) || 0)) {
+    throw new Error("Store destination is temporarily unavailable");
+  }
+  // The Census geocoder is independent of Google Directions. A Maps billing
+  // failure must not hide tracking for a route that the driver has started.
+  const pending = (async () => {
+    const params = new URLSearchParams({ address: stop.address, benchmark: "Public_AR_Current", format: "json" });
+    const response = await fetch(`https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`Store destination lookup failed (${response.status})`);
+    const destination = censusDestination(await response.json(), stop.address);
+    if (!destination) throw new Error("Store destination has no unambiguous address match");
+    return destination;
+  })().catch((error) => {
+    destinationCoordinatesCache.delete(key);
+    destinationCoordinatesFailureUntil.set(key, Date.now() + 60 * 1000);
+    throw error;
+  });
+  destinationCoordinatesCache.set(key, pending);
+  return pending;
+}
+
+async function applyStoreTrackingPrivacy(state, route, stop, eta) {
+  if (!eta.started || !eta.vanImei) return;
+  const startedAt = state.routeMeta[route.id]?.startedAt;
+  const status = state.stopStatus[stop.id] || {};
+  let cutoff = trackingCutoffAt(startedAt, status);
+  if (!Number.isFinite(cutoff)) {
+    eta.trackingAvailable = false;
+    return;
+  }
+  // Driver arrival and delivery taps take precedence. A Bouncie trip ending
+  // at the store also closes tracking when the driver forgets to tap.
+  if (Date.now() < cutoff && status.status !== "delivered" && !status.arrivedAt) {
+    const [trips, destination] = await Promise.all([
+      getTrackingTrips(eta.vanImei), getStopCoordinates(stop),
+    ]);
+    const tripEndAt = firstTripEndNearStore(trips, destination, startedAt);
+    cutoff = trackingCutoffAt(startedAt, status, tripEndAt);
+  }
+  eta.trackingEndsAt = new Date(cutoff).toISOString();
+  eta.trackingAvailable = Date.now() < cutoff;
+}
 
 async function getEtaVehicles() {
   if (Date.now() - etaVehiclesCache.fetchedAt < VAN_STATUS_CACHE_MS) return etaVehiclesCache.vehicles;
@@ -3961,6 +4051,8 @@ function computeEtaForStop(state, stopName) {
   // van heading to them, not just a generic fleet view.
   const van = (state.assignments[route.id] && state.assignments[route.id].van) || null;
   const vanImei = van ? VAN_TO_BOUNCIE_IMEI[van] || null : null;
+  const meta = state.routeMeta[route.id];
+  const started = routeHasStarted(meta);
 
   const stopStatus = state.stopStatus[stop.id];
   const arrivedAt = stopStatus && (stopStatus.arrivedAt || stopStatus.deliveredAt) || null;
@@ -3968,7 +4060,7 @@ function computeEtaForStop(state, stopName) {
     ? new Date(new Date(arrivedAt).getTime() + STORE_TRACKING_GRACE_MS).toISOString()
     : null;
   const trackingAvailable = Boolean(
-    vanImei && (!trackingEndsAt || Date.now() < new Date(trackingEndsAt).getTime())
+    started && vanImei && (!trackingEndsAt || Date.now() < new Date(trackingEndsAt).getTime())
   );
   if (stopStatus && stopStatus.status === "delivered") {
     return {
@@ -3988,19 +4080,18 @@ function computeEtaForStop(state, stopName) {
     };
   }
 
-  const meta = state.routeMeta[route.id];
-  if (!meta || !meta.startedAt || !meta.legDurationsSeconds || !meta.optimizedStopIds) {
+  if (!routeHasEtaPlan(meta)) {
     return {
       routeId: route.id,
       routeName: route.name,
       scheduledTime: route.time || null,
-      started: false,
+      started,
       delivered: false,
       eta: null,
       stopsAway: null,
       van,
       vanImei,
-      trackingAvailable: false,
+      trackingAvailable,
       trackingEndsAt,
       fleetTrackerUrl: FLEET_TRACKER_URL,
     };
@@ -4280,11 +4371,22 @@ app.get("/api/store-eta/:stopName", async (req, res) => {
   if (!eta) {
     return res.status(404).json({ error: "No route stop matches that store name." });
   }
+  const route = getRouteById(eta.routeId);
+  const stop = route?.stops.find((entry) =>
+    entry.name.toLowerCase() === String(req.params.stopName).toLowerCase());
+  if (eta.started && stop) {
+    try {
+      await applyStoreTrackingPrivacy(state, route, stop, eta);
+    } catch (error) {
+      // A location or trip lookup failure must never expose a van after
+      // a visit that could not be checked.
+      eta.trackingAvailable = false;
+      eta.trackingEndsAt = new Date().toISOString();
+      console.warn(`[store-tracking] ${eta.routeId}: ${error.message}`);
+    }
+  }
   if (eta.started && !eta.delivered && eta.eta && eta.vanImei) {
     try {
-      const route = getRouteById(eta.routeId);
-      const stop = route?.stops.find((entry) =>
-        entry.name.toLowerCase() === String(req.params.stopName).toLowerCase());
       const live = route && await liveEtasForRoute(route, state, eta.vanImei);
       const current = stop && live?.byStopId[stop.id];
       if (current) {
