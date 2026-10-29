@@ -653,6 +653,9 @@
   </div>
 </div>
 
+<div class="eta-plan-warning" id="mapsHealthWarning" role="alert" hidden>⚠ Customer live ETAs are unavailable: Google Maps is not responding. Check Maps billing before dispatch.</div>
+<div class="eta-plan-warning" id="bouncieHealthWarning" role="alert" hidden>⚠ Bouncie live van data is unavailable. Automatic route start and customer tracking need a fresh vehicle signal.</div>
+<div class="eta-plan-warning" id="gpsHealthWarning" role="alert" hidden></div>
 <main id="routesContainer">
   <div style="color:var(--dim); font-family:'JetBrains Mono', monospace; font-size:13px; padding:30px 0;">Loading routes…</div>
 </main>
@@ -1307,6 +1310,19 @@
 
   loadInitial();
   setInterval(pollState, 10000);
+
+  function updateMapsHealthWarning(){
+    fetch('/api/status').then(function(r){ return r.json(); }).then(function(data){
+      document.getElementById('mapsHealthWarning').hidden = data.mapsOperational !== false;
+      document.getElementById('bouncieHealthWarning').hidden = data.bouncieOperational !== false;
+      var gpsWarning = document.getElementById('gpsHealthWarning');
+      var routes = data.gpsStaleRoutes || [];
+      gpsWarning.hidden = routes.length === 0;
+      gpsWarning.textContent = routes.length ? '⚠ Van GPS is stale for ' + routes.join(', ') + '. Customer tracking and live ETAs need a fresh Bouncie signal.' : '';
+    }).catch(function(){});
+  }
+  updateMapsHealthWarning();
+  setInterval(updateMapsHealthWarning, 30000);
 
   // ---- Live clock (Eastern Time, ticks every second) ----
   function tickClock(){
