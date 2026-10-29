@@ -20,6 +20,7 @@ const {
   knownDestination,
   censusDestination,
   firstTripEndNearStore,
+  firstCompletedTripPassingStore,
   trackingCutoffAt,
 } = require("./store-tracking-privacy.js");
 const { createCompletionFulfillment, canonicalStore, backorderDecision, validBackorder, confirmedCaseLines } = require('./completion-fulfillment');
@@ -3891,17 +3892,22 @@ async function getStopCoordinates(stop) {
   return pending;
 }
 
-async function tripEndsForRoute(route, meta, imei, trips = null) {
+async function tripVisitsForRoute(route, meta, imei, trips = null) {
   const history = trips || await getTrackingTrips(imei);
   const stopById = new Map(route.stops.map((stop) => [stop.id, stop]));
   const ids = meta?.optimizedStopIds || route.stops.map((stop) => stop.id);
   const coordinates = await Promise.allSettled(ids.map((id) => getStopCoordinates(stopById.get(id))));
-  return Object.fromEntries(ids.flatMap((id, index) => {
+  const endedNear = {};
+  const passedNear = {};
+  ids.forEach((id, index) => {
     const result = coordinates[index];
-    if (result.status !== "fulfilled") return [];
+    if (result.status !== "fulfilled") return;
     const endedAt = firstTripEndNearStore(history, result.value, meta.startedAt);
-    return Number.isFinite(endedAt) ? [[id, endedAt]] : [];
-  }));
+    const passedAt = firstCompletedTripPassingStore(history, result.value, meta.startedAt);
+    if (Number.isFinite(endedAt)) endedNear[id] = endedAt;
+    if (Number.isFinite(passedAt)) passedNear[id] = passedAt;
+  });
+  return { endedNear, passedNear };
 }
 
 async function applyStoreTrackingPrivacy(state, route, stop, eta) {
@@ -3921,17 +3927,24 @@ async function applyStoreTrackingPrivacy(state, route, stop, eta) {
     ]);
     const tripEndAt = firstTripEndNearStore(trips, destination, startedAt);
     cutoff = trackingCutoffAt(startedAt, status, tripEndAt);
+    const passedAt = firstCompletedTripPassingStore(trips, destination, startedAt);
+    if (Number.isFinite(passedAt)) cutoff = Math.min(cutoff, passedAt);
+    let movedOn = Number.isFinite(tripEndAt) || Number.isFinite(passedAt);
     // A driver may keep the engine running at this store, leaving no trip
     // end here. A confirmed visit to a later stop still closes access to
     // this van for earlier customers.
     const ids = state.routeMeta[route.id]?.optimizedStopIds || route.stops.map((entry) => entry.id);
     const index = ids.indexOf(stop.id);
-    if (!Number.isFinite(tripEndAt) && index >= 0 && index < ids.length - 1) {
-      const ends = await tripEndsForRoute(route, state.routeMeta[route.id], eta.vanImei, trips);
+    if (!movedOn && index >= 0 && index < ids.length - 1) {
+      const visits = await tripVisitsForRoute(route, state.routeMeta[route.id], eta.vanImei, trips);
       for (const laterId of ids.slice(index + 1)) {
-        if (Number.isFinite(ends[laterId])) cutoff = Math.min(cutoff, ends[laterId]);
+        if (Number.isFinite(visits.endedNear[laterId])) {
+          cutoff = Math.min(cutoff, visits.endedNear[laterId]);
+          movedOn = true;
+        }
       }
     }
+    if (movedOn && Date.now() >= cutoff) eta.vanPassedLocation = true;
   }
   eta.trackingEndsAt = new Date(cutoff).toISOString();
   eta.trackingAvailable = Date.now() < cutoff;
@@ -3957,9 +3970,12 @@ async function getEtaVehicles() {
 
 async function liveEtasForRoute(route, state, vanImei) {
   const meta = state.routeMeta[route.id];
-  const tripEnds = await tripEndsForRoute(route, meta, vanImei);
+  const visits = await tripVisitsForRoute(route, meta, vanImei);
   const effectiveStopStatus = progressFromTripEnds(meta.optimizedStopIds,
-    state.stopStatus, tripEnds).effectiveStatus;
+    state.stopStatus, visits.endedNear).effectiveStatus;
+  for (const id of Object.keys(visits.passedNear)) {
+    effectiveStopStatus[id] = { ...effectiveStopStatus[id], status: "delivered" };
+  }
   const firstStopId = meta.optimizedStopIds.find((id) => effectiveStopStatus[id]?.status !== "delivered");
   const firstStop = route.stops.find((stop) => stop.id === firstStopId);
   if (!firstStop || !vanImei || !GOOGLE_MAPS_API_KEY) return null;
@@ -4588,6 +4604,10 @@ app.get("/api/store-eta/:stopName", async (req, res) => {
       eta.trackingEndsAt = new Date().toISOString();
       console.warn(`[store-tracking] ${eta.routeId}: ${error.message}`);
     }
+  }
+  if (eta.vanPassedLocation) {
+    eta.eta = null;
+    eta.stopsAway = null;
   }
   if (eta.started && !eta.delivered && eta.eta && eta.vanImei) {
     try {
