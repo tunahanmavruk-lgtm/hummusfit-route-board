@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   routeHasStarted, routeHasEtaPlan, knownDestination, censusDestination,
-  firstTripEndNearStore, trackingCutoffAt,
+  firstTripEndNearStore, firstCompletedTripPassingStore, trackingCutoffAt,
 } = require('../store-tracking-privacy.js');
 
 const started = '2026-10-05T12:00:00Z';
@@ -52,6 +52,22 @@ test('the first store visit remains the cutoff even if the van returns', () => {
     trip('2026-10-05T14:00:00Z', -73, 40),
   ], store, started);
   assert.equal(ended, Date.parse('2026-10-05T12:20:00Z'));
+});
+
+test('a completed trip that passed and left a store closes tracking without a driver tap', () => {
+  const near = Array.from({ length: 6 }, (_, i) => [-73 + i * 0.00001, 40]);
+  const tripPastStore = { endTime: '2026-10-05T14:00:00Z', gps: {
+    coordinates: [[-73.1, 40.1], ...near, [-73.05, 40.05]],
+  } };
+  assert.equal(firstCompletedTripPassingStore([tripPastStore], store, started), Date.parse(tripPastStore.endTime));
+  assert.equal(firstCompletedTripPassingStore([{ ...tripPastStore, gps: {
+    coordinates: [[-73.1, 40.1], ...near.slice(0, 4), [-73.05, 40.05]],
+  } }], store, started), null);
+  assert.equal(firstCompletedTripPassingStore([{ ...tripPastStore, gps: {
+    coordinates: [[-73.1, 40.1], ...near, [-73, 40]],
+  } }], store, started), null);
+  assert.equal(firstCompletedTripPassingStore([{ ...tripPastStore,
+    endTime: '2026-10-05T11:00:00Z' }], store, started), null);
 });
 
 test('driver delivery closes tracking immediately; arrival and route age are also bounded', () => {

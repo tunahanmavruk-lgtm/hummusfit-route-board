@@ -77,6 +77,39 @@ function firstTripEndNearStore(trips, destination, routeStartedAt) {
   return first === Infinity ? null : first;
 }
 
+// Some drivers keep the engine on through a drop. The trip then ends miles
+// later, so its endpoint alone cannot close that store's tracking link.
+// Five GPS samples within 100m plus a completed trip ending at least 1km
+// away is a conservative signal that the van visited and left the area.
+// The cutoff uses the trip end, never an invented visit time.
+function firstCompletedTripPassingStore(trips, destination, routeStartedAt) {
+  const startedAt = Date.parse(routeStartedAt);
+  if (!Number.isFinite(startedAt) || !destination) return null;
+  let first = Infinity;
+  for (const trip of trips || []) {
+    const endedAt = Date.parse(trip.endTime);
+    if (!Number.isFinite(endedAt) || endedAt < startedAt) continue;
+    const points = trip.gps?.coordinates;
+    if (!Array.isArray(points) || points.length < 6) continue;
+    const end = points[points.length - 1];
+    if (!Array.isArray(end) || end.length < 2 ||
+        !Number.isFinite(Number(end[0])) || !Number.isFinite(Number(end[1])) ||
+        distanceMeters(Number(end[1]), Number(end[0]), destination.lat, destination.lon) < 1000) continue;
+    let nearSamples = 0;
+    for (const point of points) {
+      if (!Array.isArray(point) || point.length < 2) continue;
+      if (distanceMeters(Number(point[1]), Number(point[0]), destination.lat, destination.lon) <= 100) {
+        nearSamples++;
+        if (nearSamples >= 5) {
+          first = Math.min(first, endedAt);
+          break;
+        }
+      }
+    }
+  }
+  return first === Infinity ? null : first;
+}
+
 function trackingCutoffAt(routeStartedAt, stopStatus = {}, tripEndAt = null) {
   const startedAt = Date.parse(routeStartedAt);
   if (!Number.isFinite(startedAt)) return null;
@@ -91,4 +124,5 @@ function trackingCutoffAt(routeStartedAt, stopStatus = {}, tripEndAt = null) {
   return cutoff;
 }
 
-module.exports = { routeHasStarted, routeHasEtaPlan, knownDestination, censusDestination, firstTripEndNearStore, trackingCutoffAt };
+module.exports = { routeHasStarted, routeHasEtaPlan, knownDestination, censusDestination,
+  firstTripEndNearStore, firstCompletedTripPassingStore, trackingCutoffAt };
