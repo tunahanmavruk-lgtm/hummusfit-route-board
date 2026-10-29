@@ -15,6 +15,10 @@ const KNOWN_DESTINATIONS = Object.freeze({
   "4309 Dearborn Cir, Mt Laurel Township, NJ 08054": { lat: 39.968912, lon: -74.902446 },
   // Hummus Fit Ronkonkoma: https://www.waze.com/live-map/directions/us/ny/lake-ronkonkoma/hummus-fit?to=place.ChIJ2YBIUBs36IkRTB56u0BPMeU
   "200 Ronkonkoma Ave, Ronkonkoma, NY": { lat: 40.8206952, lon: -73.113406799 },
+  // Census maps this building to ZIP 06450, while the route address uses
+  // 06451. Google Directions' destination and today's Bouncie stop agree
+  // on this storefront, so keep the route address and pin its coordinates.
+  "477 S Broad St Ste 8, Meriden, CT 06451": { lat: 41.5100872, lon: -72.8070352 },
 });
 
 function knownDestination(address) {

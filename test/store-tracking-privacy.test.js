@@ -33,6 +33,9 @@ test('known delivery points remain available when address geocoding cannot match
   assert.deepEqual(knownDestination('200 Ronkonkoma Ave, Ronkonkoma, NY'), {
     lat: 40.8206952, lon: -73.113406799,
   });
+  assert.deepEqual(knownDestination('477 S Broad St Ste 8, Meriden, CT 06451'), {
+    lat: 41.5100872, lon: -72.8070352,
+  });
   assert.equal(knownDestination('Unknown stop'), null);
 });
 
