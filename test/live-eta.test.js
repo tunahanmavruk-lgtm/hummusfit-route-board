@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { remainingStopEtas } = require('../live-eta.js');
+const { remainingStopEtas, progressFromTripEnds } = require('../live-eta.js');
 const route = { stops: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
 const meta = { optimizedStopIds: ['a', 'b', 'c'], legDurationsSeconds: [600, 900, 1200] };
 const now = Date.parse('2026-10-05T14:00:00Z');
@@ -20,4 +20,15 @@ test('delivered stops are excluded and a delayed first leg pushes later stores',
   assert.equal(normal.b.stopsAway, 0);
   assert.equal(normal.a, undefined);
   assert.equal(Date.parse(traffic.c.eta) - Date.parse(normal.c.eta), 600000);
+});
+
+test('a confirmed later visit advances ETA without changing delivery records', () => {
+  const listed = ['a', 'b', 'c', 'd'];
+  const persisted = { a: { status: 'picked' } };
+  const visitedAt = now - 11 * 60 * 1000;
+  const progress = progressFromTripEnds(listed, persisted, { c: visitedAt }, now);
+  assert.equal(progress.furthest, 2);
+  assert.deepEqual(listed.filter((id) => progress.effectiveStatus[id]?.status !== 'delivered'), ['d']);
+  assert.equal(persisted.a.status, 'picked');
+  assert.equal(progressFromTripEnds(listed, persisted, { c: now - 2 * 60 * 1000 }, now).furthest, -1);
 });

@@ -12,7 +12,7 @@ const { caseMapping, receiptLines, receiptKey, validateCaseAndUnit, adjustmentPl
 const { createPosTokenProvider } = require("./shopify-pos-auth.js");
 const { readConversionLedger, writeConversionLedger } = require("./retail-conversion-ledger.js");
 const { catalogSearches, exactCatalogMatch } = require("./receiving-barcode-catalog.js");
-const { remainingStopEtas } = require("./live-eta.js");
+const { remainingStopEtas, progressFromTripEnds } = require("./live-eta.js");
 const { createDepartureDetector, routeForDeparture } = require("./automatic-route-start.js");
 const {
   routeHasStarted,
@@ -3891,6 +3891,19 @@ async function getStopCoordinates(stop) {
   return pending;
 }
 
+async function tripEndsForRoute(route, meta, imei, trips = null) {
+  const history = trips || await getTrackingTrips(imei);
+  const stopById = new Map(route.stops.map((stop) => [stop.id, stop]));
+  const ids = meta?.optimizedStopIds || route.stops.map((stop) => stop.id);
+  const coordinates = await Promise.allSettled(ids.map((id) => getStopCoordinates(stopById.get(id))));
+  return Object.fromEntries(ids.flatMap((id, index) => {
+    const result = coordinates[index];
+    if (result.status !== "fulfilled") return [];
+    const endedAt = firstTripEndNearStore(history, result.value, meta.startedAt);
+    return Number.isFinite(endedAt) ? [[id, endedAt]] : [];
+  }));
+}
+
 async function applyStoreTrackingPrivacy(state, route, stop, eta) {
   if (!eta.started || !eta.vanImei) return;
   const startedAt = state.routeMeta[route.id]?.startedAt;
@@ -3908,6 +3921,17 @@ async function applyStoreTrackingPrivacy(state, route, stop, eta) {
     ]);
     const tripEndAt = firstTripEndNearStore(trips, destination, startedAt);
     cutoff = trackingCutoffAt(startedAt, status, tripEndAt);
+    // A driver may keep the engine running at this store, leaving no trip
+    // end here. A confirmed visit to a later stop still closes access to
+    // this van for earlier customers.
+    const ids = state.routeMeta[route.id]?.optimizedStopIds || route.stops.map((entry) => entry.id);
+    const index = ids.indexOf(stop.id);
+    if (!Number.isFinite(tripEndAt) && index >= 0 && index < ids.length - 1) {
+      const ends = await tripEndsForRoute(route, state.routeMeta[route.id], eta.vanImei, trips);
+      for (const laterId of ids.slice(index + 1)) {
+        if (Number.isFinite(ends[laterId])) cutoff = Math.min(cutoff, ends[laterId]);
+      }
+    }
   }
   eta.trackingEndsAt = new Date(cutoff).toISOString();
   eta.trackingAvailable = Date.now() < cutoff;
@@ -3933,7 +3957,10 @@ async function getEtaVehicles() {
 
 async function liveEtasForRoute(route, state, vanImei) {
   const meta = state.routeMeta[route.id];
-  const firstStopId = meta.optimizedStopIds.find((id) => state.stopStatus[id]?.status !== "delivered");
+  const tripEnds = await tripEndsForRoute(route, meta, vanImei);
+  const effectiveStopStatus = progressFromTripEnds(meta.optimizedStopIds,
+    state.stopStatus, tripEnds).effectiveStatus;
+  const firstStopId = meta.optimizedStopIds.find((id) => effectiveStopStatus[id]?.status !== "delivered");
   const firstStop = route.stops.find((stop) => stop.id === firstStopId);
   if (!firstStop || !vanImei || !GOOGLE_MAPS_API_KEY) return null;
   const key = `${route.id}:${meta.startedAt}:${vanImei}:${firstStopId}`;
@@ -3942,7 +3969,7 @@ async function liveEtasForRoute(route, state, vanImei) {
   if (cached && Date.now() - cached.updatedAt < LIVE_ETA_CACHE_MS) {
     return {
       ...cached,
-      byStopId: remainingStopEtas(meta, route, state.stopStatus, cached.firstLegSeconds,
+      byStopId: remainingStopEtas(meta, route, effectiveStopStatus, cached.firstLegSeconds,
         UNLOAD_MINUTES_PER_STOP * 60, cached.updatedAt),
     };
   }
@@ -3993,7 +4020,7 @@ async function liveEtasForRoute(route, state, vanImei) {
     liveEtaUnavailableUntil.delete(key);
     return {
       ...value,
-      byStopId: remainingStopEtas(meta, route, state.stopStatus, firstLegSeconds,
+      byStopId: remainingStopEtas(meta, route, effectiveStopStatus, firstLegSeconds,
         UNLOAD_MINUTES_PER_STOP * 60, updatedAt),
     };
   })().catch((error) => {
@@ -4294,6 +4321,14 @@ async function planListedRouteWithGoogle(route) {
   return planRouteWithGoogle(route, false);
 }
 
+function listedOrExistingStopOrder(route, meta) {
+  const ids = meta?.optimizedStopIds;
+  if (!Array.isArray(ids) || ids.length !== route.stops.length) return route;
+  const byId = new Map(route.stops.map((stop) => [stop.id, stop]));
+  if (new Set(ids).size !== ids.length || ids.some((id) => !byId.has(id))) return route;
+  return { ...route, stops: ids.map((id) => byId.get(id)) };
+}
+
 function cachedRouteMatchesDefinition(meta, route) {
   if (!meta || !Array.isArray(meta.optimizedStopIds)) return false;
   if (meta.optimizedStopIds.length !== route.stops.length) return false;
@@ -4398,7 +4433,7 @@ async function checkAutomaticRouteStarts() {
         try {
           // Follow the board's listed stop order unless dispatch already
           // created a route. Auto-start must never silently reorder stops.
-          planned = await planListedRouteWithGoogle(route);
+          planned = await planListedRouteWithGoogle(listedOrExistingStopOrder(route, state.routeMeta[route.id]));
         } catch (error) { planError = error; }
       }
       const current = loadState();
@@ -4451,10 +4486,49 @@ async function checkMapsHealth() {
   }
 }
 
+const etaPlanRetryAfter = new Map();
+let etaPlanRepairInFlight = false;
+async function repairMissingEtaPlans() {
+  if (etaPlanRepairInFlight || !GOOGLE_MAPS_API_KEY) return;
+  etaPlanRepairInFlight = true;
+  try {
+    const snapshot = loadState();
+    const now = Date.now();
+    for (const route of [...ROUTES, ...B2B_ROUTES]) {
+      const meta = snapshot.routeMeta[route.id];
+      const startedAt = Date.parse(meta?.startedAt);
+      if (!Number.isFinite(startedAt) || startedAt > now ||
+          now - startedAt > 16 * 60 * 60 * 1000 || routeHasEtaPlan(meta) ||
+          (route.day !== undefined && route.day !== getEasternWeekday()) ||
+          !VAN_TO_BOUNCIE_IMEI[snapshot.assignments[route.id]?.van] ||
+          now < (etaPlanRetryAfter.get(route.id) || 0)) continue;
+      try {
+        // Repair only missing ETA data. Keep the route's existing start,
+        // assignments, stops, orders, and picking records untouched.
+        const planned = await planListedRouteWithGoogle(listedOrExistingStopOrder(route, meta));
+        const current = loadState();
+        if (current.routeMeta[route.id]?.startedAt !== meta.startedAt ||
+            routeHasEtaPlan(current.routeMeta[route.id])) continue;
+        current.routeMeta[route.id] = { ...current.routeMeta[route.id], ...planned };
+        saveState(current);
+        etaPlanRetryAfter.delete(route.id);
+        console.log(`[eta-plan-repair] ${route.id} restored listed-order ETA plan`);
+      } catch (error) {
+        etaPlanRetryAfter.set(route.id, Date.now() + 5 * 60 * 1000);
+        console.warn(`[eta-plan-repair] ${route.id}: ${error.message}`);
+      }
+    }
+  } finally {
+    etaPlanRepairInFlight = false;
+  }
+}
+
 setInterval(checkAutomaticRouteStarts, 30 * 1000);
 setTimeout(checkAutomaticRouteStarts, 5 * 1000);
 setInterval(checkMapsHealth, 30 * 60 * 1000);
 setTimeout(checkMapsHealth, 8 * 1000);
+setInterval(repairMissingEtaPlans, 2 * 60 * 1000);
+setTimeout(repairMissingEtaPlans, 12 * 1000);
 
 app.get("/api/route-eta/:routeId", (req, res) => {
   const state = loadState();
