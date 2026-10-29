@@ -309,6 +309,19 @@
     line-height:1.5;
   }
 
+  .eta-plan-warning{
+    margin: 12px 24px 0;
+    padding: 11px 15px;
+    background: #FFF1F0;
+    border: 1.5px solid #C63B32;
+    border-radius: 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight:700;
+    color: #91231B;
+    line-height:1.5;
+  }
+
   .stop-address{
     font-family:'JetBrains Mono', monospace;
     font-size: 10px;
@@ -1013,6 +1026,13 @@
           ' — verify before dispatching, commercial vans are not permitted</div>';
       }
 
+      var etaPlanWarning = meta.startedAt && !(Array.isArray(meta.optimizedStopIds) &&
+        meta.optimizedStopIds.length === route.stops.length &&
+        Array.isArray(meta.legDurationsSeconds) &&
+        meta.legDurationsSeconds.length >= route.stops.length)
+        ? '<div class="eta-plan-warning" role="alert">⚠ Route started, but customer ETAs are unavailable. Check Google Maps billing and verify a store tracking link before dispatch.</div>'
+        : '';
+
       card.innerHTML =
         '<div class="route-head">' +
           '<span class="route-name">' + route.name + '</span>' +
@@ -1023,6 +1043,7 @@
         ((route.responsibleDriver || route.dutySummary) ?
           '<div class="route-duty"><strong>Permanent responsibility</strong><b>' + (route.responsibleDriver || 'Assigned manager') + '</b><span>' + (route.dutySummary || '') + '</span></div>' : '') +
         parkwayWarning +
+        etaPlanWarning +
         '<div class="assign-row">' +
           '<div class="assign-field">' +
             '<div class="assign-label">Van</div>' +
@@ -1120,7 +1141,9 @@
         }).then(function(r){ return r.json().then(function(data){ return { ok:r.ok, data:data }; }); }).then(function(result){
           if(!result.ok || result.data.error){ alert(result.data.error || 'Could not start this route.'); render(); return; }
           var data = result.data;
-          if(data.warning){ console.warn(data.warning); }
+          if(data.warning){
+            alert('Route started, but customer ETAs are unavailable. Check Google Maps billing and verify a store tracking link before dispatch. Details: ' + data.warning);
+          }
           if(data.state){ stateData = data.state; }
           fetchEtaFor(routeId);
           render();
