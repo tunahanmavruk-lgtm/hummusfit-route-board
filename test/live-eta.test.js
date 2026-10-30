@@ -22,13 +22,20 @@ test('delivered stops are excluded and a delayed first leg pushes later stores',
   assert.equal(Date.parse(traffic.c.eta) - Date.parse(normal.c.eta), 600000);
 });
 
-test('a confirmed later visit advances ETA without changing delivery records', () => {
+test('a confirmed out-of-order visit excludes only that stop from ETA', () => {
   const listed = ['a', 'b', 'c', 'd'];
   const persisted = { a: { status: 'picked' } };
   const visitedAt = now - 11 * 60 * 1000;
   const progress = progressFromTripEnds(listed, persisted, { c: visitedAt }, now);
   assert.equal(progress.furthest, 2);
-  assert.deepEqual(listed.filter((id) => progress.effectiveStatus[id]?.status !== 'delivered'), ['d']);
+  assert.deepEqual(listed.filter((id) => progress.effectiveStatus[id]?.status !== 'delivered'), ['a', 'b', 'd']);
   assert.equal(persisted.a.status, 'picked');
   assert.equal(progressFromTripEnds(listed, persisted, { c: now - 2 * 60 * 1000 }, now).furthest, -1);
+});
+
+test('a manually delivered later stop does not imply earlier stops were visited', () => {
+  const result = progressFromTripEnds(['a', 'b', 'c'], { c: { status: 'delivered' } }, {}, now);
+  assert.equal(result.effectiveStatus.a, undefined);
+  assert.equal(result.effectiveStatus.b, undefined);
+  assert.equal(result.effectiveStatus.c.status, 'delivered');
 });
