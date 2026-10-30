@@ -18,22 +18,19 @@ function remainingStopEtas(meta, route, stopStatus, firstLegSeconds, unloadSecon
   return result;
 }
 
-// A later confirmed stop visit proves the van has passed earlier listed
-// stops even when the driver forgot to mark them delivered on the board.
-// These inferred marks are only used for ETA/privacy calculations; they
-// never write delivery status or touch an order.
+// A driver may visit stops out of the planned order. Only a confirmed visit
+// to the individual stop may remove it from the live ETA calculation.
+// These inferred marks stay in memory and never change delivery records.
 function progressFromTripEnds(stopIds, stopStatus, tripEndsByStop, now = Date.now()) {
   let furthest = -1;
+  const effectiveStatus = { ...stopStatus };
   for (let index = 0; index < stopIds.length; index++) {
     const id = stopIds[index];
     if (stopStatus[id]?.status === 'delivered' ||
         (Number.isFinite(tripEndsByStop[id]) && tripEndsByStop[id] + 10 * 60 * 1000 <= now)) {
       furthest = index;
+      effectiveStatus[id] = { ...effectiveStatus[id], status: 'delivered' };
     }
-  }
-  const effectiveStatus = { ...stopStatus };
-  for (let index = 0; index <= furthest; index++) {
-    effectiveStatus[stopIds[index]] = { ...effectiveStatus[stopIds[index]], status: 'delivered' };
   }
   return { effectiveStatus, furthest };
 }

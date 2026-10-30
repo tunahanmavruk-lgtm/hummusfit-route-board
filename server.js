@@ -3929,22 +3929,12 @@ async function applyStoreTrackingPrivacy(state, route, stop, eta) {
     cutoff = trackingCutoffAt(startedAt, status, tripEndAt);
     const passedAt = firstCompletedTripPassingStore(trips, destination, startedAt);
     if (Number.isFinite(passedAt)) cutoff = Math.min(cutoff, passedAt);
-    let movedOn = Number.isFinite(tripEndAt) || Number.isFinite(passedAt);
-    // A driver may keep the engine running at this store, leaving no trip
-    // end here. A confirmed visit to a later stop still closes access to
-    // this van for earlier customers.
-    const ids = state.routeMeta[route.id]?.optimizedStopIds || route.stops.map((entry) => entry.id);
-    const index = ids.indexOf(stop.id);
-    if (!movedOn && index >= 0 && index < ids.length - 1) {
-      const visits = await tripVisitsForRoute(route, state.routeMeta[route.id], eta.vanImei, trips);
-      for (const laterId of ids.slice(index + 1)) {
-        if (Number.isFinite(visits.endedNear[laterId])) {
-          cutoff = Math.min(cutoff, visits.endedNear[laterId]);
-          movedOn = true;
-        }
-      }
+    // Planned stop order is not proof of the driver's actual visit order.
+    // Keep tracking open for an unvisited store even if a later listed store
+    // was reached first.
+    if ((Number.isFinite(tripEndAt) || Number.isFinite(passedAt)) && Date.now() >= cutoff) {
+      eta.vanPassedLocation = true;
     }
-    if (movedOn && Date.now() >= cutoff) eta.vanPassedLocation = true;
   }
   eta.trackingEndsAt = new Date(cutoff).toISOString();
   eta.trackingAvailable = Date.now() < cutoff;
