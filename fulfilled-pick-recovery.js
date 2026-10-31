@@ -42,13 +42,16 @@ function recoverFulfilledDelivery(orders,records,store,now=new Date(),separation
     }
     for(const item of order.lineItems.nodes){
       const title=item.variantTitle&&item.variantTitle.toLowerCase()!=='default title'?item.title+' — '+item.variantTitle:item.title;
-      const key=title+'::'+(item.sku||'');
-      if(!title||!/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(item.variant?.id||'')||!item.variant?.product||!Array.isArray(item.variant.product.tags)||!item.sku||
+      // Food and supply lines can have no SKU. Their exact Shopify line and
+      // variant IDs, warehouse fulfillment, title, and saved count still gate recovery.
+      const sku=item.sku||'';
+      const key=title+'::'+sku;
+      if(!title||!/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(item.variant?.id||'')||!item.variant?.product||!Array.isArray(item.variant.product.tags)||
           !Number.isSafeInteger(item.quantity)||item.quantity<1||shipped.get(item.id)!==item.quantity||
           item.variant.product.collections?.pageInfo?.hasNextPage||
-          (skuKeys.has(item.sku)&&skuKeys.get(item.sku)!==key))throw fail();
-      skuKeys.set(item.sku,key);
-      const line={title,sku:item.sku,variantId:item.variant.id,quantity:item.quantity,imageUrl:item.variant.image?.url||item.variant.product.featuredImage?.url||null,
+          (sku&&skuKeys.has(sku)&&skuKeys.get(sku)!==key))throw fail();
+      if(sku)skuKeys.set(sku,key);
+      const line={title,sku,variantId:item.variant.id,quantity:item.quantity,imageUrl:item.variant.image?.url||item.variant.product.featuredImage?.url||null,
         productTags:item.variant.product.tags,productCollections:item.variant.product.collections?.nodes||[],scanCodes:[item.sku,item.variant.barcode].filter(Boolean)};
       if(merged.has(key)){
         const prior=merged.get(key);
