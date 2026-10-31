@@ -83,6 +83,30 @@ test('complete shipments work once without altering food calculations',async t=>
   assert.equal((await s.service.run(s.key)).status,'fulfilled');await s.service.run(s.key);assert.equal(s.calls(),1);
   assert.equal(s.order.fulfillments[0].fulfillmentLineItems.nodes.find(l=>l.lineItem.id===food).quantity,12);
 });
+test('cancelled warehouse fulfillment uses only an open replacement order and sends the saved shipment once',async t=>{
+  const order=fixture('Lynbrook');
+  order.fulfillments.push({id:'gid://shopify/Fulfillment/old',status:'CANCELLED',location:{id:warehouse},
+    fulfillmentLineItems:{nodes:[{quantity:12,lineItem:{id:food}},{quantity:1,lineItem:{id:ghost}}],pageInfo:{hasNextPage:false}}});
+  const replacement=structuredClone(order.fulfillmentOrders.nodes[0]);
+  order.fulfillmentOrders.nodes[0].status='CLOSED';
+  replacement.id='gid://shopify/FulfillmentOrder/2';
+  order.fulfillmentOrders.nodes.push(replacement);
+  const s=setup(t,{store:'Lynbrook',ghostQuantity:1,order});
+  const first=await s.service.run(s.key);
+  assert.equal(first.status,'fulfilled');assert.equal(s.calls(),1);
+  assert.equal(first.orders[0].fulfillmentId,'gid://shopify/Fulfillment/1');
+  const verified=await s.make().run(s.key);
+  assert.equal(verified.status,'fulfilled');assert.equal(s.calls(),1);
+  assert.deepEqual(verified.orders[0].fulfillmentIds,['gid://shopify/Fulfillment/1']);
+});
+test('cancelled fulfillment without an open replacement cannot be sent again',async t=>{
+  const order=fixture('Lynbrook');
+  order.fulfillments.push({id:'gid://shopify/Fulfillment/old',status:'CANCELLED',location:{id:warehouse},
+    fulfillmentLineItems:{nodes:[{quantity:12,lineItem:{id:food}},{quantity:1,lineItem:{id:ghost}}],pageInfo:{hasNextPage:false}}});
+  order.fulfillmentOrders.nodes[0].status='CLOSED';
+  const s=setup(t,{store:'Lynbrook',ghostQuantity:1,order});
+  assert.equal((await s.service.run(s.key)).status,'needs_review');assert.equal(s.calls(),0);
+});
 test('changed counts or overlapping order set cannot create another shipment',t=>{
   const s=setup(t);
   assert.equal(s.service.enqueue(s.request),s.key);
