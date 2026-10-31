@@ -16,7 +16,7 @@ const ORDER_QUERY = `query AutomaticReceiptOrder($id: ID!) {
     fulfillments(first: 100) { id createdAt status location { id }
       fulfillmentLineItems(first:250) { nodes { quantity lineItem { id } } pageInfo { hasNextPage endCursor } } }
     lineItems(first: 250) { pageInfo { hasNextPage endCursor } nodes { id sku quantity
-      variant { id inventoryItem { id } }
+      variant { id product { status productType tags } inventoryItem { id } }
     } }
   }
 }`;
@@ -242,7 +242,7 @@ function registerAutomaticReceiving(app,deps) {
     try { res.json(await service.reconcile(req.body?.report)); }
     catch(e) { res.status(e instanceof Review?409:503).json({error:e.message}); }
   });
-  app.get('/api/receiving-automation-health',(_req,res)=>res.json({version:RELEASE,cutover:new Date(CUTOVER).toISOString(),stores:14,flowProofConfigured:!!process.env.HOLBROOK_FLOW_CREDIT_SECRET}));
+  app.get('/api/receiving-automation-health',(_req,res)=>res.json({version:RELEASE,cutover:new Date(CUTOVER).toISOString(),stores:14,flowProofConfigured:!!process.env.HOLBROOK_FLOW_CREDIT_SECRET,caseCreditActivation:'retail-case-2026-10-31-v1'}));
   return service;
 }
 module.exports={RELEASE,CUTOVER,ORDER_QUERY,GROUP_QUERY,VARIANT_QUERY,ADJUST_MUTATION,Review,Retry,

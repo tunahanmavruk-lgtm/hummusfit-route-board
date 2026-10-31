@@ -49,11 +49,16 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
       if(!entry) {
         let stock=(await inventoryQuery(STOCK_QUERY,{id:inventoryItemId,locationId})).inventoryItem;
         let available=stock?.inventoryLevel?.quantities?.find(q=>q.name==='available')?.quantity;
-        // Only an exact, approved Retail Essentials case may have a missing store
-        // inventory level activated. Activation omits quantities: it credits zero.
+        // A verified case-to-unit mapping is required for conversion, not for
+        // crediting an exact fulfilled case at its destination. New case flavors
+        // can arrive before their sell-unit barcode has been reviewed.
         const mapping=VERIFIED_CASE_MAPPINGS[line.sku];
+        const product=line.variant?.product;
+        const retailCase=product?.status==='ACTIVE'&&
+          product.productType?.trim().toLowerCase()==='retail essentials - case'&&
+          product.tags?.some(tag=>tag.trim().toLowerCase()==='retail-essentials');
         if(stock?.id===inventoryItemId&&stock.sku===line.sku&&stock.tracked===true&&
-           !stock.inventoryLevel&&mapping?.caseVariantId===line.variant?.id) {
+           !stock.inventoryLevel&&(mapping ? mapping.caseVariantId===line.variant?.id : retailCase)) {
           const activationKey=hash(['activate-fulfilled-case-v1',locationId,inventoryItemId]);
           const activated=(await inventoryQuery(ACTIVATE_CASE_MUTATION,{inventoryItemId,locationId,key:activationKey})).inventoryActivate;
           if(!activated?.inventoryLevel?.id||activated.userErrors?.length) throw new Error('Verified case destination activation failed');
