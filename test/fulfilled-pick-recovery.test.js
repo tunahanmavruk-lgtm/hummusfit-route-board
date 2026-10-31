@@ -40,6 +40,24 @@ test('combined orders verify every shipment and merge the exact variant count wi
  assert.throws(()=>recoverFulfilledDelivery([f.order,duplicateSku],{picking:f.record},'Holbrook',now,true));
  second.displayFulfillmentStatus='PARTIALLY_FULFILLED';assert.throws(()=>recoverFulfilledDelivery([f.order,second],{picking:f.record},'Holbrook',now,true));
 });
+test('a mixed prior-morning add-on and current delivery recover only after every exact order ships today',()=>{
+ const f=fixture(),second=structuredClone(f.order);
+ f.order.createdAt='2026-10-26T14:00:00Z'; // Previous day, before the noon cutoff.
+ second.id='gid://shopify/Order/124';second.name='#124';
+ second.lineItems.nodes[0].id='gid://shopify/LineItem/2';
+ second.fulfillments[0].fulfillmentLineItems.nodes[0].lineItem.id='gid://shopify/LineItem/2';
+ f.record.orderId=f.order.id+','+second.id;f.record.itemScannedCount['Food::FOOD']=4;
+ const recovered=recoverFulfilledDelivery([f.order,second],{picking:f.record},'Holbrook',now,true);
+ assert.equal(recovered.deliveryDate,'2026-10-27');
+ assert.equal(recovered.source.lineItems[0].quantity,4);
+ assert.equal(recovered.shipmentVerifiedAt,'2026-10-27T14:10:00Z');
+ const oldShipment=structuredClone(second);oldShipment.fulfillments[0].createdAt='2026-10-26T20:10:00Z';
+ assert.throws(()=>recoverFulfilledDelivery([f.order,oldShipment],{picking:f.record},'Holbrook',now,true));
+ const olderOrder=structuredClone(f.order);olderOrder.createdAt='2026-10-25T14:00:00Z';
+ assert.throws(()=>recoverFulfilledDelivery([olderOrder,second],{picking:f.record},'Holbrook',now,true));
+ const unfulfilled=structuredClone(second);unfulfilled.displayFulfillmentStatus='UNFULFILLED';
+ assert.throws(()=>recoverFulfilledDelivery([f.order,unfulfilled],{picking:f.record},'Holbrook',now,true));
+});
 test('regular receiving requests detect a later Shopify fulfillment without a manual repair or Finish',async()=>{
  const f=mixedFixture(),before=JSON.stringify(f.records),calls=[];let fulfilled=false;
  const query=async(document,variables,version)=>{assert.match(document,/^query /);assert.equal(version,'2026-07');calls.push(variables.id);return {order:{...f.order,displayFulfillmentStatus:fulfilled?'FULFILLED':'UNFULFILLED'}};};

@@ -1114,7 +1114,7 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       orderName: orderName,
       pickedBy: record.completedBy || record.pickedBy,
       completedAt: record.completedAt,
-      deliveryDate: store ? deliveryDate(source) : null,
+      deliveryDate: store ? (selected.deliveryDate || deliveryDate(source)) : null,
       shipmentVerifiedAt: selected.shipmentVerifiedAt || null,
       isB2B: isB2B,
       crateCount,

@@ -2,6 +2,7 @@ const {deliveryDate,orderKey}=require('./receiving-selection');
 const {POS_STORE_LOCATIONS}=require('./essentials-pos-conversion');
 const {essentialsTypeFor}=require('./essentials-shadow');
 const QUERY=`query ReceivingFulfilledPick($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id title variantTitle sku quantity variant{id barcode image{url} product{tags featuredImage{url} collections(first:100){nodes{title handle} pageInfo{hasNextPage}}}}} pageInfo{hasNextPage}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage}}}}}`;
+const easternDateFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'});
 
 function recoveryOrderIds(value){
   const ids=String(value||'').split(',').map(id=>id.trim());
@@ -18,13 +19,13 @@ function recoverFulfilledDelivery(orders,records,store,now=new Date(),separation
   orders=[...orders].sort((a,b)=>String(a?.id).localeCompare(String(b?.id)));
   const ids=recoveryOrderIds(orders.map(o=>o?.id).join(','));
   if(!ids)throw fail();
-  const identity=ids.join(','),today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  const identity=ids.join(','),today=easternDateFormatter.format(now);
   const matching=record=>record&&orderKey(record.orderId)===identity?record:null;
   const foodRecord=matching(records?.picking),essentialsRecord=matching(records?.essentials);
   const merged=new Map(),skuKeys=new Map(),fulfillmentTimes=[];
   for(const order of orders){
     if(order.cancelledAt||order.displayFulfillmentStatus!=='FULFILLED'||order.lineItems?.pageInfo?.hasNextPage||
-        !order.lineItems?.nodes?.length||!order.fulfillments?.length||deliveryDate(order)!==today)throw fail();
+        !order.lineItems?.nodes?.length||!order.fulfillments?.length)throw fail();
     const tags=(order.customer?.tags||[]).map(t=>t.toLowerCase());
     const destinations=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes('hummus fit '+s.toLowerCase())||(s==='Islip'&&tags.includes('hummus fit east islip')));
     if(destinations.length!==1||destinations[0]!==store)throw fail();
@@ -56,6 +57,17 @@ function recoverFulfilledDelivery(orders,records,store,now=new Date(),separation
       }else merged.set(key,line);
     }
   }
+  // A store's morning delivery can include an add-on order placed before the
+  // previous day's noon cutoff. Accept that mixed batch only when another
+  // order is scheduled for today and every exact warehouse fulfillment was
+  // completed today. Older or unfulfilled batches remain unavailable.
+  const scheduledDays=orders.map(deliveryDate);
+  const scheduledToday=scheduledDays.every(day=>day===today);
+  const yesterday=new Date(Date.parse(`${today}T00:00:00Z`)-86400000).toISOString().slice(0,10);
+  const verifiedCarryover=scheduledDays.includes(today)&&scheduledDays.some(day=>day===yesterday)&&
+    scheduledDays.every(day=>day===today||day===yesterday)&&
+    fulfillmentTimes.every(time=>easternDateFormatter.format(new Date(time))===today);
+  if(!scheduledToday&&!verifiedCarryover)throw fail();
   const lineItems=[...merged.values()],foodKeys=new Set(),essentialsKeys=new Set();
   for(const item of lineItems){
     const key=item.title+'::'+item.sku;
@@ -68,7 +80,7 @@ function recoverFulfilledDelivery(orders,records,store,now=new Date(),separation
     if(keys.size&&Object.keys(record.itemStatus||{}).some(key=>!keys.has(key)))throw fail();
   }
   const verifiedAt=fulfillmentTimes.sort().at(-1),primary=foodKeys.size?foodRecord:essentialsRecord;
-  return {source:{orderId:identity,orderName:orders.map(o=>o.name).join(', '),createdAt:orders.map(o=>o.createdAt).sort()[0],
+  return {deliveryDate:today,source:{orderId:identity,orderName:orders.map(o=>o.name).join(', '),createdAt:orders.map(o=>o.createdAt).sort()[0],
       orders:orders.map(o=>({id:o.id,name:o.name,createdAt:o.createdAt})),lineItems,isB2B:false},
     record:{...primary,orderId:identity,completedAt:verifiedAt},
     essentialsRecord:essentialsKeys.size?{...essentialsRecord,orderId:identity,completedAt:verifiedAt}:null,
