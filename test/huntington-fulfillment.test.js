@@ -66,8 +66,9 @@ test('a new Retail Essentials case can receive its exact case credit before unit
   changed.lines[0].sku='MF-7171015-CS';
   changed.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials']};
   changed.setInactive();
-  await assert.rejects(changed.make().credit(changed.body),/activation needs review/);
-  assert.equal(changed.activations(),0);
+  await changed.make().credit(changed.body);
+  assert.equal(changed.activations(),1);
+  assert.equal(changed.writes(),1);
 });
 test('delivered items reconcile while GHOST stays uncredited; duplicate and concurrent events write once',async t=>{
   const f=fixture(t),service=f.make();

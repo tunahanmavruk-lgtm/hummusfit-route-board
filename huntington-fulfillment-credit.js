@@ -58,7 +58,7 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
           product.productType?.trim().toLowerCase()==='retail essentials - case'&&
           product.tags?.some(tag=>tag.trim().toLowerCase()==='retail-essentials');
         if(stock?.id===inventoryItemId&&stock.sku===line.sku&&stock.tracked===true&&
-           !stock.inventoryLevel&&(mapping ? mapping.caseVariantId===line.variant?.id : retailCase)) {
+           !stock.inventoryLevel&&(retailCase || mapping?.caseVariantId===line.variant?.id)) {
           const activationKey=hash(['activate-fulfilled-case-v1',locationId,inventoryItemId]);
           const activated=(await inventoryQuery(ACTIVATE_CASE_MUTATION,{inventoryItemId,locationId,key:activationKey})).inventoryActivate;
           if(!activated?.inventoryLevel?.id||activated.userErrors?.length) throw new Error('Verified case destination activation failed');
