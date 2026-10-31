@@ -32,8 +32,11 @@ function recoverFulfilledDelivery(orders,records,store,now=new Date(),separation
     const shipped=new Map(),lineIds=new Set(order.lineItems.nodes.map(i=>i.id));
     if(lineIds.size!==order.lineItems.nodes.length)throw fail();
     for(const f of order.fulfillments){
-      if(f.status!=='SUCCESS'||f.location?.id!=='gid://shopify/Location/103133642999'||f.fulfillmentLineItems?.pageInfo?.hasNextPage||
+      if(!['SUCCESS','CANCELLED'].includes(f.status)||f.location?.id!=='gid://shopify/Location/103133642999'||f.fulfillmentLineItems?.pageInfo?.hasNextPage||
           !Number.isFinite(Date.parse(f.createdAt))||Date.parse(f.createdAt)>now.getTime())throw fail();
+      // A cancelled attempt is historical. Only successful warehouse
+      // fulfillments prove the quantities and delivery date for receiving.
+      if(f.status==='CANCELLED')continue;
       fulfillmentTimes.push(f.createdAt);
       for(const l of f.fulfillmentLineItems?.nodes||[]){
         if(!lineIds.has(l.lineItem?.id)||!Number.isSafeInteger(l.quantity)||l.quantity<1)throw fail();
