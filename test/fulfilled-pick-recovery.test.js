@@ -58,6 +58,23 @@ test('a mixed prior-morning add-on and current delivery recover only after every
  const unfulfilled=structuredClone(second);unfulfilled.displayFulfillmentStatus='UNFULFILLED';
  assert.throws(()=>recoverFulfilledDelivery([f.order,unfulfilled],{picking:f.record},'Holbrook',now,true));
 });
+test('SKU-less fulfilled lines use exact variant and saved title counts without weakening case conversion',()=>{
+ const f=fixture(),second=structuredClone(f.order);
+ f.order.createdAt='2026-10-26T14:00:00Z';
+ f.order.lineItems.nodes[0].sku=null;
+ second.id='gid://shopify/Order/124';second.name='#124';
+ second.lineItems.nodes[0].id='gid://shopify/LineItem/2';second.lineItems.nodes[0].sku=null;
+ second.fulfillments[0].fulfillmentLineItems.nodes[0].lineItem.id='gid://shopify/LineItem/2';
+ f.record.orderId=f.order.id+','+second.id;
+ f.record.itemStatus={'Food::':'picked'};f.record.itemScannedCount={'Food::':4};
+ const r=recoverFulfilledDelivery([f.order,second],{picking:f.record},'Holbrook',now,true);
+ assert.equal(r.source.lineItems[0].sku,'');assert.equal(r.source.lineItems[0].quantity,4);
+ assert.deepEqual(r.source.lineItems[0].scanCodes,[]);
+ const changedVariant=structuredClone(second);changedVariant.lineItems.nodes[0].variant.id='gid://shopify/ProductVariant/99';
+ assert.throws(()=>recoverFulfilledDelivery([f.order,changedVariant],{picking:f.record},'Holbrook',now,true));
+ const changedCount=structuredClone(f.record);changedCount.itemScannedCount['Food::']=3;
+ assert.throws(()=>recoverFulfilledDelivery([f.order,second],{picking:changedCount},'Holbrook',now,true));
+});
 test('regular receiving requests detect a later Shopify fulfillment without a manual repair or Finish',async()=>{
  const f=mixedFixture(),before=JSON.stringify(f.records),calls=[];let fulfilled=false;
  const query=async(document,variables,version)=>{assert.match(document,/^query /);assert.equal(version,'2026-07');calls.push(variables.id);return {order:{...f.order,displayFulfillmentStatus:fulfilled?'FULFILLED':'UNFULFILLED'}};};
