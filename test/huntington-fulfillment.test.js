@@ -26,7 +26,7 @@ function fixture(t, store='Huntington') {
   const body={store,orderId:order.id,fulfillmentId:order.fulfillments[0].id,lineItemId:lines[0].id};
   return {dir,order,lines,body,make,groups,writes:()=>writes,activations:()=>activations,setInactive:()=>inactive=true,lose:()=>lose=true,advance:()=>clock+=7200000};
 }
-test('only an exact approved case activates a missing destination level before one credit',async t=>{
+test('a mapped case activates a missing destination level before one credit',async t=>{
   const f=fixture(t,'Lake Grove');
   f.lines[0].sku='MF-7171015-CS';
   f.lines[0].variant.id='gid://shopify/ProductVariant/51259630125303';
@@ -38,6 +38,36 @@ test('only an exact approved case activates a missing destination level before o
   const g=fixture(t,'Lake Grove');g.setInactive();
   await assert.rejects(g.make().credit(g.body),/activation needs review/);
   assert.equal(g.activations(),0);assert.equal(g.writes(),0);
+});
+test('a new Retail Essentials case can receive its exact case credit before unit mapping',async t=>{
+  const f=fixture(t,'Bellmore');
+  f.lines[0].sku='HF-NYB-RAW-602-C12';
+  f.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials','mapping-pending']};
+  f.setInactive();
+  await f.make().credit(f.body);
+  await f.make().credit(f.body);
+  assert.equal(f.activations(),1);
+  assert.equal(f.writes(),1);
+  for(const change of [
+    product=>product.status='DRAFT',
+    product=>product.productType='Other Essentials',
+    product=>product.tags=['mapping-pending'],
+  ]) {
+    const blocked=fixture(t,'Bellmore');
+    blocked.lines[0].sku='HF-NYB-RAW-602-C12';
+    blocked.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials','mapping-pending']};
+    change(blocked.lines[0].variant.product);
+    blocked.setInactive();
+    await assert.rejects(blocked.make().credit(blocked.body),/activation needs review/);
+    assert.equal(blocked.activations(),0);
+    assert.equal(blocked.writes(),0);
+  }
+  const changed=fixture(t,'Bellmore');
+  changed.lines[0].sku='MF-7171015-CS';
+  changed.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials']};
+  changed.setInactive();
+  await assert.rejects(changed.make().credit(changed.body),/activation needs review/);
+  assert.equal(changed.activations(),0);
 });
 test('delivered items reconcile while GHOST stays uncredited; duplicate and concurrent events write once',async t=>{
   const f=fixture(t),service=f.make();
