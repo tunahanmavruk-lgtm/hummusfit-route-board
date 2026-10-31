@@ -58,6 +58,19 @@ test('a mixed prior-morning add-on and current delivery recover only after every
  const unfulfilled=structuredClone(second);unfulfilled.displayFulfillmentStatus='UNFULFILLED';
  assert.throws(()=>recoverFulfilledDelivery([f.order,unfulfilled],{picking:f.record},'Holbrook',now,true));
 });
+test('an older cancelled fulfillment does not block a fully shipped mixed delivery',()=>{
+ const f=fixture(),second=structuredClone(f.order);
+ f.order.createdAt='2026-10-26T14:00:00Z';
+ f.order.fulfillments.unshift({...structuredClone(f.order.fulfillments[0]),id:'old',createdAt:'2026-10-26T20:00:00Z',status:'CANCELLED'});
+ second.id='gid://shopify/Order/124';second.name='#124';
+ second.lineItems.nodes[0].id='gid://shopify/LineItem/2';
+ second.fulfillments[0].fulfillmentLineItems.nodes[0].lineItem.id='gid://shopify/LineItem/2';
+ f.record.orderId=f.order.id+','+second.id;f.record.itemScannedCount['Food::FOOD']=4;
+ const recovered=recoverFulfilledDelivery([f.order,second],{picking:f.record},'Holbrook',now,true);
+ assert.equal(recovered.deliveryDate,'2026-10-27');
+ assert.equal(recovered.source.lineItems[0].quantity,4);
+ assert.equal(recovered.shipmentVerifiedAt,'2026-10-27T14:10:00Z');
+});
 test('SKU-less fulfilled lines use exact variant and saved title counts without weakening case conversion',()=>{
  const f=fixture(),second=structuredClone(f.order);
  f.order.createdAt='2026-10-26T14:00:00Z';
