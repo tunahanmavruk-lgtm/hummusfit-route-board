@@ -65,9 +65,13 @@ function inspectOrders(orders,job) {
     }
     const seen=new Set();
     for(const f of order.fulfillments) {
-      if(f.status!=='SUCCESS' || f.location?.id!==WAREHOUSE || !f.id || seen.has(f.id) ||
+      if(!['SUCCESS','CANCELLED'].includes(f.status) || f.location?.id!==WAREHOUSE || !f.id || seen.has(f.id) ||
         !Array.isArray(f.fulfillmentLineItems?.nodes) || f.fulfillmentLineItems.pageInfo?.hasNextPage) throw Error('Fulfillment evidence needs warehouse review');
-      seen.add(f.id);const lines=new Set();
+      seen.add(f.id);
+      // Shopify cancellation restores the order's unfulfilled quantity. Its
+      // original shipment is not current proof and must not count twice.
+      if(f.status==='CANCELLED') continue;
+      const lines=new Set();
       for(const entry of f.fulfillmentLineItems.nodes) {
         const id=entry.lineItem?.id;
         if(native.get(id)?.orderId!==order.id || lines.has(id) || !Number.isSafeInteger(entry.quantity) || entry.quantity<1) throw Error('Invalid fulfilled line');
@@ -92,14 +96,17 @@ function planOrder(order,evidence,job) {
   const satisfied=lines.every(l=>(totals.get(l.id)||0)>=targets.get(l.id));
   // A fully shipped line/backorder shipped later is evidence, never a reason
   // to resend the original completion or change inventory here.
-  if(satisfied) return {done:true,fulfillmentIds:order.fulfillments.map(f=>f.id)};
+  if(satisfied) return {done:true,fulfillmentIds:order.fulfillments.filter(f=>f.status==='SUCCESS').map(f=>f.id)};
   const partial=lines.some(l=>targets.get(l.id)<l.quantity);
-  if((partial || order.fulfillments.length>0) && !PARTIAL_FULFILLMENT_STORES.includes(job.store)) throw Error('Backorder saved. Logistics must replace this store’s legacy inventory-credit step before partial fulfillment; no stock changed');
+  if((partial || order.fulfillments.some(f=>f.status==='SUCCESS')) && !PARTIAL_FULFILLMENT_STORES.includes(job.store)) throw Error('Backorder saved. Logistics must replace this store’s legacy inventory-credit step before partial fulfillment; no stock changed');
   if(order.fulfillmentOrders?.pageInfo?.hasNextPage || !Array.isArray(order.fulfillmentOrders?.nodes)) throw Error('Complete fulfillment orders required');
   const needed=new Map(lines.map(l=>[l.id,Math.max(0,targets.get(l.id)-(totals.get(l.id)||0))]));
   const input=[];
   for(const fo of order.fulfillmentOrders.nodes) {
     if(fo.lineItems?.pageInfo?.hasNextPage || !Array.isArray(fo.lineItems?.nodes)) throw Error('Complete fulfillment-order lines required');
+    // Cancelled fulfillments can leave a closed fulfillment order beside a
+    // replacement OPEN one. Only the open order can be fulfilled again.
+    if(!['OPEN','IN_PROGRESS'].includes(fo.status)) continue;
     const selected=[];
     for(const row of fo.lineItems.nodes) {
       const want=needed.get(row.lineItem?.id)||0;
