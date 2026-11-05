@@ -286,6 +286,13 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitBarcode: "860001800548", lookupByVariantId: true,
     allowSharedProductMappingPendingTag: true,
   }),
+  "HF-SOURSTRIPS-TROPICALMANGO-CS12": Object.freeze({
+    unitSku: "860001800531", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51393643413751",
+    unitVariantId: "gid://shopify/ProductVariant/50348807356663",
+    unitBarcode: "860001800531", lookupByVariantId: true,
+    allowSharedProductMappingPendingTag: true,
+  }),
   "HF-SOURSTRIPS-STRAWBERRY-CS12": Object.freeze({
     unitSku: "860001800517", unitsPerCase: 12,
     caseVariantId: "gid://shopify/ProductVariant/51317893333239",

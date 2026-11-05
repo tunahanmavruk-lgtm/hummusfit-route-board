@@ -34,6 +34,10 @@ function barcodeVariants(scannedCode) {
 // generations scan while old inventory is being used up.
 const PRODUCT_BARCODE_ALIASES = new Map([
   ["basic baddie pumpkin exclusive", ["641837881303"]],
+  // Farmingdale's 2026-11-04 physical Blue Raspberry case uses a GS1-128
+  // application-identifier prefix plus its GTIN-14. Keep the exact observed
+  // case label; do not infer case GTINs from individual bag UPCs.
+  ["case — sour strips — 12 × 3.4 oz bags — blue raspberry", ["0110860001800507", "10860001800507"]],
 ]);
 
 function barcodeCodesForProduct(title, primaryCode, sku) {
