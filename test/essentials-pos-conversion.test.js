@@ -52,6 +52,15 @@ test('Bucked Up P3 packs stay distinct from historical C6 orders and pending cat
 });
 
 test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", () => {
+  const mango = caseMapping({ ...coca, sku: "HF-SOURSTRIPS-TROPICALMANGO-CS12" });
+  assert.deepEqual({ unitSku: mango.unitSku, unitsPerCase: mango.unitsPerCase,
+    caseVariantId: mango.caseVariantId, unitVariantId: mango.unitVariantId,
+    unitBarcode: mango.unitBarcode }, {
+    unitSku: "860001800531", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51393643413751",
+    unitVariantId: "gid://shopify/ProductVariant/50348807356663",
+    unitBarcode: "860001800531",
+  });
   assert.equal(caseMapping(coca).unitSku, "4890008101306");
   assert.equal(caseMapping(coca).unitsPerCase, 8);
   assert.equal(caseMapping(coca).unitBarcode, "4890008101306");
