@@ -112,6 +112,42 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
     }
     return verifyLine(order,line);
   }
-  return {credit,verifyLine,ensureLineCredit};
+  async function readShipmentCredit(order, line, fulfillmentIds) {
+    const {store,locationId}=orderPolicy(order);
+    const active=order.fulfillments.filter(f=>f.status!=='CANCELLED');
+    const totals=active.length ? deliveredQuantities({...order,fulfillments:active}) : new Map();
+    const expected=order.fulfillments.filter(f=>fulfillmentIds.includes(f.id));
+    if (expected.length!==fulfillmentIds.length || expected.some(f=>f.status!=='SUCCESS')) {
+      throw new Error('Saved shipment was cancelled or changed');
+    }
+    const scoped=expected.flatMap(f=>f.fulfillmentLineItems.nodes
+      .filter(row=>row.lineItem.id===line.id).map(row=>({id:f.id,quantity:row.quantity})));
+    const shipped=scoped.reduce((sum,row)=>sum+row.quantity,0);
+    if (shipped!==(totals.get(line.id)||0)) throw new Error('A later shipment needs separate receipt allocation');
+    const ledger=read(file);
+    const legacy=['store-flow-credit-proofs.json','holbrook-flow-credit-proofs.json']
+      .some(name=>Object.values(read(path.join(dir,name))).some(e=>e.orderId===order.id&&e.lineItemId===line.id));
+    if (legacy || Object.values(ledger).some(e=>e.orderId===order.id&&e.lineItemId===line.id&&
+        (!scoped.some(row=>row.id===e.fulfillmentId)||e.locationId!==locationId))) {
+      throw new Error('Conflicting historical credit needs inventory review');
+    }
+    const credits=[];
+    for (const row of scoped) {
+      const key=hash([store==='Huntington'?'huntington-fulfillment-v1':'store-fulfillment-v1',order.id,row.id,line.id,locationId]);
+      const entry=ledger[key];
+      if (entry?.status!=='posted') throw new Error('Waiting for verified shipment credit');
+      if (entry.quantity!==row.quantity || entry.inventoryItemId!==line.variant?.inventoryItem?.id ||
+          entry.input?.referenceDocumentUri!==`gid://agent-hazar-receiving/FulfillmentCredit/${key}`) {
+        throw new Error('Saved store credit differs from the exact fulfilled line');
+      }
+      const group=(await inventoryQuery(groupQuery,{id:entry.adjustmentId})).node;
+      verifyCredit(group,entry);
+      if (group.id!==entry.adjustmentId) throw new Error('Shopify returned a different credit group');
+      credits.push({fulfillmentId:row.id,adjustmentId:group.id,quantity:row.quantity,postedAt:group.createdAt});
+    }
+    if (new Set(credits.map(row=>row.adjustmentId)).size!==credits.length) throw new Error('Duplicate shipment credit proof');
+    return {shipped,credited:shipped,credits,lineItemId:line.id,locationId,inventoryItemId:line.variant?.inventoryItem?.id};
+  }
+  return {credit,verifyLine,ensureLineCredit,readShipmentCredit};
 }
 module.exports={createFulfillmentCredit,verifyCredit,STOCK_QUERY,ACTIVATE_CASE_MUTATION};

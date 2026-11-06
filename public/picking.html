@@ -1986,9 +1986,14 @@
 
     if(orderDetail.completion && !orderDetail.isB2B){
       var completion=orderDetail.completion, shipment=completion.shipment;
-      var stateLabels={queued:'Saved — waiting for Shopify',verifying:'Verifying Shopify response',fulfilled:'Shopify fulfillment verified',fulfilled_with_backorder:'Delivered quantities fulfilled — backorder remains',needs_review:'Saved — logistics review needed',not_confirmed:'Shopify fulfillment not yet confirmed'};
+      var stateLabels={queued:'Saved — waiting for Shopify',verifying:'Verifying Shopify response',fulfilled:'Shopify fulfillment verified',fulfilled_with_backorder:'Packed quantities fulfilled — backorder remains',needs_review:'Saved — logistics review needed',not_confirmed:'Shopify fulfillment not yet confirmed'};
+      var recounts=(shipment && shipment.warehouseRecounts || []).map(function(line){
+        return '<p>Warehouse recount needed for '+escapeHtml(line.item.split('::')[0])+
+          ' ('+escapeHtml(line.shortfall)+' short at picking).</p>';
+      }).join('');
       html+='<div class="completed-banner"><div>Food picking: '+(completion.foodComplete?'saved':'in progress')+'</div><div>Essentials: '+(completion.essentialsComplete?'saved':'in progress')+'</div><div>'+escapeHtml(stateLabels[completion.shopifyStatus]||'Shopify status needs review')+'</div>'+
         (shipment && shipment.error?'<p>'+escapeHtml(shipment.error)+'</p>':'')+
+        recounts+
         '<p>Receiving corrections and case-to-unit conversion run after store confirmation. “Picking saved” does not mean inventory is corrected.</p>'+
         (completion.allComplete?'<button id="retryCompletionBtn">Retry / check Shopify status</button>':'')+'</div>';
     }

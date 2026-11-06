@@ -55,7 +55,7 @@ function isFood(product) {
   return ![...(product.tags||[]),...(product.collections?.nodes||[]).map(c=>c.title)]
     .some(t=>/essentials|pos.sell.unit/i.test(t));
 }
-function checkOrder(report, order) {
+function checkOrder(report, order, shipment) {
   assert(Object.hasOwn(POS_STORE_LOCATIONS,report?.store),'Store is outside the 14 POS locations');
   assert(report.automation?.version===RELEASE && Date.parse(report.submittedAt)>=CUTOVER &&
     Date.parse(report.submittedAt)<=Date.now()+60000 && !report.supersededBy,'Receipt is outside the automatic cutover');
@@ -66,9 +66,16 @@ function checkOrder(report, order) {
   const stores=Object.keys(POS_STORE_LOCATIONS).filter(s=>tags.includes(`hummus fit ${s.toLowerCase()}`)||
     (s==='Islip'&&tags.includes('hummus fit east islip')));
   assert(stores.length===1&&stores[0]===report.store,'Order destination does not match this store');
-  if(order.displayFulfillmentStatus!=='FULFILLED'&&!partialReceiptAllowed(report,order)) throw new Retry('Waiting for Shopify warehouse fulfillment');
-  assert(order.fulfillments?.length>0&&order.fulfillments.length<100&&order.fulfillments.every(f=>
-    f.status==='SUCCESS'&&f.location?.id===WAREHOUSE),'Warehouse fulfillment is not uniquely proven');
+  if (shipment) {
+    assert(!order.cancelledAt && Array.isArray(order.fulfillments) && order.fulfillments.length<100 &&
+      order.fulfillments.every(f=>['SUCCESS','CANCELLED'].includes(f.status)&&f.location?.id===WAREHOUSE) &&
+      shipment.fulfillmentIds.every(id=>order.fulfillments.some(f=>f.id===id&&f.status==='SUCCESS')),
+      'Saved warehouse shipment is no longer verified');
+  } else {
+    if(order.displayFulfillmentStatus!=='FULFILLED'&&!partialReceiptAllowed(report,order)) throw new Retry('Waiting for Shopify warehouse fulfillment');
+    assert(order.fulfillments?.length>0&&order.fulfillments.length<100&&order.fulfillments.every(f=>
+      f.status==='SUCCESS'&&f.location?.id===WAREHOUSE),'Warehouse fulfillment is not uniquely proven');
+  }
   assert(Array.isArray(order.lineItems?.nodes)&&!order.lineItems.pageInfo?.hasNextPage,'Complete Shopify order lines required');
 }
 function verifyGroup(group, plan) {
@@ -78,7 +85,7 @@ function verifyGroup(group, plan) {
     changes[0].location?.id===plan.locationId,'Exact Shopify adjustment proof does not match');
 }
 
-function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocation, env=process.env, now=Date.now}) {
+function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocation, findFoodShipment=()=>null, env=process.env, now=Date.now}) {
   const ledgerFile=path.join(dir,'automatic-receiving-v1.json');
   const flowFile=path.join(dir,'store-flow-credit-proofs.json');
   const holbrookFile=path.join(dir,'holbrook-flow-credit-proofs.json');
@@ -118,19 +125,47 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     verifiedStoreFlowCredit({store:report.store,order,group:proof.node,lineItemId:line.id,locationId,
       warehouseLocationId:WAREHOUSE,cutover:Date.parse('2026-10-06T04:00:00Z'),flowAppId});
   }
-  async function correct(report,order,locationId,item,kind) {
+  function shipmentFor(report, references, enabled) {
+    const job=findFoodShipment(report.store,references.map(order=>order.id));
+    if (!enabled) {
+      assert(!job && !report.foodShipmentKey,'Use verified shipment receiving for this order');
+      return null;
+    }
+    assert(job?.foodShipmentVersion==='verified-food-shipment-v1' && job.key===report.foodShipmentKey &&
+      job.verifiedAt && ['fulfilled','fulfilled_with_backorder'].includes(job.status) &&
+      job.orderIds.length===references.length && references.every(o=>job.orderIds.includes(o.id)) &&
+      references.every(o=>job.orders[o.id]?.status==='verified'&&Array.isArray(job.orders[o.id].fulfillmentIds)) &&
+      Date.parse(job.verifiedAt)<=Date.parse(report.submittedAt),'Exact verified shipment is required for this receipt');
+    return job;
+  }
+  async function foodBasis(report, order, item, shipment, locationId) {
+    const line=order.lineItems.nodes.filter(l=>l.sku===item.sku);
+    const picked=shipment.items.filter(l=>l.food===true&&l.key===item.title+'::'+item.sku);
+    assert(line.length===1&&picked.length===1&&item.receivingCategory==='food'&&
+      report.items.filter(i=>i.sku===item.sku).length===1&&item.orderedQty===line[0].quantity&&
+      picked[0].ordered===item.orderedQty&&picked[0].shipped===item.expectedFromPicking&&
+      Number.isSafeInteger(item.actuallyReceived)&&item.actuallyReceived>=0,
+      'Exact order line, confirmed pack and physical receiving count required');
+    const proof=await fulfillmentCredit.readShipmentCredit(order,line[0],shipment.orders[order.id].fulfillmentIds);
+    assert(proof.shipped===picked[0].shipped,'Shopify shipment differs from the confirmed packed quantity');
+    assert(proof.inventoryItemId && proof.locationId===locationId,'Exact store inventory identity required');
+    return {...proof,shipmentKey:shipment.key,ordered:item.orderedQty,received:item.actuallyReceived,
+      delta:item.actuallyReceived-proof.credited};
+  }
+  async function correct(report,order,locationId,item,kind,shipment) {
     const sku=item.sku;
     assert(typeof sku==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(sku),'A verified product SKU is required');
     const key=hash([kind==='extra'?'agent-hazar-extra':'agent-hazar-food',report.store,report.orderId,sku]);
     const line=order.lineItems.nodes.filter(l=>l.sku===sku);
-    const delta=kind==='extra'?item.qty:item.actuallyReceived-item.orderedQty;
-    assert(Number.isSafeInteger(delta)&&delta!==0&&delta<=10,'Large or invalid overage requires a physical-count confirmation');
+    const basis=shipment&&kind==='food' ? await foodBasis(report,order,item,shipment,locationId) : null;
+    const delta=basis ? basis.delta : kind==='extra'?item.qty:item.actuallyReceived-item.orderedQty;
+    assert(Number.isSafeInteger(delta)&&(basis||delta!==0)&&delta<=10,'Large or invalid overage requires a physical-count confirmation');
     let variantId;
     if(kind==='food') {
-      if(order.displayFulfillmentStatus==='PARTIALLY_FULFILLED') assert(fullyDelivered(order,sku),'Food correction waits for this exact delivered line');
+      if(!basis&&order.displayFulfillmentStatus==='PARTIALLY_FULFILLED') assert(fullyDelivered(order,sku),'Food correction waits for this exact delivered line');
       assert(line.length===1&&report.items.filter(i=>i.sku===sku).length===1&&item.receivingCategory==='food'&&
         Number.isSafeInteger(item.actuallyReceived)&&item.actuallyReceived>=0&&item.orderedQty===line[0].quantity&&
-        item.orderDiff===delta,'Exact food order line and received count required');
+        item.orderDiff===item.actuallyReceived-item.orderedQty,'Exact food order line and received count required');
       variantId=line[0].variant.id;
     } else {
       assert(['scan','entered'].includes(item.source)&&item.catalogVerified===true&&item.catalogStatus==='matched'&&
@@ -143,10 +178,16 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     if(previous) {
       assert(previous.reportId===report.id&&previous.delta===delta&&previous.variantId===variantId,
         'Another receipt or changed count already owns this order correction');
+      assert((previous.shipmentKey||null)===(basis?.shipmentKey||null),'Existing adjustment uses a different shipment baseline');
       if(previous.status==='review') throw new Review(previous.error);
     }
+    if (basis && delta===0) {
+      if (!previous) write(ledgerFile,key,{status:'matched',kind,sku,reportId:report.id,store:report.store,
+        orderId:report.orderId,shipmentKey:basis.shipmentKey,variantId,delta,verifiedAt:new Date(now()).toISOString()});
+      return {kind,sku,status:'matched',adjustmentId:null};
+    }
     if(!previous?.plan) {
-      if(kind==='food') await creditFor(report,order,line[0],locationId);
+      if(kind==='food'&&!basis) await creditFor(report,order,line[0],locationId);
       const data=await inventoryQuery(VARIANT_QUERY,{id:variantId,locationId}),variant=data.productVariant;
       assert(variant?.id===variantId&&variant.sku===sku&&variant.inventoryItem?.sku===sku&&
         variant.inventoryItem.tracked===true&&isFood(variant.product),'Active food inventory item required');
@@ -160,7 +201,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
           referenceDocumentUri:`gid://agent-hazar-receiving/${kind==='extra'?'ExtraCorrection':'FoodCorrection'}/${key}`,
           changes:[{inventoryItemId:variant.inventoryItem.id,locationId,delta,changeFromQuantity:available}]}};
       previous={reportId:report.id,store:report.store,orderId:report.orderId,sku,kind,delta,variantId,attempt,
-        status:'pending',startedAt:now(),plan};
+        status:'pending',startedAt:now(),plan,...(basis?{shipmentKey:basis.shipmentKey}:{})};
       // Persist BEFORE sending. On an uncertain response, only this exact key/input may be retried.
       write(ledgerFile,key,previous);
     }
@@ -188,39 +229,63 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     write(ledgerFile,key,{...previous,status:'posted',postedAt:proof.node.createdAt});
     return {kind,sku,status:'posted',adjustmentId:proof.node.id,variantId:kind==='extra'?variantId:undefined};
   }
-  async function process(report) {
+  async function process(report, enabled) {
     let references;
     try { references=receiptOrders(report); } catch(e) { throw new Review(e.message); }
+    const shipment=shipmentFor(report,references,enabled);
     const orders=[];
     // Validate every destination and fulfillment before any mutation.
     for(const reference of references) {
       const {order}=await orderQuery(ORDER_QUERY,{id:reference.id});
-      checkOrder(receiptForOrder(report,reference.id),order); orders.push(order);
+      checkOrder(receiptForOrder(report,reference.id),order,shipment?.orders[reference.id]); orders.push(order);
     }
     const locationId=await exactLocation(report.store),results=[];
-    const jobs=[...(report.items||[]).filter(i=>i.receivingCategory==='food'&&i.orderDiff!==0).map(item=>({item,kind:'food'})),
+    const jobs=[...(report.items||[]).filter(i=>i.receivingCategory==='food'&&
+      (i.orderDiff!==0 || (shipment&&i.expectedFromPicking!==i.orderedQty))).map(item=>({item,kind:'food'})),
       ...(report.extraItems||[]).map(item=>({item,kind:'extra'}))];
     for(const {item,kind}of jobs) {
       try {
         const owners=kind==='food'?orders.filter(o=>o.lineItems.nodes.some(l=>l.sku===item.sku)):orders;
         assert(owners.length===1,'Combined receipt item requires one unambiguous source order; allocation needs review');
         const order=owners[0],scoped=receiptForOrder(report,order.id);
-        results.push({...await correct(scoped,order,locationId,item,kind),orderId:order.id});
+        results.push({...await correct(scoped,order,locationId,item,kind,shipment),orderId:order.id});
       }
       catch(error) { results.push({kind,sku:item.sku||'',code:item.code,status:error instanceof Review?'requires_review':'retry',error:error.message}); }
     }
     return {ok:true,results};
   }
-  async function reconcile(report) {
+  async function readFoodProof(report,sku,orderId,groupId) {
+    const shipment=shipmentFor(report,receiptOrders(report),true);
+    const scoped=receiptForOrder(report,orderId);
+    const {order}=await orderQuery(ORDER_QUERY,{id:orderId});
+    checkOrder(scoped,order,shipment.orders[orderId]);
+    const item=report.items.find(i=>i.sku===sku);
+    assert(item,'Exact receipt item required');
+    const basis=await foodBasis(scoped,order,item,shipment,await exactLocation(report.store));
+    const key=hash(['agent-hazar-food',report.store,orderId,sku]);
+    const entry=read(ledgerFile)[key];
+    if (basis.delta===0) {
+      assert(!groupId&&entry?.status==='matched'&&entry.reportId===report.id&&
+        entry.shipmentKey===shipment.key&&entry.delta===0,'Verified matched shipment is required');
+      return {basis,node:null};
+    }
+    assert(entry?.status==='posted'&&entry.adjustmentId===groupId&&entry.reportId===report.id&&
+      entry.shipmentKey===shipment.key&&entry.delta===basis.delta,'Posted shipment correction proof required');
+    const {node}=await inventoryQuery(GROUP_QUERY,{id:groupId});
+    verifyGroup(node,entry.plan);
+    assert(node.id===groupId,'Shopify returned a different correction group');
+    return {basis,node};
+  }
+  async function reconcile(report, enabled=false) {
     if(env.RECEIVING_AUTOMATION_ENABLED==='false') throw new Retry('Automatic receiving corrections are paused');
     let references;
     try { references=receiptOrders(report); } catch(e) { throw new Review(e.message); }
     const keys=references.map(o=>`${report?.store}:${o.id}`);
     if(keys.some(key=>flights.has(key))) throw new Retry('This order is already processing');
-    const promise=process(report).finally(()=>keys.forEach(key=>flights.delete(key)));
+    const promise=process(report,enabled).finally(()=>keys.forEach(key=>flights.delete(key)));
     keys.forEach(key=>flights.set(key,promise)); return promise;
   }
-  return {flowProof,reconcile,verifyFulfillmentCredit:fulfillmentCredit.ensureLineCredit};
+  return {flowProof,reconcile,readFoodProof,verifyFulfillmentCredit:fulfillmentCredit.ensureLineCredit};
 }
 function registerAutomaticReceiving(app,deps) {
   const service=createAutomaticReceiving(deps);
@@ -234,12 +299,20 @@ function registerAutomaticReceiving(app,deps) {
       catch(e) { console.error('[receiving-flow-proof]',e.message); res.status(e instanceof Review?409:503).json({error:e.message}); }
     });
   }
-  app.post('/api/automatic-receiving-correction',async(req,res)=>{
+  for (const [url,verifiedShipment] of [['/api/automatic-receiving-correction',false],['/api/verified-food-receiving-correction',true]]) app.post(url,async(req,res)=>{
     const token=String(req.get('authorization')||'').replace(/^Bearer /,'');
     const identity=deps.verifyToken(token,'essentials.receive');
     if(!identity||identity.sub!=='hummusfit-receiving') return res.status(403).json({error:'Receiving service authorization required'});
     if(process.env.RAILWAY_ENVIRONMENT_ID && deps.dir!=='/data') return res.status(503).json({error:'Persistent inventory ledger volume is unavailable'});
-    try { res.json(await service.reconcile(req.body?.report)); }
+    try { res.json(await service.reconcile(req.body?.report,verifiedShipment)); }
+    catch(e) { res.status(e instanceof Review?409:503).json({error:e.message}); }
+  });
+  app.post('/api/verified-food-receiving-proof',async(req,res)=>{
+    const token=String(req.get('authorization')||'').replace(/^Bearer /,'');
+    const identity=deps.verifyToken(token,'essentials.receive');
+    if(!identity||identity.sub!=='hummusfit-receiving') return res.status(403).json({error:'Receiving service authorization required'});
+    const {report,sku,orderId,groupId}=req.body||{};
+    try { res.json(await service.readFoodProof(report,sku,orderId,groupId)); }
     catch(e) { res.status(e instanceof Review?409:503).json({error:e.message}); }
   });
   app.get('/api/receiving-automation-health',(_req,res)=>res.json({version:RELEASE,cutover:new Date(CUTOVER).toISOString(),stores:14,flowProofConfigured:!!process.env.HOLBROOK_FLOW_CREDIT_SECRET,caseCreditActivation:'retail-case-2026-10-31-v1'}));
