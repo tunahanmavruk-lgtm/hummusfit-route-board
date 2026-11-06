@@ -35,6 +35,15 @@ function savedReceiptLines(store,orderId,counts,evidence,order,cutover) {
     const backordered=order.displayFulfillmentStatus==='PARTIALLY_FULFILLED'&&
       saved.actuallyReceived===0&&saved.expectedFromPicking===0&&(deliveredQuantities(order).get(item.id)||0)===0;
     const mapping=caseMapping(item);
+    // A duplicate legacy SKU can name two different case inventory items.
+    // The saved order must own the approved case variant before a retry can
+    // debit store stock. Keep this line for review without blocking other
+    // independently verified retail lines on the same receipt.
+    if(mapping?.caseVariantId && item.variant?.id!==mapping.caseVariantId) {
+      return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,
+        receivedCases:saved.actuallyReceived,
+        error:'Fulfilled case variant differs from the approved POS conversion case; reconcile the exact Shopify credit and case migration'};
+    }
     return {...mapping,title:item.title,pickedCases:saved.expectedFromPicking,receivedCases:saved.actuallyReceived,
       ...(backordered?{backordered:true,lineItemId:item.id,orderedCases:item.quantity}: {})};
   });

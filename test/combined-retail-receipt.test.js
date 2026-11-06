@@ -5,7 +5,7 @@ const cutoff=Date.parse('2026-10-06T04:00:00Z'),sku='HF-NYB-CELL-4905-C12';
 function fixture(){
   const orders=[1,2].map(n=>({id:`gid://shopify/Order/${n}`,name:`#${n}`,createdAt:'2026-10-17T00:00:00Z',cancelledAt:null,
     displayFulfillmentStatus:'FULFILLED',customer:{tags:['Hummus Fit Ronkonkoma']},
-    lineItems:{nodes:n===1?[{sku,quantity:2,variant:{product:{tags:['retail-essentials']}}}]:[],pageInfo:{hasNextPage:false}},
+    lineItems:{nodes:n===1?[{sku,quantity:2,variant:{id:'gid://shopify/ProductVariant/51259609514231',product:{tags:['retail-essentials']}}}]:[],pageInfo:{hasNextPage:false}},
     fulfillments:[{status:'SUCCESS',location:{id:'gid://shopify/Location/103133642999'}}]}));
   const orderId=orders.map(o=>o.id).join(',');
   return {orders,orderId,counts:{[sku]:2},evidence:{id:'Ronkonkoma::receipt',store:'Ronkonkoma',orderId,orderName:'#1, #2',
@@ -52,7 +52,7 @@ test('actual receipt endpoint uses exact keys across retry/restart and does not 
       POS_SHOPIFY_CLIENT_ID:'test',POS_SHOPIFY_CLIENT_SECRET:'test',ESSENTIALS_POS_CUTOVER:cutoff,
       verifyLogisticsToken:()=>({sub:'hummusfit-receiving'}),VALID_STOP_NAMES:new Map([['ronkonkoma',{isB2B:false}]]),
       POS_STORE_LOCATIONS:{Ronkonkoma:'Hummus Fit Ronkonkoma'},loadArchive:()=>({}),loadPosLedger:()=>ledger,
-      shopifyGraphQL:async(q,v)=>{assert.match(v.id,/^gid:\/\/shopify\/Order\/\d+$/);return {order:f.orders.find(o=>o.id===v.id)};},
+      shopifyGraphQL:async(q,v)=>{assert.match(q,/variant\{id inventoryItem/);assert.match(v.id,/^gid:\/\/shopify\/Order\/\d+$/);return {order:f.orders.find(o=>o.id===v.id)};},
       exactStoreLocation:async()=> 'ronkonkoma-location',
       convertOneReceivedLine:async(store,id,location,line)=>{
         const key=receiptKey(store,id,line.caseSku);if(ledger[key]) return {sku:line.caseSku,status:'already_posted'};
