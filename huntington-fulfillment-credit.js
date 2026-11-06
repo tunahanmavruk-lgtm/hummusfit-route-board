@@ -54,9 +54,9 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
         // can arrive before their sell-unit barcode has been reviewed.
         const mapping=VERIFIED_CASE_MAPPINGS[line.sku];
         const product=line.variant?.product;
+        const tags=(product?.tags||[]).map(tag=>tag.trim().toLowerCase());
         const retailCase=product?.status==='ACTIVE'&&
-          product.productType?.trim().toLowerCase()==='retail essentials - case'&&
-          product.tags?.some(tag=>tag.trim().toLowerCase()==='retail-essentials');
+          tags.includes('retail-essentials')&&tags.includes('b2b-case');
         if(stock?.id===inventoryItemId&&stock.sku===line.sku&&stock.tracked===true&&
            !stock.inventoryLevel&&(retailCase || mapping?.caseVariantId===line.variant?.id)) {
           const activationKey=hash(['activate-fulfilled-case-v1',locationId,inventoryItemId]);
@@ -98,6 +98,20 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
     }
     return true;
   }
-  return {credit,verifyLine};
+  async function ensureLineCredit(order,line) {
+    try { return await verifyLine(order,line); }
+    catch(error) {
+      if(error.message!=='Waiting for exact delivered-line store credit proof') throw error;
+    }
+    const {store}=orderPolicy(order);
+    const fulfilled=order.fulfillments.flatMap(f=>f.fulfillmentLineItems.nodes
+      .filter(l=>l.lineItem.id===line.id).map(l=>({fulfillmentId:f.id,quantity:l.quantity})));
+    for(const item of fulfilled) {
+      if(!Number.isSafeInteger(item.quantity)||item.quantity<=0) throw new Error('Exact fulfilled quantity required');
+      await credit({store,orderId:order.id,fulfillmentId:item.fulfillmentId,lineItemId:line.id});
+    }
+    return verifyLine(order,line);
+  }
+  return {credit,verifyLine,ensureLineCredit};
 }
 module.exports={createFulfillmentCredit,verifyCredit,STOCK_QUERY,ACTIVATE_CASE_MUTATION};
