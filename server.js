@@ -23,7 +23,7 @@ const {
   firstCompletedTripPassingStore,
   trackingCutoffAt,
 } = require("./store-tracking-privacy.js");
-const { createCompletionFulfillment, canonicalStore, backorderDecision, validBackorder, confirmedCaseLines } = require('./completion-fulfillment');
+const { createCompletionFulfillment, canonicalStore, backorderDecision, validBackorder, confirmedCaseLines, confirmedFoodLines, FOOD_SHIPMENT_VERSION } = require('./completion-fulfillment');
 const {
   lineItemsForWorkflow,
   normalizePickingWorkflow,
@@ -54,6 +54,7 @@ const completionFulfillment = createCompletionFulfillment({
   dir: PERSISTENT_DIR,
   durable: fs.existsSync('/data'),
   query: (query, variables) => shopifyGraphQL(query, variables, '2026-07'),
+  foodShipmentReady,
 });
 
 // The crate label printer is black-ink-only (thermal) — no brand colors
@@ -70,6 +71,20 @@ const LOGO_BLACK_PATH = path.join(__dirname, "public", "assets", "logo-black.png
 // have it bookmarked.
 const RECEIVING_APP_URL =
   process.env.RECEIVING_APP_URL || "https://hummusfit-receiving-production.up.railway.app";
+
+async function foodShipmentReady() {
+  if (!ESSENTIALS_SEPARATION_ENABLED || process.env.RECEIVING_AUTOMATION_ENABLED==='false') return false;
+  try {
+    const response=await fetch(new URL('/api/receiving-automation-health',RECEIVING_APP_URL),{
+      cache:'no-store',signal:AbortSignal.timeout(5000)
+    });
+    if (!response.ok) return false;
+    const health=await response.json();
+    return health.foodShipmentVersion===FOOD_SHIPMENT_VERSION && health.foodShipmentReady===true;
+  } catch {
+    return false;
+  }
+}
 
 // The Essentials board and its operational picking split are gated
 // independently. This lets the board remain visible in read-only mode while
@@ -1074,6 +1089,10 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
     }
     if(!selected)return res.status(409).json({code:'current_delivery_unavailable',error:'Today’s delivery is not yet verified for receiving. This page will check again automatically. Contact logistics if the delivery has already arrived.'});
     const {record,source,essentialsRecord}=selected;
+    const shipment = store === 'Huntington' ? completionFulfillment.status(store,source.orderId) : null;
+    if (shipment?.foodShipmentVersion && (req.get('X-HF-Receiving-Food-Shipment')!==FOOD_SHIPMENT_VERSION || !shipment.verifiedAt)) {
+      return res.status(409).json({code:'current_delivery_unavailable',error:'Receiving is waiting for the compatible service and verified Shopify shipment.'});
+    }
     const orderName=source.orderName,isB2B=Boolean(source.isB2B),lineItems=source.lineItems;
 
     const items = lineItems.map((item, idx) => {
@@ -1090,8 +1109,11 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
         status === "partial" ? (readItemState(pickedRecord.itemPickedQty, item, workflowIndex) || 0) :
         0; // missing or not_picked
       const mapping = essentialsType === "retail" ? caseMapping(item) : null;
+      const confirmedFood = shipment?.foodPicks?.find(line=>line.key===lineItemKey(item));
       return {
-        title: item.title, sku: item.sku, expectedQty: item.quantity, pickedQty, status,
+        title: item.title, sku: item.sku, expectedQty: item.quantity,
+        pickedQty: confirmedFood ? confirmedFood.shipped : pickedQty,
+        status: confirmedFood ? (confirmedFood.shipped===0?'missing':confirmedFood.shipped===item.quantity?'picked':'partial') : status,
         scanCodes: item.scanCodes || [item.sku].filter(Boolean),
         imageUrl: item.imageUrl || null, productTags: item.productTags || [],
         productCollections: item.productCollections || [], essentialsType,
@@ -1114,8 +1136,10 @@ app.get("/api/picked-summary/:stopName", async (req, res) => {
       orderName: orderName,
       pickedBy: record.completedBy || record.pickedBy,
       completedAt: record.completedAt,
+      ...(store==='Huntington' ? {foodShipmentVersion:FOOD_SHIPMENT_VERSION} : {}),
+      ...(shipment?.foodShipmentVersion ? {foodShipmentKey:shipment.key} : {}),
       deliveryDate: store ? (selected.deliveryDate || deliveryDate(source)) : null,
-      shipmentVerifiedAt: selected.shipmentVerifiedAt || null,
+      shipmentVerifiedAt: shipment?.foodShipmentVersion ? shipment.verifiedAt : selected.shipmentVerifiedAt || null,
       isB2B: isB2B,
       crateCount,
       items,
@@ -2835,6 +2859,9 @@ app.post("/api/picking-item", async (req, res) => {
         // Cycled back to the start — clear scan progress so a fresh
         // scan-count cycle can begin cleanly.
         delete record.itemScannedCount[itemKey];
+      } else if (status === "missing" && workflow === "orders" && canonicalStore(key) === 'Huntington' &&
+          process.env.FOOD_SHIPMENT_PILOT === 'Huntington') {
+        record.itemScannedCount[itemKey] = 0;
       }
     }
     if (workflow !== "essentials" && (status === "picked" || status === "partial")) {
@@ -3306,6 +3333,12 @@ app.post("/api/picking-finish", async (req, res) => {
         finalCrateNumber:null,workflow,shipment,fulfillment:shipment.orders,completion:completionView(state,key,sourceOrder),waitingForWorkflow:null});
     }
 
+    const foodPilot = store === 'Huntington' && !sourceOrder.isB2B &&
+      process.env.FOOD_SHIPMENT_PILOT === 'Huntington';
+    if (foodPilot && !await foodShipmentReady()) {
+      return res.status(503).json({error:'Huntington shipment pilot is waiting for the compatible receiving service. Picking progress is saved.'});
+    }
+
     const state = loadState();
     const { workflow, order, record } = pickingWorkflowContext(req, state, key, sourceOrder);
 
@@ -3345,7 +3378,6 @@ app.post("/api/picking-finish", async (req, res) => {
 
     record.completedAt ||= new Date().toISOString();
     record.completedBy ||= record.pickedBy;
-    saveState(state);
 
     const foodOrder = orderForPickingWorkflow(sourceOrder, "orders");
     const essentialsOrder = orderForPickingWorkflow(sourceOrder, "essentials");
@@ -3362,6 +3394,18 @@ app.post("/api/picking-finish", async (req, res) => {
       ESSENTIALS_SEPARATION_ENABLED
     );
     const { foodComplete, essentialsComplete, allComplete: allWorkflowsComplete } = completion;
+    // Queue the exact pilot shipment before publishing a completed pick.
+    // Invalid or ambiguous quantities must never fall through to the old writer.
+    let pilotJobKey;
+    if (foodPilot && allWorkflowsComplete) {
+      try {
+        const foodLines = confirmedFoodLines(foodOrder,foodRecord,readItemState);
+        const caseLines = confirmedCaseLines(sourceOrder,{lineItems:essentialsOrder.lineItems,record:essentialsRecord},readItemState);
+        pilotJobKey = completionFulfillment.enqueue({store,source:sourceOrder,caseLines,foodLines,confirmedBy:record.completedBy});
+      } catch(error) {
+        return res.status(409).json({error:error.message});
+      }
+    }
     saveState(state);
 
     if (allWorkflowsComplete) {
@@ -3379,7 +3423,7 @@ app.post("/api/picking-finish", async (req, res) => {
       try {
         if(store && !sourceOrder.isB2B) {
           const caseLines=ESSENTIALS_SEPARATION_ENABLED ? confirmedCaseLines(sourceOrder,{lineItems:essentialsOrder.lineItems,record:essentialsRecord},readItemState) : [];
-          const jobKey=completionFulfillment.enqueue({store,source:sourceOrder,caseLines,confirmedBy:record.completedBy});
+          const jobKey=pilotJobKey || completionFulfillment.enqueue({store,source:sourceOrder,caseLines,confirmedBy:record.completedBy});
           shipment=await completionFulfillment.run(jobKey);
           fulfillmentResults=shipment.orders;
         } else {
@@ -4755,6 +4799,11 @@ checkForNewOrdersAndNotify();
 const receivingService=require('./automatic-receiving').registerAutomaticReceiving(app, {
   dir: PERSISTENT_DIR, orderQuery: shopifyGraphQL, inventoryQuery: posShopifyGraphQL,
   exactLocation: exactStoreLocation, verifyToken: verifyLogisticsToken,
+  findFoodShipment(store, ids) {
+    if (store!=='Huntington') return null;
+    return Object.values(completionFulfillment.read()).find(job=>job.foodShipmentVersion&&
+      job.store===store&&job.orderIds.some(id=>ids.includes(id)));
+  },
 });
 
 // Explicit manager-only pilot. Does not alter picking or food reconciliation.

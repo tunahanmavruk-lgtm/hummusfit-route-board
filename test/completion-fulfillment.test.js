@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {ORDER_QUERY,CREATE_MUTATION,backorderDecision,validBackorder,createCompletionFulfillment,canonicalStore}=require('../completion-fulfillment');
+const {ORDER_QUERY,CREATE_MUTATION,backorderDecision,validBackorder,createCompletionFulfillment,canonicalStore,confirmedFoodLines}=require('../completion-fulfillment');
 const orderId='gid://shopify/Order/1', food='gid://shopify/LineItem/1', ghost='gid://shopify/LineItem/2';
 const warehouse='gid://shopify/Location/103133642999';
 function fixture(store='Huntington'){
@@ -11,10 +11,10 @@ function fixture(store='Huntington'){
     lineItems:{nodes:[{id:food,title:'Food',sku:'FOOD',quantity:12,currentQuantity:12},{id:ghost,title:'GHOST',sku:'GHOST',quantity:1,currentQuantity:1}],pageInfo:{hasNextPage:false}},
     fulfillments:[],fulfillmentOrders:{nodes:[{id:'gid://shopify/FulfillmentOrder/1',status:'OPEN',assignedLocation:{location:{id:warehouse}},lineItems:{nodes:[{id:'gid://shopify/FulfillmentOrderLineItem/1',lineItem:{id:food},remainingQuantity:12},{id:'gid://shopify/FulfillmentOrderLineItem/2',lineItem:{id:ghost},remainingQuantity:1}],pageInfo:{hasNextPage:false}}}],pageInfo:{hasNextPage:false}}};
 }
-function setup(t,{store='Huntington',ghostQuantity=0,mode,order:given}={}){
+function setup(t,{store='Huntington',ghostQuantity=0,mode,order:given,foodPicked}={}){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'completion-test-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
-  let order=given||fixture(store),calls=0;
+  let order=given||fixture(store),calls=0,ready=true;
   const query=async(q,vars)=>{
     if(q===ORDER_QUERY)return {order:structuredClone(order)};
     assert.equal(q,CREATE_MUTATION);calls++;
@@ -32,9 +32,19 @@ function setup(t,{store='Huntington',ghostQuantity=0,mode,order:given}={}){
   };
   const source={orderId,orders:[{id:orderId}],lineItems:[{title:'Food',sku:'FOOD',quantity:12},{title:'GHOST',sku:'GHOST',quantity:1}]};
   const request={store,source,caseLines:[{key:'GHOST::GHOST',ordered:1,shipped:ghostQuantity}],confirmedBy:'Staff'};
-  const make=()=>createCompletionFulfillment({dir,query});
+  if(foodPicked!==undefined) {
+    source.lineItems[0].quantity=10;
+    order.lineItems.nodes[0].quantity=10;
+    order.lineItems.nodes[0].currentQuantity=10;
+    order.fulfillmentOrders.nodes[0].lineItems.nodes[0].remainingQuantity=10;
+    request.foodLines=confirmedFoodLines({lineItems:[source.lineItems[0]]},{
+      itemStatus:{'Food::FOOD':foodPicked?'partial':'missing'},
+      itemScannedCount:{'Food::FOOD':foodPicked},itemPickedQty:{'Food::FOOD':foodPicked}
+    },(dict,item)=>dict[item.title+'::'+item.sku]);
+  }
+  const make=()=>createCompletionFulfillment({dir,query,foodShipmentReady:async()=>ready});
   const service=make(),key=service.enqueue(request);
-  return {service,key,make,order,source,request,query,dir,calls:()=>calls};
+  return {service,key,make,order,source,request,query,dir,calls:()=>calls,setReady:value=>{ready=value;}};
 }
 test('backorder requires explicit exact order, count and staff evidence',()=>{
   const item={title:'GHOST',sku:'GHOST',quantity:2};
@@ -46,6 +56,33 @@ test('backorder requires explicit exact order, count and staff evidence',()=>{
   assert.throws(()=>backorderDecision(orderId,item,3,'Staff'));
   assert.throws(()=>backorderDecision(orderId,item,0,''));
   assert.equal(validBackorder({},orderId,item,0),false);
+});
+test('Huntington pilot ships nine of ten, freezes fulfillment IDs and flags warehouse recount',async t=>{
+  const s=setup(t,{foodPicked:9,mode:'lost-after-write'});
+  assert.equal((await s.service.run(s.key)).status,'needs_review');
+  const verified=await s.make().run(s.key);
+  assert.equal(verified.status,'fulfilled_with_backorder');
+  assert.deepEqual(verified.orders[0].fulfillmentIds,['gid://shopify/Fulfillment/1']);
+  assert.equal(verified.warehouseRecounts[0].shortfall,1);
+  assert.equal(s.order.fulfillments[0].fulfillmentLineItems.nodes[0].quantity,9);
+  s.order.fulfillments.push({...s.order.fulfillments[0],id:'gid://shopify/Fulfillment/2',
+    fulfillmentLineItems:{nodes:[{quantity:1,lineItem:{id:food}}],pageInfo:{hasNextPage:false}}});
+  assert.deepEqual((await s.make().run(s.key)).orders[0].fulfillmentIds,verified.orders[0].fulfillmentIds);
+  assert.equal(s.calls(),1);
+});
+test('confirmed zero food ships only the other packed lines',async t=>{
+  const s=setup(t,{foodPicked:0,ghostQuantity:1});
+  assert.equal((await s.service.run(s.key)).status,'fulfilled_with_backorder');
+  assert.deepEqual(s.order.fulfillments[0].fulfillmentLineItems.nodes,[{quantity:1,lineItem:{id:ghost}}]);
+});
+test('queued pilot shipments hold through a Receiving downgrade and resume once compatible',async t=>{
+  const s=setup(t,{foodPicked:9});
+  s.setReady(false);
+  assert.equal((await s.make().run(s.key)).status,'needs_review');
+  assert.equal(s.calls(),0);
+  s.setReady(true);
+  assert.equal((await s.make().run(s.key)).status,'fulfilled_with_backorder');
+  assert.equal(s.calls(),1);
 });
 test('Huntington fulfills food once, leaves GHOST untouched; retry/restart/double tap cannot duplicate',async t=>{
   const s=setup(t);

@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { POS_STORE_LOCATIONS } = require('./essentials-pos-conversion');
 const { WAREHOUSE } = require('./huntington-fulfillment');
 const {PARTIAL_FULFILLMENT_STORES}=require('./store-fulfillment-policy');
+const FOOD_SHIPMENT_VERSION = 'verified-food-shipment-v1';
 const ORDER_QUERY = `query CompletionOrder($id:ID!){order(id:$id){id name cancelledAt tags customer{tags} displayFulfillmentStatus
   lineItems(first:250){nodes{id title variantTitle sku quantity currentQuantity} pageInfo{hasNextPage}}
   fulfillmentOrders(first:100){nodes{id status assignedLocation{location{id}} lineItems(first:250){nodes{id remainingQuantity lineItem{id}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}
@@ -43,6 +44,21 @@ function confirmedCaseLines(source,essentials,readItemState) {
     if(!Number.isSafeInteger(scanned) || scanned<0 || scanned>item.quantity ||
       (scanned<item.quantity && !validBackorder(essentials.record,source.orderId,item,scanned))) throw Error('Every missing case must be explicitly confirmed on backorder');
     return {key:itemKey(item),ordered:item.quantity,shipped:scanned};
+  });
+}
+function confirmedFoodLines(food, record, readItemState) {
+  return food.lineItems.map((item, index) => {
+    const status = readItemState(record.itemStatus, item, index);
+    const scanned = readItemState(record.itemScannedCount, item, index);
+    const partial = readItemState(record.itemPickedQty, item, index);
+    const full = status === 'picked' && scanned === item.quantity;
+    const short = status === 'partial' && Number.isSafeInteger(partial) &&
+      partial > 0 && partial < item.quantity && scanned === partial;
+    const missing = status === 'missing' && (scanned === undefined || scanned === 0);
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1 || (!full && !short && !missing)) {
+      throw Error('Confirm the exact packed food quantity for ' + item.title + ' before finishing');
+    }
+    return {key:itemKey(item), ordered:item.quantity, shipped:missing ? 0 : scanned, food:true};
   });
 }
 function inspectOrders(orders,job) {
@@ -86,7 +102,13 @@ function inspectOrders(orders,job) {
     const match=aggregate.get(item.key);
     if(!match || match.quantity!==item.ordered || !Number.isSafeInteger(item.shipped) || item.shipped<0 || item.shipped>item.ordered) throw Error('Order quantities changed since completion');
     if(item.shipped!==item.ordered && match.ids.length!==1) throw Error('Merged-order backorder needs exact line allocation; no shipment created');
-    for(const id of match.ids) targets.set(id,item.shipped===item.ordered?native.get(id).quantity:item.shipped);
+    for(const id of match.ids) {
+      const target = item.shipped===item.ordered ? native.get(id).quantity : item.shipped;
+      if (job.foodShipmentVersion && (totals.get(id) || 0) > target) {
+        throw Error('Shopify already fulfilled more than this confirmed shipment. Review before posting.');
+      }
+      targets.set(id,target);
+    }
   }
   return {native,totals,targets};
 }
@@ -121,32 +143,45 @@ function planOrder(order,evidence,job) {
   if([...needed.values()].some(n=>n!==0) || !input.length) throw Error('Exact picked quantities are not fulfillable');
   return {done:false,fulfillment:{notifyCustomer:false,lineItemsByFulfillmentOrder:input}};
 }
-function createCompletionFulfillment({dir,query,durable=true}) {
+function createCompletionFulfillment({dir,query,durable=true,foodShipmentReady=async()=>true}) {
   const file=path.join(dir,'completion-fulfillments-v1.json');
   // Serialize the entire writer: overlapping merged order sets must not race.
   let tail=Promise.resolve();
   const locked=fn=>{const next=tail.then(fn,fn);tail=next.catch(()=>{});return next;};
   function persist(key,job) {const all=read(file);all[key]=job;durableWrite(file,all);}
-  function enqueue({store,source,caseLines,confirmedBy}) {
+  function enqueue({store,source,caseLines,foodLines,confirmedBy}) {
     if(!durable) throw Error('Persistent completion ledger unavailable; no Shopify write allowed');
     if(!canonicalStore(store) || source.isB2B || !confirmedBy) throw Error('Confirmed POS store completion required');
     const orderIds=[...new Set((source.orders||[]).map(o=>o.id))].sort();
     if(!orderIds.length || orderIds.some(id=>!/^gid:\/\/shopify\/Order\/\d+$/.test(id))) throw Error('Exact order identifiers required');
-    const cases=new Map(caseLines.map(l=>[l.key,l]));
-    const items=source.lineItems.map(item=>cases.get(itemKey(item))||{key:itemKey(item),ordered:item.quantity,shipped:item.quantity}).sort((a,b)=>a.key.localeCompare(b.key));
+    const version = foodLines === undefined ? undefined : FOOD_SHIPMENT_VERSION;
+    const confirmed = [...caseLines, ...(foodLines || [])];
+    const quantities = new Map(confirmed.map(line => [line.key, line]));
+    const items=source.lineItems.map(item=>quantities.get(itemKey(item))||{key:itemKey(item),ordered:item.quantity,shipped:item.quantity}).sort((a,b)=>a.key.localeCompare(b.key));
+    if (version && (store !== 'Huntington' || quantities.size !== confirmed.length ||
+        quantities.size !== items.length || items.some(item => !quantities.has(item.key)) ||
+        !items.some(item => item.shipped > 0))) {
+      throw Error('The Huntington pilot requires exact confirmed counts and at least one packed item');
+    }
     if(new Set(items.map(i=>i.key)).size!==items.length) throw Error('Duplicate picking identity');
     const key=digest([store,orderIds]), fingerprint=digest(items), existing=read(file)[key];
-    if(existing) {if(existing.fingerprint!==fingerprint) throw Error('Shipment already saved with different counts; review before changing it');return key;}
+    if(existing) {if(existing.fingerprint!==fingerprint || existing.foodShipmentVersion!==version) throw Error('Shipment already saved with different counts; review before changing it');return key;}
     for(const other of Object.values(read(file))) if(other.orderIds.some(id=>orderIds.includes(id))) throw Error('An overlapping shipment already exists; review it instead of creating another');
-    persist(key,{key,fingerprint,store,orderIds,items,confirmedBy,confirmedAt:new Date().toISOString(),status:'queued',orders:{}});
+    persist(key,{key,fingerprint,store,orderIds,items,foodShipmentVersion:version,confirmedBy,confirmedAt:new Date().toISOString(),status:'queued',orders:{}});
     return key;
   }
   async function run(key) {return locked(async()=>{
     let job=read(file)[key];if(!job) throw Error('Saved completion not found');
     if(!durable) throw Error('Persistent completion ledger unavailable');
+    if (job.foodShipmentVersion && job.verifiedAt) return summary(job);
     try {
+      if (job.foodShipmentVersion && !await foodShipmentReady()) throw Error('Waiting for the compatible Receiving service before shipping');
       let orders=await Promise.all(job.orderIds.map(async id=>(await query(ORDER_QUERY,{id})).order));
       let evidence=inspectOrders(orders,job);
+      if (job.foodShipmentVersion && orders.some(order=>!job.orders[order.id]?.attemptedAt &&
+          order.fulfillments.some(f=>f.status==='SUCCESS'))) {
+        throw Error('An existing Shopify shipment needs review before entering the food pilot');
+      }
       for(const order of orders) {
         const previous=job.orders[order.id]||{};
         const plan=planOrder(order,evidence,job);
@@ -163,7 +198,9 @@ function createCompletionFulfillment({dir,query,durable=true}) {
         const fresh=(await query(ORDER_QUERY,{id:order.id})).order;
         orders=orders.map(o=>o.id===order.id?fresh:o);evidence=inspectOrders(orders,job);
         if(!planOrder(fresh,evidence,job).done) throw Error('Shopify has not confirmed the exact shipment');
-        job.orders[order.id].status='verified';persist(key,job);
+        job.orders[order.id].status='verified';
+        job.orders[order.id].fulfillmentIds=fresh.fulfillments.filter(f=>f.status==='SUCCESS').map(f=>f.id);
+        persist(key,job);
       }
       job.status=[...evidence.native.values()].every(l=>(evidence.totals.get(l.id)||0)===l.quantity)?'fulfilled':'fulfilled_with_backorder';
       job.error=null;job.verifiedAt=new Date().toISOString();persist(key,job);
@@ -172,11 +209,16 @@ function createCompletionFulfillment({dir,query,durable=true}) {
   });}
   function summary(job) {
     if(!job) return null;
-    return {key:job.key,status:job.status,error:job.error||null,verifiedAt:job.verifiedAt||null,
+    return {key:job.key,status:job.status,error:job.error||null,verifiedAt:job.verifiedAt||null,foodShipmentVersion:job.foodShipmentVersion,
+      ...(job.foodShipmentVersion ? {
+        foodPicks:job.items.filter(item=>item.food),
+        warehouseRecounts:job.items.filter(item=>item.food&&item.shipped<item.ordered)
+          .map(item=>({item:item.key,shortfall:item.ordered-item.shipped,status:'recount_needed'}))
+      } : {}),
       backorders:job.items.filter(i=>i.shipped<i.ordered).map(i=>({item:i.key,quantity:i.ordered-i.shipped})),
       orders:job.orderIds.map(id=>({orderId:id,ok:job.orders[id]?.status==='verified',...job.orders[id],input:undefined}))};
   }
   function status(store,orderId) {const ids=String(orderId).split(',').sort();return summary(read(file)[digest([store,ids])]);}
   return {enqueue,run,status,read:()=>read(file)};
 }
-module.exports={ORDER_QUERY,CREATE_MUTATION,backorderDecision,validBackorder,confirmedCaseLines,canonicalStore,inspectOrders,planOrder,createCompletionFulfillment};
+module.exports={ORDER_QUERY,CREATE_MUTATION,FOOD_SHIPMENT_VERSION,backorderDecision,validBackorder,confirmedCaseLines,confirmedFoodLines,canonicalStore,inspectOrders,planOrder,createCompletionFulfillment};

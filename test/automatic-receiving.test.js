@@ -36,6 +36,75 @@ function setup(t,store='Holbrook') {
     timeout:()=>{failAfterWrite=true;},stale:()=>{stale=true;},advance:()=>{clock+=3600001;},
     proof:()=>service.flowProof({store,orderId:order.id,lineItemId:gid('LineItem',2),adjustmentGroupId:credit.id},store==='Holbrook')};
 }
+
+function shipmentFixture(t, quantities, received) {
+  const f=setup(t,'Huntington');
+  const item=f.report.items[0],line=f.order.lineItems.nodes[0];
+  const shipped=quantities.reduce((sum,qty)=>sum+qty,0);
+  const locationId=gid('Location',103133511927);
+  const shipmentKey='a'.repeat(64);
+  const verifiedAt='2026-11-03T11:16:46Z';
+  f.order.createdAt='2026-11-02T17:00:00Z';
+  f.order.displayFulfillmentStatus=shipped===10?'FULFILLED':'PARTIALLY_FULFILLED';
+  f.order.fulfillments=quantities.map((quantity,index)=>({
+    id:gid('Fulfillment',index+1),status:'SUCCESS',location:{id:gid('Location',103133642999)},
+    createdAt:verifiedAt,fulfillmentLineItems:{nodes:[{quantity,lineItem:{id:line.id}}],pageInfo:{hasNextPage:false}}
+  }));
+  line.quantity=10;
+  Object.assign(item,{title:'Cheeseburger Bowl',orderedQty:10,expectedFromPicking:shipped,actuallyReceived:received,orderDiff:received-10});
+  Object.assign(f.report,{foodShipmentKey:shipmentKey,submittedAt:'2026-11-03T16:30:19Z'});
+  const job={key:shipmentKey,foodShipmentVersion:'verified-food-shipment-v1',verifiedAt,
+    status:shipped===10?'fulfilled':'fulfilled_with_backorder',orderIds:[f.order.id],
+    items:[{key:'Cheeseburger Bowl::WRAP',food:true,ordered:10,shipped}],
+    orders:{[f.order.id]:{status:'verified',fulfillmentIds:f.order.fulfillments.map(row=>row.id)}}};
+  const query=f.deps.inventoryQuery;
+  f.deps.exactLocation=async()=>locationId;
+  f.deps.now=()=>Date.parse(f.report.submittedAt)+2000;
+  f.deps.findFoodShipment=()=>job;
+  f.deps.inventoryQuery=(document,variables)=>document.includes('HuntingtonCreditStock')
+    ? {inventoryItem:{id:line.variant.inventoryItem.id,sku:'WRAP',tracked:true,inventoryLevel:{quantities:[{name:'available',quantity:12}]}}}
+    : query(document,variables);
+  const service=createAutomaticReceiving(f.deps);
+  return {...f,service,job,locationId,creditAll:async()=>{
+    for (const fulfillment of f.order.fulfillments) {
+      await service.flowProof({mode:'store_fulfillment_v1',store:'Huntington',orderId:f.order.id,
+        fulfillmentId:fulfillment.id,lineItemId:line.id});
+    }
+  }};
+}
+
+for (const [parts,received,delta] of [[[10],9,-1],[[9],9,0],[[9],8,-1],[[4,5],8,-1],[[9],0,-9],[[9],10,1]]) {
+  test(`shipment ${parts.join('+')}/10, receipt ${received}: adjust store by ${delta} once`,async t=>{
+    const f=shipmentFixture(t,parts,received);
+    await assert.rejects(f.service.reconcile({...f.report,foodShipmentKey:undefined}),/verified shipment/);
+    const waiting=await f.service.reconcile(f.report,true);
+    assert.equal(waiting.results[0].status,'retry');
+    assert.equal(f.mutations.length,0);
+    await f.creditAll();
+    const {results:[result]}=await f.service.reconcile(f.report,true);
+    assert.equal(result.status,delta?'posted':'matched');
+    const proof=await f.service.readFoodProof(f.report,'WRAP',f.order.id,result.adjustmentId);
+    assert.equal(proof.basis.delta,delta);
+    assert.equal(proof.basis.credits.length,parts.length);
+    assert.equal(proof.node?.id||null,result.adjustmentId);
+    await createAutomaticReceiving(f.deps).reconcile(f.report,true);
+    assert.deepEqual(f.mutations.map(m=>m.input.changes[0].delta),[...parts,...(delta?[delta]:[])]);
+    assert(f.mutations.every(m=>m.input.changes.every(change=>change.locationId===f.locationId)));
+  });
+}
+
+test('a later same-line fulfillment or cancellation cannot change the first receipt baseline',async t=>{
+  const f=shipmentFixture(t,[9],8);
+  await f.creditAll();
+  const original=f.order.fulfillments[0];
+  f.order.fulfillments.push({...original,id:gid('Fulfillment',2),
+    fulfillmentLineItems:{nodes:[{quantity:1,lineItem:{id:f.order.lineItems.nodes[0].id}}],pageInfo:{hasNextPage:false}}});
+  assert.match((await f.service.reconcile(f.report,true)).results[0].error,/separate receipt allocation/);
+  f.order.fulfillments.pop();
+  original.status='CANCELLED';
+  await assert.rejects(f.service.reconcile(f.report,true),/no longer verified/);
+  assert.equal(f.mutations.length,1);
+});
 test('all 14 stores: original credit, signed shortage, exact location, retry posts once',async t=>{
   for(const store of Object.keys(POS_STORE_LOCATIONS)) {
     const f=setup(t,store);await f.proof();
