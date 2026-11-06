@@ -95,6 +95,28 @@ test("maps a Retail Essentials case to its exact sell-unit SKU and quantity", ()
   assert.match(caseMapping({ ...coca, sku: "UNVERIFIED-CS8" }).error, /approved/);
 });
 
+test("new Suffolk puffcorn and gummies convert only their verified case variants", () => {
+  const pairs = [
+    ["HF-SUFFOLK-0042462-LIKEAIR-1-CS6", "850014335014", 6, "51939923427575", "51940025532663", 18.60, 5.99],
+    ["HF-SUFFOLK-0042462-LIKEAIR-2-CS6", "850014335021", 6, "51939923460343", "51940025729271", 18.60, 5.99],
+    ["HF-SUFFOLK-0042462-SMARTSWEETS-1-CS12", "669809200211", 12, "51939923689719", "51940022583543", 29.00, 4.15],
+    ["HF-SUFFOLK-0042462-SMARTSWEETS-2-CS12", "669809200815", 12, "51939923722487", "51940023271671", 29.00, 4.15],
+  ];
+  for (const [sku, upc, units, caseId, unitId, caseCost, unitPrice] of pairs) {
+    const line = { ...caseMapping({ ...coca, sku }), receivedCases: 1 };
+    assert.deepEqual([line.unitSku, line.unitsPerCase, line.caseVariantId, line.unitVariantId, line.unitBarcode, line.lookupByVariantId],
+      [upc, units, `gid://shopify/ProductVariant/${caseId}`, `gid://shopify/ProductVariant/${unitId}`, upc, true]);
+    const plan = adjustmentPlan(line,
+      { id: `case:${caseId}`, available: 1, unitCost: caseCost },
+      { id: `unit:${unitId}`, available: 0, price: unitPrice },
+      "gid://shopify/Location/1", receiptKey("Selden", "gid://shopify/Order/1", sku));
+    assert.deepEqual(plan.input.changes.map(({ inventoryItemId, locationId, delta }) => ({ inventoryItemId, locationId, delta })), [
+      { inventoryItemId: `case:${caseId}`, locationId: "gid://shopify/Location/1", delta: -1 },
+      { inventoryItemId: `unit:${unitId}`, locationId: "gid://shopify/Location/1", delta: units },
+    ]);
+  }
+});
+
 test("East Islip's nine blocked cases have exact approved POS identities and pack sizes", () => {
   const expected = [
     ["HF-NYB-CELL-4909-C12", "842595141467", 12, "51259609546999", "51279794733303"],
