@@ -42,7 +42,7 @@ test('a mapped case activates a missing destination level before one credit',asy
 test('a new Retail Essentials case can receive its exact case credit before unit mapping',async t=>{
   const f=fixture(t,'Bellmore');
   f.lines[0].sku='HF-NYB-RAW-602-C12';
-  f.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials','mapping-pending']};
+  f.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials — Beverages',tags:['retail-essentials','b2b-case','mapping-pending']};
   f.setInactive();
   await f.make().credit(f.body);
   await f.make().credit(f.body);
@@ -50,12 +50,12 @@ test('a new Retail Essentials case can receive its exact case credit before unit
   assert.equal(f.writes(),1);
   for(const change of [
     product=>product.status='DRAFT',
-    product=>product.productType='Other Essentials',
-    product=>product.tags=['mapping-pending'],
+    product=>product.tags=['retail-essentials','mapping-pending'],
+    product=>product.tags=['b2b-case','mapping-pending'],
   ]) {
     const blocked=fixture(t,'Bellmore');
     blocked.lines[0].sku='HF-NYB-RAW-602-C12';
-    blocked.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials','mapping-pending']};
+    blocked.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials — Beverages',tags:['retail-essentials','b2b-case','mapping-pending']};
     change(blocked.lines[0].variant.product);
     blocked.setInactive();
     await assert.rejects(blocked.make().credit(blocked.body),/activation needs review/);
@@ -64,11 +64,22 @@ test('a new Retail Essentials case can receive its exact case credit before unit
   }
   const changed=fixture(t,'Bellmore');
   changed.lines[0].sku='MF-7171015-CS';
-  changed.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials']};
+  changed.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials - Case',tags:['retail-essentials','b2b-case']};
   changed.setInactive();
   await changed.make().credit(changed.body);
   assert.equal(changed.activations(),1);
   assert.equal(changed.writes(),1);
+});
+test('verified receipt recovers a missed Flow callback with the same durable credit key',async t=>{
+  const f=fixture(t,'Lake Grove'),service=f.make();
+  f.lines[0].sku='BP-RBF-CS12';
+  f.lines[0].variant.product={status:'ACTIVE',productType:'Retail Essentials — Beverages',tags:['retail-essentials','b2b-case']};
+  f.setInactive();
+  await Promise.all([service.ensureLineCredit(f.order,f.lines[0]),service.ensureLineCredit(f.order,f.lines[0])]);
+  await f.make().ensureLineCredit(f.order,f.lines[0]);
+  assert.equal(f.activations(),1);
+  assert.equal(f.writes(),1);
+  await service.verifyLine(f.order,f.lines[0]);
 });
 test('delivered items reconcile while GHOST stays uncredited; duplicate and concurrent events write once',async t=>{
   const f=fixture(t),service=f.make();

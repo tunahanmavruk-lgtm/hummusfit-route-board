@@ -86,7 +86,16 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "MF-7610062-CS6": Object.freeze({unitSku:"MF-7610062-EA",unitsPerCase:6,caseVariantId:"gid://shopify/ProductVariant/51510660858103",unitVariantId:"gid://shopify/ProductVariant/51510542074103",unitBarcode:"847644011432",lookupByVariantId:true}),
   // The invoice confirms one 12-can case. Keep the Celsius case unpublished
   // until its physical can barcode is checked against the sell-unit variant.
-  "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51510542172407",unitVariantId:"gid://shopify/ProductVariant/51510742843639",unitBarcode:"889392003185",lookupByVariantId:true}),
+  "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51550875353335",unitVariantId:"gid://shopify/ProductVariant/51510742843639",unitBarcode:"889392003185",lookupByVariantId:true,allowSharedProductMappingPendingTag:true}),
+  // 2026-11-06: exact received case variants and existing POS can/bar variants.
+  "BP-RBF-CS12": Object.freeze({unitSku:"842595139815",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078368503",unitVariantId:"gid://shopify/ProductVariant/52005085905143",unitBarcode:"842595139815",lookupByVariantId:true}),
+  "BP-RL-CS12": Object.freeze({unitSku:"842595138412",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078335735",unitVariantId:"gid://shopify/ProductVariant/50976704168183",unitBarcode:"842595138412",lookupByVariantId:true}),
+  "BP-ST-CS12": Object.freeze({unitSku:"842595138290",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078270199",unitVariantId:"gid://shopify/ProductVariant/50383738503415",unitBarcode:"842595138290",lookupByVariantId:true}),
+  "BP-SC-CS12": Object.freeze({unitSku:"842595138375",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078302967",unitVariantId:"gid://shopify/ProductVariant/50383738470647",unitBarcode:"842595138375",lookupByVariantId:true}),
+  "HF-SUFFOLK-0042462-JACKSONS-2-CS12": Object.freeze({unitSku:"850036699828",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51939923362039",unitVariantId:"gid://shopify/ProductVariant/51940025663735",unitBarcode:"850036699828",lookupByVariantId:true}),
+  "HF-SUFFOLK-0042462-JACKSONS-3-CS12": Object.freeze({unitSku:"856823004745",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51939923394807",unitVariantId:"gid://shopify/ProductVariant/51940025696503",unitBarcode:"856823004745",lookupByVariantId:true}),
+  "HF-NYB-LF-503-C10": Object.freeze({unitSku:"810035970809",unitsPerCase:10,caseVariantId:"gid://shopify/ProductVariant/51393545699575",unitVariantId:"gid://shopify/ProductVariant/51393545339127",unitBarcode:"810035970809",lookupByVariantId:true,allowSharedProductMappingPendingTag:true}),
+  "HF-NYB-LF-510-C10": Object.freeze({unitSku:"810035973947",unitsPerCase:10,caseVariantId:"gid://shopify/ProductVariant/51393545732343",unitVariantId:"gid://shopify/ProductVariant/51393545371895",unitBarcode:"810035973947",lookupByVariantId:true,allowSharedProductMappingPendingTag:true}),
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),

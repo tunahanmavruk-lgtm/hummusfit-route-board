@@ -108,7 +108,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
   }
   async function creditFor(report,order,line,locationId) {
     if(usesSafeCredits(order)) {
-      return fulfillmentCredit.verifyLine(order,line);
+      return fulfillmentCredit.ensureLineCredit(order,line);
     }
     const source=report.store==='Holbrook'?read(holbrookFile):read(flowFile);
     const entries=Object.values(source).filter(e=>e.orderId===order.id&&e.lineItemId===line.id&&e.locationId===locationId);
@@ -220,7 +220,7 @@ function createAutomaticReceiving({dir, orderQuery, inventoryQuery, exactLocatio
     const promise=process(report).finally(()=>keys.forEach(key=>flights.delete(key)));
     keys.forEach(key=>flights.set(key,promise)); return promise;
   }
-  return {flowProof,reconcile,verifyFulfillmentCredit:fulfillmentCredit.verifyLine};
+  return {flowProof,reconcile,verifyFulfillmentCredit:fulfillmentCredit.ensureLineCredit};
 }
 function registerAutomaticReceiving(app,deps) {
   const service=createAutomaticReceiving(deps);
