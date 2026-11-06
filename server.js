@@ -1204,7 +1204,7 @@ app.post("/api/essentials-pos-receipt", async (req, res) => {
       const {receiptOrderIds,savedReceiptBatches}=require('./combined-retail-receipt');
       const orders=[];
       for(const id of receiptOrderIds(orderId)) {
-        const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku title quantity variant{inventoryItem{id} product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage endCursor}}}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`,{id});
+        const data=await shopifyGraphQL(`query SavedReceiptOrder($id:ID!){order(id:$id){id name createdAt cancelledAt displayFulfillmentStatus customer{tags} lineItems(first:250){nodes{id sku title quantity variant{id inventoryItem{id} product{tags collections(first:100){nodes{title handle} pageInfo{hasNextPage endCursor}}}}} pageInfo{hasNextPage endCursor}} fulfillments(first:100){id createdAt status location{id} fulfillmentLineItems(first:250){nodes{quantity lineItem{id}} pageInfo{hasNextPage endCursor}}}}}`,{id});
         orders.push(data.order);
       }
       batches=savedReceiptBatches(store,orderId,receivedCounts,receiptEvidence,orders,ESSENTIALS_POS_CUTOVER,loadPosLedger());
