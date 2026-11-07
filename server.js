@@ -883,7 +883,6 @@ function loadState() {
       }
     });
 
-    const localRouteIds = new Set(ROUTES.map((r) => r.id));
     const b2bRouteIds = new Set(B2B_ROUTES.map((r) => r.id));
 
     // Delivery-side state (which van/driver is assigned, whether a route
@@ -904,10 +903,13 @@ function loadState() {
     // below instead.
     const currentWindowStart = getOrderWindowEastern(new Date()).windowStart.toISOString();
     if (state.deliveryWindowStart !== currentWindowStart) {
-      localRouteIds.forEach((id) => {
-        delete state.assignments[id];
-        delete state.stopStatus[id];
-        delete state.routeMeta[id];
+      ROUTES.forEach((route) => {
+        delete state.assignments[route.id];
+        delete state.stopStatus[route.id]; // Remove any legacy route-keyed entry.
+        // Stop progress is keyed by stop ID, not route ID. Otherwise a prior
+        // delivery can keep showing "picked" after the new window begins.
+        route.stops.forEach((stop) => { delete state.stopStatus[stop.id]; });
+        delete state.routeMeta[route.id];
       });
       ROUTES.filter((route) => route.defaultDriver).forEach((route) => {
         state.assignments[route.id] = { van: "", driver: route.defaultDriver };
@@ -942,7 +944,8 @@ function loadState() {
       const occurrenceDateStr = todayEasternFor(occurrenceDate);
       if (state.b2bLastResetDate[id] !== occurrenceDateStr) {
         delete state.assignments[id];
-        delete state.stopStatus[id];
+        delete state.stopStatus[id]; // Remove any legacy route-keyed entry.
+        route.stops.forEach((stop) => { delete state.stopStatus[stop.id]; });
         delete state.routeMeta[id];
         state.b2bLastResetDate[id] = occurrenceDateStr;
         b2bChanged = true;
