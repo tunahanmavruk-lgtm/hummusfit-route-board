@@ -57,8 +57,13 @@ function createFulfillmentCredit({dir, orderQuery, inventoryQuery, orderQueryTex
         const tags=(product?.tags||[]).map(tag=>tag.trim().toLowerCase());
         const retailCase=product?.status==='ACTIVE'&&
           tags.includes('retail-essentials')&&tags.includes('b2b-case');
+        // A one-bag internal store pack is also an exact fulfilled retail
+        // receipt unit. It still needs a separate verified sell-unit mapping
+        // before conversion; this only permits the destination case credit.
+        const retailStorePack=product?.status==='ACTIVE'&&
+          tags.includes('retail-essentials')&&tags.includes('internal-only')&&tags.includes('pack-1');
         if(stock?.id===inventoryItemId&&stock.sku===line.sku&&stock.tracked===true&&
-           !stock.inventoryLevel&&(retailCase || mapping?.caseVariantId===line.variant?.id)) {
+           !stock.inventoryLevel&&(retailCase || retailStorePack || mapping?.caseVariantId===line.variant?.id)) {
           const activationKey=hash(['activate-fulfilled-case-v1',locationId,inventoryItemId]);
           const activated=(await inventoryQuery(ACTIVATE_CASE_MUTATION,{inventoryItemId,locationId,key:activationKey})).inventoryActivate;
           if(!activated?.inventoryLevel?.id||activated.userErrors?.length) throw new Error('Verified case destination activation failed');
