@@ -1553,8 +1553,33 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
       }
     }`, { id, locationId });
     variant = data.productVariant;
-    if (!variant || variant.id !== id || variant.sku !== sku || variant.inventoryItem?.duplicateSkuCount !== 0) {
+    const duplicateCount = variant?.inventoryItem?.duplicateSkuCount;
+    const archivedId = requireSellable ? mapping.archivedUnitVariantId : mapping.archivedCaseVariantId;
+    if (!variant || variant.id !== id || variant.sku !== sku ||
+        (duplicateCount !== 0 && !(duplicateCount === 1 && archivedId))) {
       throw new Error(`Approved Shopify variant must have the exact unique SKU ${sku}`);
+    }
+    if (duplicateCount === 1) {
+      const duplicates = await posShopifyGraphQL(`query ExactArchivedSkuDuplicate($search: String!, $locationId: ID!) {
+        productVariants(first: 10, query: $search) {
+          nodes { id sku product { status } inventoryItem {
+            inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } }
+          } }
+          pageInfo { hasNextPage }
+        }
+      }`, { search: `sku:${sku}`, locationId });
+      const variants = duplicates.productVariants;
+      const exact = (variants?.nodes || []).filter((candidate) => candidate.sku === sku);
+      const archived = exact.find((candidate) => candidate.id === archivedId);
+      const archivedAvailable = archived?.inventoryItem?.inventoryLevel?.quantities
+        ?.find((entry) => entry.name === "available")?.quantity;
+      if (variants?.pageInfo?.hasNextPage || exact.length !== 2 ||
+          variant.product?.status !== "ACTIVE" ||
+          !exact.some((candidate) => candidate.id === id && candidate.product?.status === "ACTIVE") ||
+          archived?.product?.status !== "ARCHIVED" ||
+          (archivedAvailable !== undefined && archivedAvailable !== 0)) {
+        throw new Error(`Approved Shopify variant has an unverified duplicate SKU ${sku}`);
+      }
     }
   } else {
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
