@@ -352,6 +352,10 @@ const PUBLIC_OPERATIONAL_POST_PATHS = new Set([
   "/api/store-flow-credit-proof",
   "/api/holbrook-flow-credit-proof",
   "/api/automatic-receiving-correction",
+  // These have their own Receiving service token check, like the standard
+  // correction endpoint. A browser board cookie must not gate the worker.
+  "/api/verified-food-receiving-correction",
+  "/api/verified-food-receiving-proof",
 ]);
 
 app.use((req, res, next) => {
