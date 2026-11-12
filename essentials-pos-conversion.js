@@ -87,6 +87,17 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // The invoice confirms one 12-can case. Keep the Celsius case unpublished
   // until its physical can barcode is checked against the sell-unit variant.
   "MF-8670041-CS": Object.freeze({unitSku:"MF-8670041-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51550875353335",unitVariantId:"gid://shopify/ProductVariant/51510742843639",unitBarcode:"889392003185",lookupByVariantId:true,allowSharedProductMappingPendingTag:true}),
+  // The fulfilled Peaches & Honey case and its POS can are active variants.
+  // Older, archived products retain the same SKUs; pin and verify those exact
+  // archived variants rather than changing historical catalog identities.
+  "HF-NYB-RAW-322-C12": Object.freeze({
+    unitSku: "810193923617", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51397804458231",
+    unitVariantId: "gid://shopify/ProductVariant/51397808390391",
+    unitBarcode: "810193923617", lookupByVariantId: true,
+    archivedCaseVariantId: "gid://shopify/ProductVariant/51393545535735",
+    archivedUnitVariantId: "gid://shopify/ProductVariant/51393547501815",
+  }),
   // 2026-11-06: exact received case variants and existing POS can/bar variants.
   "BP-RBF-CS12": Object.freeze({unitSku:"842595139815",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078368503",unitVariantId:"gid://shopify/ProductVariant/52005085905143",unitBarcode:"842595139815",lookupByVariantId:true}),
   "BP-RL-CS12": Object.freeze({unitSku:"842595138412",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/52005078335735",unitVariantId:"gid://shopify/ProductVariant/50976704168183",unitBarcode:"842595138412",lookupByVariantId:true}),
