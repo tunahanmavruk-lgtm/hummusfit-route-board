@@ -116,6 +116,16 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   // Revalidated against exact live Shopify variants, SKUs and unit barcodes.
   // Explicit entries below retain newer physical-barcode corrections.
   ...Object.fromEntries(RESTORED_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
+  // Deer Park #811997 fulfilled and credited the replacement active case.
+  // The original case variant is archived with no stock at the destination.
+  "HF-NYB-QUEST3003-C8": Object.freeze({
+    unitSku: "888849000319", unitsPerCase: 8,
+    caseVariantId: "gid://shopify/ProductVariant/51551051120887",
+    unitVariantId: "gid://shopify/ProductVariant/50613940682999",
+    unitBarcode: "888849000319", lookupByVariantId: true,
+    archivedCaseVariantId: "gid://shopify/ProductVariant/51259610169591",
+    allowSharedProductMappingPendingTag: true,
+  }),
   // Bucked Up future 3-bag store packs use new case variants. Keep historical
   // C6 mappings in RESTORED_MAPPINGS unchanged. The draft product retains its
   // mapping-pending tag, so conversion stays blocked until catalog release.
