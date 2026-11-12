@@ -29,6 +29,18 @@ test('restored verified catalog remains available without reverting physical bar
   assert.equal(caseMapping({...coca,sku:'SD-PEACH-60G-CS8'}).unitSku,'860014183430');
 });
 
+test('Deer Park replacement Quest case maps only the fulfilled active variant to eight bags', () => {
+  const mapping = caseMapping({ ...coca, sku: 'HF-NYB-QUEST3003-C8' });
+  assert.deepEqual([
+    mapping.caseVariantId, mapping.archivedCaseVariantId, mapping.unitVariantId,
+    mapping.unitSku, mapping.unitsPerCase, mapping.lookupByVariantId,
+  ], [
+    'gid://shopify/ProductVariant/51551051120887',
+    'gid://shopify/ProductVariant/51259610169591',
+    'gid://shopify/ProductVariant/50613940682999', '888849000319', 8, true,
+  ]);
+});
+
 test('Bucked Up P3 packs stay distinct from historical C6 orders and pending catalog stays blocked', () => {
   const variants = [
     ['700', '810203842808', '51376821272823', '51279797092599', '51259609612535'],
