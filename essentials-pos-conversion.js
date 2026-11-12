@@ -126,6 +126,12 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     archivedCaseVariantId: "gid://shopify/ProductVariant/51259610169591",
     allowSharedProductMappingPendingTag: true,
   }),
+  // Muscle Foods invoice 9998465-1 bills 20 loose bags per carton at $59.80
+  // net. These internal store packs each contain one bag; the three flavors
+  // match the existing active POS variants and their individual bag barcodes.
+  "MF-5960570-P1": Object.freeze({unitSku:"810203842808",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/52103329644791",unitVariantId:"gid://shopify/ProductVariant/51279797092599",unitBarcode:"810203842808",lookupByVariantId:true}),
+  "MF-5960571-P1": Object.freeze({unitSku:"810203842815",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/52103329677559",unitVariantId:"gid://shopify/ProductVariant/51279797125367",unitBarcode:"810203842815",lookupByVariantId:true}),
+  "MF-5960573-P1": Object.freeze({unitSku:"MF-5960573-EA",unitsPerCase:1,caseVariantId:"gid://shopify/ProductVariant/52103329710327",unitVariantId:"gid://shopify/ProductVariant/52103330005239",unitBarcode:"810203842839",lookupByVariantId:true}),
   // Bucked Up future 3-bag store packs use new case variants. Keep historical
   // C6 mappings in RESTORED_MAPPINGS unchanged. The draft product retains its
   // mapping-pending tag, so conversion stays blocked until catalog release.

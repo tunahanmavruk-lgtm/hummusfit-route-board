@@ -41,6 +41,21 @@ test('Deer Park replacement Quest case maps only the fulfilled active variant to
   ]);
 });
 
+test('invoice-backed Bucked Up one-bag store packs map three received packs to three POS bags', () => {
+  for (const [caseSku, caseId, unitId, unitSku, barcode] of [
+    ['MF-5960570-P1','52103329644791','51279797092599','810203842808','810203842808'],
+    ['MF-5960571-P1','52103329677559','51279797125367','810203842815','810203842815'],
+    ['MF-5960573-P1','52103329710327','52103330005239','MF-5960573-EA','810203842839'],
+  ]) {
+    const line = { ...caseMapping({ ...coca, sku: caseSku }), receivedCases: 3 };
+    assert.deepEqual([line.caseVariantId,line.unitVariantId,line.unitSku,line.unitBarcode,line.unitsPerCase],
+      [`gid://shopify/ProductVariant/${caseId}`,`gid://shopify/ProductVariant/${unitId}`,unitSku,barcode,1]);
+    const plan = adjustmentPlan(line,{id:'case',available:3,unitCost:2.99,mappingPending:false},
+      {id:'bag',available:0,price:4.99},'Deer Park','one-bag-proof');
+    assert.deepEqual(plan.input.changes.map(change=>change.delta),[-3,3]);
+  }
+});
+
 test('Bucked Up P3 packs stay distinct from historical C6 orders and pending catalog stays blocked', () => {
   const variants = [
     ['700', '810203842808', '51376821272823', '51279797092599', '51259609612535'],
