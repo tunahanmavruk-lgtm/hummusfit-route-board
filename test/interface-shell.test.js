@@ -141,6 +141,21 @@ test('keeps active warehouse picking available on dedicated scanners', () => {
   assert.doesNotMatch(allowlist, /"\/api\/picking-reset-order"/);
 });
 
+test('lets the authenticated Receiving worker reach verified food correction and proof', () => {
+  const server = read('server.js');
+  const service = read('automatic-receiving.js');
+  const allowlist = server.slice(
+    server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS'),
+    server.indexOf('app.use((req, res, next)', server.indexOf('const PUBLIC_OPERATIONAL_POST_PATHS')),
+  );
+  for (const path of ['/api/verified-food-receiving-correction', '/api/verified-food-receiving-proof']) {
+    assert.ok(allowlist.includes(`"${path}"`), `${path} must reach its service-token check`);
+    assert.ok(service.includes(`'${path}'`), `${path} must have a handler`);
+  }
+  assert.match(service, /deps\.verifyToken\(token,'essentials\.receive'\)/);
+  assert.match(service, /identity\.sub!=='hummusfit-receiving'/);
+});
+
 test('requires a physical Bouncie van before route start and expires store tracking after arrival', () => {
   const server = read('server.js');
   assert.match(server, /Select the actual Bouncie van before starting this route/);
