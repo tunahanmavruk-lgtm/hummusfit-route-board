@@ -70,6 +70,24 @@ test('a new Retail Essentials case can receive its exact case credit before unit
   assert.equal(changed.activations(),1);
   assert.equal(changed.writes(),1);
 });
+test('an exact fulfilled one-bag retail store pack receives one case credit only',async t=>{
+  const f=fixture(t,'Deer Park');
+  f.lines[0].sku='MF-5960570-P1';
+  f.lines[0].variant.product={status:'ACTIVE',tags:['internal-only','muscle-foods','pack-1','retail-essentials']};
+  f.setInactive();
+  await f.make().credit(f.body);
+  await f.make().credit(f.body);
+  assert.equal(f.activations(),1);
+  assert.equal(f.writes(),1);
+  for (const removed of ['pack-1','retail-essentials','internal-only']) {
+    const blocked=fixture(t,'Deer Park');
+    blocked.lines[0].sku='MF-5960570-P1';
+    blocked.lines[0].variant.product={status:'ACTIVE',tags:['internal-only','muscle-foods','pack-1','retail-essentials'].filter(tag=>tag!==removed)};
+    blocked.setInactive();
+    await assert.rejects(blocked.make().credit(blocked.body),/activation needs review/);
+    assert.equal(blocked.writes(),0);
+  }
+});
 test('verified receipt recovers a missed Flow callback with the same durable credit key',async t=>{
   const f=fixture(t,'Lake Grove'),service=f.make();
   f.lines[0].sku='BP-RBF-CS12';
