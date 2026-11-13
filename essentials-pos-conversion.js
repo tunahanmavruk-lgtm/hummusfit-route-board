@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { essentialsTypeFor } = require("./essentials-shadow");
 const RESTORED_MAPPINGS = require("./verified-retail-case-mappings-2026-10-12.json");
+const ADDITIONAL_MAPPINGS = require("./verified-retail-case-mappings-2026-11-13.json");
 
 // Only catalog pairs that have been reviewed against the actual Shopify
 // variants may change store inventory. The SKU suffix alone is not proof of
@@ -646,6 +647,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     unitBarcode: "898999010007", lookupByVariantId: true,
     allowSharedProductMappingPendingTag: true,
   }),
+  // Exact live case and POS unit identities reviewed on 2026-11-13.
+  ...Object.fromEntries(ADDITIONAL_MAPPINGS.map(({caseSku, ...mapping}) => [caseSku, Object.freeze(mapping)])),
 });
 
 // The 14 active Hummus Fit POS stores. Route Board calls East Islip "Islip";
