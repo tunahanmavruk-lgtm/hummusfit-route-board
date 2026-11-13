@@ -308,5 +308,50 @@
     "unitBarcode": "850050020110",
     "lookupByVariantId": true,
     "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898954999"
+  },
+  {
+    "caseSku": "EL-887725000658-CS12",
+    "unitSku": "887725000658",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52005085970679",
+    "unitVariantId": "gid://shopify/ProductVariant/50339142533367",
+    "lookupByVariantId": true,
+    "unitBarcode": "887725000658"
+  },
+  {
+    "caseSku": "MF-6310029-CS",
+    "unitSku": "MF-6310029-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329415415",
+    "unitVariantId": "gid://shopify/ProductVariant/52103333708023",
+    "lookupByVariantId": true,
+    "unitBarcode": "810137322254"
+  },
+  {
+    "caseSku": "HF-BAGELMAN-PLAIN-CS4",
+    "unitSku": "BAGELMAN-PLAIN-P4",
+    "unitsPerCase": 4,
+    "caseVariantId": "gid://shopify/ProductVariant/51939223634167",
+    "unitVariantId": "gid://shopify/ProductVariant/51939219112183",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "HF-BAGELMAN-FRENCHTOAST-CS4",
+    "unitSku": "BAGELMAN-FRENCHTOAST-P4",
+    "unitsPerCase": 4,
+    "caseVariantId": "gid://shopify/ProductVariant/51939223666935",
+    "unitVariantId": "gid://shopify/ProductVariant/51939219144951",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "HF-BAGELMAN-EVERYTHING-CS4",
+    "unitSku": "BAGELMAN-EVERYTHING-P4",
+    "unitsPerCase": 4,
+    "caseVariantId": "gid://shopify/ProductVariant/51939223699703",
+    "unitVariantId": "gid://shopify/ProductVariant/51939219177719",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
   }
 ]
