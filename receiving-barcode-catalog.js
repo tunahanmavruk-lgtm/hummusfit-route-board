@@ -10,7 +10,7 @@ function catalogSearches(code) {
 function exactCatalogMatch(code, nodes) {
   const matches = new Map();
   for (const node of nodes || []) {
-    if (node?.id && barcodeMatches(code, [node.barcode, node.sku])) matches.set(node.id, node);
+    if (node?.id && barcodeMatches(code, [node.barcode, node.sku, ...(node.barcodes?.nodes || []).map((entry) => entry.value)])) matches.set(node.id, node);
   }
   return matches.size === 1 ? { status: "matched", variant: [...matches.values()][0] } :
     { status: matches.size ? "ambiguous" : "unmatched" };
