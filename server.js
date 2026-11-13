@@ -1178,8 +1178,8 @@ app.post("/api/receiving-adjustment-proof", async (req, res) => {
     if (!/^gid:\/\/agent-hazar-receiving\/(FoodCorrection|ZeroCaseShortage|ExtraCorrection|ExtraCountConfirmation|ManualRetailConversion)\//.test(proof.node?.referenceDocumentUri||'')) return res.status(409).json({ error: "Receiving correction proof required" });
     let variant;
     if(variantId) {
-      const data=await posShopifyGraphQL(`query ExtraVariantProof($id:ID!){productVariant(id:$id){id sku barcode inventoryItem{id sku} product{title tags}}}`,{id:variantId});
-      variant=data.productVariant;
+      const data=await posShopifyGraphQL(`query ExtraVariantProof($id:ID!){productVariant(id:$id){id sku barcodes(first:20){nodes{value}} inventoryItem{id sku} product{title tags}}}`,{id:variantId});
+      variant=data.productVariant ? {...data.productVariant, barcode: data.productVariant.barcodes?.nodes?.[0]?.value || ""} : null;
     }
     return res.json({ node: proof.node, order: orderData.order,variant });
   } catch (error) {
@@ -1265,7 +1265,7 @@ app.post("/api/receiving-barcode-lookup", async (req, res) => {
   try {
     const query = `query ReceivingBarcode($search: String!) {
       productVariants(first: 10, query: $search) {
-        nodes { id sku barcode product { title status } }
+        nodes { id sku barcodes(first:20){nodes{value}} product { title status } }
         pageInfo { hasNextPage }
       }
     }`;
