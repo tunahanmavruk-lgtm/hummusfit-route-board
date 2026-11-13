@@ -1,0 +1,312 @@
+[
+  {
+    "caseSku": "HF-NYB-QUEST3102-C8",
+    "unitSku": "888849006656",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51720105820407",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585855223",
+    "unitBarcode": "888849006656",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3103-C8",
+    "unitSku": "888849009954",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51720105853175",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585887991",
+    "unitBarcode": "888849009954",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-QUEST3101-C8",
+    "unitSku": "888849006632",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51720105885943",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585920759",
+    "unitBarcode": "888849006632",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-QUEST-CHEDDARSOURCREAM-CS8",
+    "unitSku": "888849000296",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/51939942498551",
+    "unitVariantId": "gid://shopify/ProductVariant/50344585822455",
+    "unitBarcode": "888849000296",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-CELL-4911-C12",
+    "unitSku": "842595144864",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393503887607",
+    "unitVariantId": "gid://shopify/ProductVariant/51393545306359",
+    "unitBarcode": "842595144864",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-GHOST-129-C12",
+    "unitSku": "810169604175",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393521189111",
+    "unitVariantId": "gid://shopify/ProductVariant/51136764117239",
+    "unitBarcode": "810169604175",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-GHOST-128-C12",
+    "unitSku": "810169604199",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393521156343",
+    "unitVariantId": "gid://shopify/ProductVariant/51080080130295",
+    "unitBarcode": "810169604199",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-201-C12",
+    "unitSku": "850000429093",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51720080720119",
+    "unitVariantId": "gid://shopify/ProductVariant/50344214266103",
+    "unitBarcode": "850000429093",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-PINKLEMONADE-CS12",
+    "unitSku": "860001800562",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393643348215",
+    "unitVariantId": "gid://shopify/ProductVariant/51393326088439",
+    "unitBarcode": "860001800562",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51392383975671"
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-WATERMELON-CS12",
+    "unitSku": "860004712510",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51722639868151",
+    "unitVariantId": "gid://shopify/ProductVariant/51940002693367",
+    "unitBarcode": "860004712510",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-DOUBLEBERRY-CS12",
+    "unitSku": "860001800586",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51939942531319",
+    "unitVariantId": "gid://shopify/ProductVariant/50348807291127",
+    "unitBarcode": "860001800586",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-RAW-304-C12",
+    "unitSku": "850049150965",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52103903314167",
+    "unitVariantId": "gid://shopify/ProductVariant/52103903379703",
+    "unitBarcode": "850049150965",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-LIPTON-PEACH-ICED-CS12",
+    "unitSku": "SS-8801056044503",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51940006625527",
+    "unitVariantId": "gid://shopify/ProductVariant/51331378708727",
+    "unitBarcode": "8801056044503",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "POINTS-CRUNCH-CS",
+    "unitSku": "POINTS-CRUNCH-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51242729472247",
+    "unitVariantId": "gid://shopify/ProductVariant/51233895907575",
+    "unitBarcode": "850068965168",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233896005879"
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-REDBULL-2-CS24",
+    "unitSku": "RB-IMPORT-BLUEBERRY-BLACKCURRANT-CAN",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51939926311159",
+    "unitVariantId": "gid://shopify/ProductVariant/51940033036535",
+    "unitBarcode": "8850228008171",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-JACKSONS-1-CS12",
+    "unitSku": "850036699880",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51939923329271",
+    "unitVariantId": "gid://shopify/ProductVariant/51940025499895",
+    "unitBarcode": "850036699880",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "SOAR-FUDGE-BROWNIE-C10",
+    "unitSku": "SOAR-FUDGE-BROWNIE-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51431670284535",
+    "unitVariantId": "gid://shopify/ProductVariant/51431686504695",
+    "unitBarcode": "199284106727",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "SOAR-PEANUT-BUTTER-CHOCOLATE-CHIP-C10",
+    "unitSku": "SOAR-PEANUT-BUTTER-CHOCOLATE-CHIP-EA",
+    "unitsPerCase": 10,
+    "caseVariantId": "gid://shopify/ProductVariant/51431670317303",
+    "unitVariantId": "gid://shopify/ProductVariant/51431686537463",
+    "unitBarcode": "199874965482",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-SMARTSWEETS-3-CS12",
+    "unitSku": "669809200402",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51939923755255",
+    "unitVariantId": "gid://shopify/ProductVariant/51940023304439",
+    "unitBarcode": "669809200402",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7610061-CS7",
+    "unitSku": "MF-7610061-EA",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51510660825335",
+    "unitVariantId": "gid://shopify/ProductVariant/51510542041335",
+    "unitBarcode": "847644011449",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7610062-CS7",
+    "unitSku": "MF-7610062-EA",
+    "unitsPerCase": 7,
+    "caseVariantId": "gid://shopify/ProductVariant/51510660858103",
+    "unitVariantId": "gid://shopify/ProductVariant/51510542074103",
+    "unitBarcode": "847644011432",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SPRITE-ZERO-TEA-350-CS24",
+    "unitSku": "8801094001728",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51317878161655",
+    "unitVariantId": "gid://shopify/ProductVariant/51317898150135",
+    "unitBarcode": "8801094001728",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-RAW-603-C12",
+    "unitSku": "810193922016",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51720474525943",
+    "unitVariantId": "gid://shopify/ProductVariant/51721556492535",
+    "unitBarcode": "810193922016",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-NYB-RAW-601-C12",
+    "unitSku": "810193921996",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51720474558711",
+    "unitVariantId": "gid://shopify/ProductVariant/51721556525303",
+    "unitBarcode": "810193921996",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-NYB-RAW-602-C12",
+    "unitSku": "810193921972",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51720474591479",
+    "unitVariantId": "gid://shopify/ProductVariant/51721556558071",
+    "unitBarcode": "810193921972",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-MON-PEACH-ORDER-CS24",
+    "unitSku": "HF-SUFFOLK-MON-JP-PEACH-U1",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/52103969931511",
+    "unitVariantId": "gid://shopify/ProductVariant/51322304168183",
+    "unitBarcode": "4897036694466",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51939946299639"
+  },
+  {
+    "caseSku": "DG-HFNC8OZ-CS",
+    "unitSku": "DG-HFNC8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51233898561783",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898496247",
+    "unitBarcode": "850050020240",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "DG-FTB8OZ-CS",
+    "unitSku": "DG-FTB8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51242736517367",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898594551",
+    "unitBarcode": "850050020196",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898660087"
+  },
+  {
+    "caseSku": "DG-DSSTKS8OZ-CS",
+    "unitSku": "DG-DSSTKS8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51242736910583",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898692855",
+    "unitBarcode": "850050020158",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898725623"
+  },
+  {
+    "caseSku": "DG-HCS8OZ-CS",
+    "unitSku": "DG-HCS8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51242737336567",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898758391",
+    "unitBarcode": "850050020233",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898791159"
+  },
+  {
+    "caseSku": "DG-BS8OZ-CS",
+    "unitSku": "DG-BS8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51242737565943",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898823927",
+    "unitBarcode": "850050020028",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898889463"
+  },
+  {
+    "caseSku": "DG-DPMS8OZ-CS",
+    "unitSku": "DG-DPMS8OZ-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51242738254071",
+    "unitVariantId": "gid://shopify/ProductVariant/51233898922231",
+    "unitBarcode": "850050020110",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51233898954999"
+  }
+]
