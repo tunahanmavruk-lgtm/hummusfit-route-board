@@ -136,20 +136,6 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     archivedCaseVariantId: "gid://shopify/ProductVariant/51259610136823",
     allowSharedProductMappingPendingTag: true,
   }),
-  "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
-    unitSku: "HF-SUFFOLK-MON-JP-WHITE-U1", unitsPerCase: 24,
-    caseVariantId: "gid://shopify/ProductVariant/52103988838647",
-    unitVariantId: "gid://shopify/ProductVariant/51322304102647",
-    unitBarcode: "4897036690895", lookupByVariantId: true,
-    archivedCaseVariantId: "gid://shopify/ProductVariant/51322197999863",
-  }),
-  "HF-SUFFOLK-MON-JP-PARADISE-C24": Object.freeze({
-    unitSku: "HF-SUFFOLK-MON-JP-PARADISE-U1", unitsPerCase: 24,
-    caseVariantId: "gid://shopify/ProductVariant/52103988871415",
-    unitVariantId: "gid://shopify/ProductVariant/51322304200951",
-    unitBarcode: "4897036692707", lookupByVariantId: true,
-    archivedCaseVariantId: "gid://shopify/ProductVariant/51322198098167",
-  }),
   // Manufacturer-confirmed UPCs for individual 1.4 oz packs. Invoice
   // confirms twelve retail packs per store-order case.
   "HF-SUFFOLK-JUSTINS-MILK-PB-CUPS-CS12": Object.freeze({
@@ -228,7 +214,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
     "unitSku": "HF-SUFFOLK-MON-JP-WHITE-U1",
     "unitsPerCase": 24,
-    "caseVariantId": "gid://shopify/ProductVariant/51322197999863",
+    "caseVariantId": "gid://shopify/ProductVariant/52103988838647",
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51322197999863",
     "unitVariantId": "gid://shopify/ProductVariant/51322304102647",
     "unitBarcode": "4897036690895",
     "lookupByVariantId": true
@@ -252,7 +239,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "HF-SUFFOLK-MON-JP-PARADISE-C24": Object.freeze({
     "unitSku": "HF-SUFFOLK-MON-JP-PARADISE-U1",
     "unitsPerCase": 24,
-    "caseVariantId": "gid://shopify/ProductVariant/51322198098167",
+    "caseVariantId": "gid://shopify/ProductVariant/52103988871415",
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51322198098167",
     "unitVariantId": "gid://shopify/ProductVariant/51322304200951",
     "unitBarcode": "4897036692707",
     "lookupByVariantId": true
