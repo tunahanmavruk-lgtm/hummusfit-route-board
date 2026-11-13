@@ -1552,7 +1552,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
     }
     const data = await posShopifyGraphQL(`query ExactMappedVariant($id: ID!, $locationId: ID!) {
       productVariant(id: $id) {
-        id sku barcode price product { status tags }
+        id sku barcodes(first: 20) { nodes { value } } price product { status tags }
         inventoryItem { id duplicateSkuCount unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } }
       }
     }`, { id, locationId });
@@ -1580,7 +1580,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
       if (variants?.pageInfo?.hasNextPage || exact.length !== 2 ||
           variant.product?.status !== "ACTIVE" ||
           !exact.some((candidate) => candidate.id === id && candidate.product?.status === "ACTIVE") ||
-          archived?.product?.status !== "ARCHIVED" ||
+          !["ARCHIVED", "DRAFT"].includes(archived?.product?.status) ||
           (archivedAvailable !== undefined && archivedAvailable !== 0)) {
         throw new Error(`Approved Shopify variant has an unverified duplicate SKU ${sku}`);
       }
@@ -1589,7 +1589,7 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(sku)) throw new Error(`SKU is not safe for exact lookup: ${sku}`);
     const query = `query ExactSku($search: String!, $locationId: ID!) {
       productVariants(first: 10, query: $search) {
-        nodes { id sku barcode price product { status tags } inventoryItem { id unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
+        nodes { id sku barcodes(first: 20) { nodes { value } } price product { status tags } inventoryItem { id unitCost { amount } inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { name quantity } } } }
       }
     }`;
     const data = await posShopifyGraphQL(query, { search: `sku:${sku}`, locationId });
@@ -1597,8 +1597,8 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
     if (matches.length !== 1) throw new Error(`Expected exactly one Shopify variant with SKU ${sku}; found ${matches.length}`);
     variant = matches[0];
   }
-  const barcode = String(variant.barcode || "").trim();
-  const validBarcode = /^[0-9]{12,14}$/.test(barcode);
+  const barcodes = (variant.barcodes?.nodes || []).map((entry) => String(entry.value || "").trim());
+  const validBarcode = barcodes.some((value) => /^[0-9]{12,14}$/.test(value));
   if (requireSellable && mapping?.unitVariantId && variant.id !== mapping.unitVariantId) {
     throw new Error(`POS sell-unit SKU ${sku} no longer matches its approved Shopify variant`);
   }
@@ -1608,8 +1608,8 @@ async function exactInventoryItem(sku, locationId, requireSellable = false, allo
   if (requireSellable && (variant.product?.status !== "ACTIVE" ||
       !(Number(variant.price) > 0) ||
       (mapping?.requirePosSellUnitTag && !(variant.product?.tags || []).includes("pos-sell-unit")) ||
-      (mapping?.unitBarcode && variant.barcode !== mapping.unitBarcode) ||
-      (!validBarcode && !(mapping?.allowMissingBarcode && !barcode)))) {
+      (mapping?.unitBarcode && !barcodes.includes(mapping.unitBarcode)) ||
+      (!validBarcode && !(mapping?.allowMissingBarcode && barcodes.length === 0)))) {
     throw new Error(`POS sell-unit SKU ${sku} must match its approved active product, price, and barcode policy`);
   }
   const inventory = variant.inventoryItem;
