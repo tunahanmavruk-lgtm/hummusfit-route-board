@@ -11,12 +11,12 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "MF-7170515-CS": Object.freeze({unitSku:"MF-7170515-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51226012811511",unitVariantId:"gid://shopify/ProductVariant/51226012844279",unitBarcode:"850075829255",lookupByVariantId:true}),
   "MF-7170514-CS": Object.freeze({unitSku:"MF-7170514-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51260314419447",unitVariantId:"gid://shopify/ProductVariant/51226013008119",unitBarcode:"850036648932",lookupByVariantId:true}),
   "MF-7171008-CS": Object.freeze({unitSku:"MF-7171008-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51226012549367",unitVariantId:"gid://shopify/ProductVariant/51226012582135",unitBarcode:"850036648581",lookupByVariantId:true}),
-  "MF-7171000-CS": Object.freeze({unitSku:"MF-7171000-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630092535",unitVariantId:"gid://shopify/ProductVariant/51226012778743",unitBarcode:"850026196122",lookupByVariantId:true}),
+  "MF-7171000-CS": Object.freeze({unitSku:"850026196122",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630092535",unitVariantId:"gid://shopify/ProductVariant/51226012778743",unitBarcode:"850026196122",lookupByVariantId:true}),
   // Tony-confirmed wrapper and 12 bags per case; POS unit activated 2026-10-17.
   "POINTS-DARK-CS": Object.freeze({unitSku:"POINTS-DARK-EA",unitsPerCase:12,caseVariantId:"gid://shopify/ProductVariant/51233895842039",unitVariantId:"gid://shopify/ProductVariant/51233895612663",unitBarcode:"860008611826",lookupByVariantId:true}),
   // Tony-confirmed individual wrappers; manufacturer confirms 15 bars per box.
-  "MF-7171013-CS": Object.freeze({unitSku:"MF-7171013-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630059767",unitVariantId:"gid://shopify/ProductVariant/51226012680439",unitBarcode:"850062928794",lookupByVariantId:true}),
-  "MF-7171015-CS": Object.freeze({unitSku:"MF-7171015-EA",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630125303",unitVariantId:"gid://shopify/ProductVariant/51226012942583",unitBarcode:"850062928510",lookupByVariantId:true}),
+  "MF-7171013-CS": Object.freeze({unitSku:"850062928794",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630059767",unitVariantId:"gid://shopify/ProductVariant/51226012680439",unitBarcode:"850062928794",lookupByVariantId:true}),
+  "MF-7171015-CS": Object.freeze({unitSku:"850062928510",unitsPerCase:15,caseVariantId:"gid://shopify/ProductVariant/51259630125303",unitVariantId:"gid://shopify/ProductVariant/51226012942583",unitBarcode:"850062928510",lookupByVariantId:true}),
   // 2026-10-17 physical case/can photos: receipt-confirmed conversion only.
   "MF-7700008-CS": Object.freeze({
     unitSku: "MF-7700008-EA", unitsPerCase: 12,
@@ -126,6 +126,30 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
     archivedCaseVariantId: "gid://shopify/ProductVariant/51259610169591",
     allowSharedProductMappingPendingTag: true,
   }),
+  // Current replacement variants after case-product consolidation. The inactive
+  // predecessors have zero inventory at every POS store.
+  "HF-NYB-QUEST3000-C8": Object.freeze({
+    unitSku: "888849000272", unitsPerCase: 8,
+    caseVariantId: "gid://shopify/ProductVariant/51551051088119",
+    unitVariantId: "gid://shopify/ProductVariant/50344585789687",
+    unitBarcode: "888849000272", lookupByVariantId: true,
+    archivedCaseVariantId: "gid://shopify/ProductVariant/51259610136823",
+    allowSharedProductMappingPendingTag: true,
+  }),
+  // Manufacturer-confirmed UPCs for individual 1.4 oz packs. Invoice
+  // confirms twelve retail packs per store-order case.
+  "HF-SUFFOLK-JUSTINS-MILK-PB-CUPS-CS12": Object.freeze({
+    unitSku: "894455000247", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51722996351223",
+    unitVariantId: "gid://shopify/ProductVariant/52157303128311",
+    unitBarcode: "894455000247", lookupByVariantId: true,
+  }),
+  "HF-SUFFOLK-JUSTINS-WHITE-PB-CUPS-CS12": Object.freeze({
+    unitSku: "855188003578", unitsPerCase: 12,
+    caseVariantId: "gid://shopify/ProductVariant/51723113496823",
+    unitVariantId: "gid://shopify/ProductVariant/52157303161079",
+    unitBarcode: "855188003578", lookupByVariantId: true,
+  }),
   // Muscle Foods invoice 9998465-1 bills 20 loose bags per carton at $59.80
   // net. These internal store packs each contain one bag; the three flavors
   // match the existing active POS variants and their individual bag barcodes.
@@ -190,7 +214,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "HF-SUFFOLK-MON-JP-WHITE-C24": Object.freeze({
     "unitSku": "HF-SUFFOLK-MON-JP-WHITE-U1",
     "unitsPerCase": 24,
-    "caseVariantId": "gid://shopify/ProductVariant/51322197999863",
+    "caseVariantId": "gid://shopify/ProductVariant/52103988838647",
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51322197999863",
     "unitVariantId": "gid://shopify/ProductVariant/51322304102647",
     "unitBarcode": "4897036690895",
     "lookupByVariantId": true
@@ -214,7 +239,8 @@ const VERIFIED_CASE_MAPPINGS = Object.freeze({
   "HF-SUFFOLK-MON-JP-PARADISE-C24": Object.freeze({
     "unitSku": "HF-SUFFOLK-MON-JP-PARADISE-U1",
     "unitsPerCase": 24,
-    "caseVariantId": "gid://shopify/ProductVariant/51322198098167",
+    "caseVariantId": "gid://shopify/ProductVariant/52103988871415",
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51322198098167",
     "unitVariantId": "gid://shopify/ProductVariant/51322304200951",
     "unitBarcode": "4897036692707",
     "lookupByVariantId": true

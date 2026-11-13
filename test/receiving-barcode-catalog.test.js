@@ -17,3 +17,11 @@ test('catalog lookup resolves one exact physical code and never chooses duplicat
   assert.deepEqual(exactCatalogMatch('604947193711', [{ id:'gid://shopify/ProductVariant/3', barcode:'999999999999' }]),
     { status:'unmatched' });
 });
+
+test('catalog lookup matches any current Shopify variant barcode', () => {
+  const cups = {
+    id: 'gid://shopify/ProductVariant/4', sku: '855188003578',
+    barcodes: { nodes: [{ value: '0855188003578' }, { value: '855188003578' }] },
+  };
+  assert.deepEqual(exactCatalogMatch('855188003578', [cups]), { status: 'matched', variant: cups });
+});
