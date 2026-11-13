@@ -353,5 +353,48 @@
     "unitVariantId": "gid://shopify/ProductVariant/51939219177719",
     "lookupByVariantId": true,
     "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-RAINBOW-CS12",
+    "unitSku": "860001800524",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393643380983",
+    "unitVariantId": "gid://shopify/ProductVariant/51393326121207",
+    "unitBarcode": "860001800524",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51392384008439"
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-BLUERASPBERRY-CS12",
+    "unitSku": "860001800500",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393643446519",
+    "unitVariantId": "gid://shopify/ProductVariant/51393326153975",
+    "unitBarcode": "860001800500",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51392384073975"
+  },
+  {
+    "caseSku": "BG-42001-LOONEN-STILL-C12",
+    "unitSku": "810200380006",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393355415799",
+    "unitVariantId": "gid://shopify/ProductVariant/50832661217527",
+    "unitBarcode": "810200380006",
+    "lookupByVariantId": true,
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-JACKSONS-CHEDDAR-VEGGIE-STRAWS-CS24",
+    "unitSku": "HF-JACKSONS-CHEDDAR-VEGGIE-STRAWS-EA",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51943470760183",
+    "unitVariantId": "gid://shopify/ProductVariant/51943479509239",
+    "unitBarcode": "810192260027",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51727580070135",
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/51728266756343"
   }
 ]
