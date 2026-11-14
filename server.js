@@ -709,6 +709,11 @@ const PICKERS = [
   "Ufuk",
 ];
 
+app.get("/api/picking-roster", (_req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.json({ pickers: PICKERS });
+});
+
 // Maps a picker's name to their headshot file under /public/headshots/.
 // Anyone not listed here just falls back to an initials avatar on the
 // frontend — so this works today with zero photos on file, and each
@@ -4733,6 +4738,7 @@ app.get("/api/status", (req, res) => {
 });
 
 app.get("/picking", (req, res) => {
+  res.set("Cache-Control", "private, no-store");
   res.sendFile(path.join(__dirname, "public", "picking.html"));
 });
 app.get("/out-of-state", (req, res) => {

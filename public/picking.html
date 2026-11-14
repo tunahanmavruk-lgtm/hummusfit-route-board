@@ -1055,6 +1055,8 @@
   var view = 'list';
   var pickingList = [];
   var orderDetail = null;
+  var pickerRoster = null;
+  var pickerRosterRequest = null;
   var scanningForIdx = null;
   var html5QrCode = null;
   var pushSubscribedFlag = false;
@@ -1070,6 +1072,58 @@
   function workflowQuery(){
     return '?workflow=' + encodeURIComponent(pickingWorkflow);
   }
+
+  function applyPickerRoster(){
+    if(!orderDetail || !pickerRoster) return;
+    orderDetail.pickers = pickerRoster.slice();
+    var select = document.getElementById('pickerSelect');
+    // Let an open native selection finish before changing its options.
+    if(!select || document.activeElement === select) return;
+    var names = Array.from(select.options).slice(1).map(function(option){ return option.value; });
+    if(JSON.stringify(names) === JSON.stringify(pickerRoster)) return;
+    var selected = select.value;
+    var options = document.createDocumentFragment();
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Select your name —';
+    options.appendChild(placeholder);
+    pickerRoster.forEach(function(name){
+      var option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      options.appendChild(option);
+    });
+    select.replaceChildren(options);
+    select.value = pickerRoster.indexOf(selected) !== -1 ? selected : '';
+  }
+
+  function refreshPickerRoster(){
+    if(document.hidden || pickerRosterRequest) return pickerRosterRequest;
+    pickerRosterRequest = fetch('/api/picking-roster', {
+      cache:'no-store', signal:AbortSignal.timeout(8000)
+    }).then(function(response){
+      if(!response.ok) throw new Error('Picker list unavailable');
+      return response.json();
+    }).then(function(data){
+      if(!Array.isArray(data.pickers) || !data.pickers.length ||
+          data.pickers.some(function(name){ return typeof name !== 'string' || !name.trim(); }) ||
+          new Set(data.pickers).size !== data.pickers.length) return;
+      pickerRoster = data.pickers.slice();
+      applyPickerRoster();
+    }).catch(function(){ /* Keep the current list until the next successful check. */ })
+      .finally(function(){ pickerRosterRequest = null; });
+    return pickerRosterRequest;
+  }
+
+  document.addEventListener('focusout', function(event){
+    if(event.target.id === 'pickerSelect') setTimeout(applyPickerRoster,0);
+  });
+  window.addEventListener('pageshow',refreshPickerRoster);
+  window.addEventListener('focus',refreshPickerRoster);
+  window.addEventListener('online',refreshPickerRoster);
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) refreshPickerRoster();
+  });
 
   if(pickingWorkflow === 'essentials'){
     document.getElementById('orderPickingNav').classList.remove('active');
@@ -2050,8 +2104,8 @@
           '<div class="picker-label">Who\'s picking this order</div>' +
           '<select class="picker-select" id="pickerSelect">' +
             '<option value="">— Select your name —</option>' +
-            (orderDetail.pickers || []).map(function(p){
-              return '<option value="' + p + '"' + (p === orderDetail.pickedBy ? ' selected' : '') + '>' + p + '</option>';
+            (pickerRoster || orderDetail.pickers || []).map(function(p){
+              return '<option value="' + escapeHtml(p) + '"' + (p === orderDetail.pickedBy ? ' selected' : '') + '>' + escapeHtml(p) + '</option>';
             }).join('') +
           '</select>' +
         '</div>';
@@ -2472,6 +2526,7 @@
   }
 
   function poll(){
+    refreshPickerRoster();
     var activeEl = document.activeElement;
     var isTyping = activeEl && activeEl.tagName === 'INPUT';
     if(isTyping) return;
@@ -2543,6 +2598,7 @@
   });
 
   autoPrintAvailable();
+  refreshPickerRoster();
 
   // Support deep-linking straight into a specific order, e.g.
   // /picking?stop=Lindenhurst — used by the "order number" link on the
