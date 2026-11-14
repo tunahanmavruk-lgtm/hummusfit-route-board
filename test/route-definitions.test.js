@@ -55,7 +55,8 @@ test("invalidates cached navigation when a permanent route changes", () => {
 
 test("uses the warehouse picker roster requested for order picking", () => {
   const pickerBlock = server.match(/const PICKERS = \[([\s\S]*?)\];/)[1];
-  assert.match(pickerBlock, /"Hakan"/);
+  assert.match(pickerBlock, /"Alper"/);
+  assert.doesNotMatch(pickerBlock, /Gabriel|Hakan/i);
   assert.match(pickerBlock, /"Ufuk"/);
   assert.doesNotMatch(pickerBlock, /Flores Morales, Carlos E/);
   assert.doesNotMatch(pickerBlock, /Hermosa Melendez, Edson D/);
