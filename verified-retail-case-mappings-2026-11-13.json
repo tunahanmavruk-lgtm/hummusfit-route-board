@@ -526,5 +526,44 @@
     "lookupByVariantId": true,
     "archivedCaseVariantId": "gid://shopify/ProductVariant/52103330038007",
     "archivedUnitVariantId": "gid://shopify/ProductVariant/52103330070775"
+  },
+  {
+    "caseSku": "HF-FANTA-KR-ZERO-PEACH-CS6",
+    "unitSku": "HF-FANTA-KR-ZERO-PEACH-EA",
+    "unitsPerCase": 6,
+    "caseVariantId": "gid://shopify/ProductVariant/51431794245879",
+    "unitVariantId": "gid://shopify/ProductVariant/51431796932855",
+    "unitBarcode": "8801094000363",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51392284655863"
+  },
+  {
+    "caseSku": "HF-SOURSTRIPS-DREAMBERRY-CS12",
+    "unitSku": "850060777554",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51393643315447",
+    "unitVariantId": "gid://shopify/ProductVariant/51393326055671",
+    "unitBarcode": "850060777554",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/51392383942903",
+    "allowSharedProductMappingPendingTag": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-406-C12",
+    "unitSku": "850075778829",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/51720080687351",
+    "unitVariantId": "gid://shopify/ProductVariant/52180954218743",
+    "unitBarcode": "850075778829",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-DORITOS-PROTEIN-NACHO-CS24",
+    "unitSku": "028400803946",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51722996121847",
+    "unitVariantId": "gid://shopify/ProductVariant/51939890102519",
+    "unitBarcode": "028400803946",
+    "lookupByVariantId": true
   }
 ]
