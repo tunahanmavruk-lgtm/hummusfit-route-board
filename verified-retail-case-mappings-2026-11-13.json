@@ -396,5 +396,135 @@
     "lookupByVariantId": true,
     "archivedCaseVariantId": "gid://shopify/ProductVariant/51727580070135",
     "archivedUnitVariantId": "gid://shopify/ProductVariant/51728266756343"
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-206-C12",
+    "unitSku": "850000429260",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52178530959607",
+    "unitVariantId": "gid://shopify/ProductVariant/50344199979255",
+    "unitBarcode": "850000429260",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "HF-NYB-NOCCO-404-C12",
+    "unitSku": "850054108548",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52178530992375",
+    "unitVariantId": "gid://shopify/ProductVariant/50344222556407",
+    "unitBarcode": "850054108548",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "SD-RASPBERRY-60G-CS8",
+    "unitSku": "860014183447",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/52103937458423",
+    "unitVariantId": "gid://shopify/ProductVariant/52103937523959",
+    "unitBarcode": "860014183447",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/52009761341687"
+  },
+  {
+    "caseSku": "SD-GREENAPPLE-60G-CS8",
+    "unitSku": "860014183423",
+    "unitsPerCase": 8,
+    "caseVariantId": "gid://shopify/ProductVariant/52103937491191",
+    "unitVariantId": "gid://shopify/ProductVariant/52103937556727",
+    "unitBarcode": "860014183423",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/52009768976631"
+  },
+  {
+    "caseSku": "MF-7760007-P1",
+    "unitSku": "MF-7760007-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103328497911",
+    "unitVariantId": "gid://shopify/ProductVariant/52103328432375",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "MF-7760013-P1",
+    "unitSku": "MF-7760013-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103328530679",
+    "unitVariantId": "gid://shopify/ProductVariant/52103328465143",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "MF-2630015-P1",
+    "unitSku": "MF-2630015-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329480951",
+    "unitVariantId": "gid://shopify/ProductVariant/52103332495607",
+    "unitBarcode": "850054122346",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-2630020-P1",
+    "unitSku": "MF-2630020-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329513719",
+    "unitVariantId": "gid://shopify/ProductVariant/52103332528375",
+    "unitBarcode": "850054122292",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-2630013-P1",
+    "unitSku": "MF-2630013-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329546487",
+    "unitVariantId": "gid://shopify/ProductVariant/52103332561143",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "MF-2630002-P1",
+    "unitSku": "MF-2630002-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329579255",
+    "unitVariantId": "gid://shopify/ProductVariant/52103332593911",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "MF-2630019-P1",
+    "unitSku": "MF-2630019-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52103329612023",
+    "unitVariantId": "gid://shopify/ProductVariant/52103332626679",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-REDBULL-1-CS24",
+    "unitSku": "RB-IMPORT-APPLE-MUSCAT-GRAPE-CAN",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51939926278391",
+    "unitVariantId": "gid://shopify/ProductVariant/51940032413943",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "HF-SUFFOLK-0042462-REDBULL-3-CS24",
+    "unitSku": "RB-IMPORT-SUMMER-BERRY-CAN",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/51939926343927",
+    "unitVariantId": "gid://shopify/ProductVariant/51940033069303",
+    "lookupByVariantId": true,
+    "allowMissingBarcode": true
+  },
+  {
+    "caseSku": "MF-5750060-CS24",
+    "unitSku": "MF-5750060-EA",
+    "unitsPerCase": 24,
+    "caseVariantId": "gid://shopify/ProductVariant/52103969964279",
+    "unitVariantId": "gid://shopify/ProductVariant/52103970062583",
+    "unitBarcode": "070847012474",
+    "lookupByVariantId": true,
+    "archivedCaseVariantId": "gid://shopify/ProductVariant/52103330038007",
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/52103330070775"
   }
 ]

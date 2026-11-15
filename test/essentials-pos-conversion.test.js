@@ -41,6 +41,75 @@ test('Deer Park replacement Quest case maps only the fulfilled active variant to
   ]);
 });
 
+test('new NYB Barebells cases convert to the exact active POS bar variants', () => {
+  for (const [caseSku, caseId, unitId, unitSku] of [
+    ['HF-NYB-NOCCO-206-C12', '52178530959607', '50344199979255', '850000429260'],
+    ['HF-NYB-NOCCO-404-C12', '52178530992375', '50344222556407', '850054108548'],
+  ]) {
+    const line = { ...caseMapping({ ...coca, sku: caseSku }), receivedCases: 1 };
+    assert.deepEqual([line.caseVariantId, line.unitVariantId, line.unitSku, line.unitBarcode,
+      line.unitsPerCase, line.lookupByVariantId],
+    [`gid://shopify/ProductVariant/${caseId}`, `gid://shopify/ProductVariant/${unitId}`,
+      unitSku, unitSku, 12, true]);
+    const plan = adjustmentPlan(line, { id: 'case', available: 1, unitCost: 23, mappingPending: false },
+      { id: 'bar', available: 0, price: 3.64 }, 'store-location', 'receipt-key');
+    assert.deepEqual(plan.input.changes.map(change => change.delta), [-1, 12]);
+  }
+});
+
+test('Zen Waffle conversion pins the active POS variant past the archived SKU duplicate', () => {
+  for (const [flavor, archivedId] of [
+    ['CLASSIC', '51236532453623'], ['CHOCC', '51236532519159'],
+    ['COCONUT', '51236532584695'], ['BLUE', '51236532650231'],
+  ]) {
+    const mapping = caseMapping({ ...coca, sku: `ZEN-${flavor}-3PK-CS` });
+    assert.equal(mapping.lookupByVariantId, true);
+    assert.equal(mapping.archivedUnitVariantId, `gid://shopify/ProductVariant/${archivedId}`);
+    assert.equal(mapping.unitsPerCase, 12);
+  }
+});
+
+test('Sour Drops store cases credit only the consolidated POS tin variants', () => {
+  for (const [flavor, caseId, oldCaseId, unitId, upc] of [
+    ['RASPBERRY', '52103937458423', '52009761341687', '52103937523959', '860014183447'],
+    ['GREENAPPLE', '52103937491191', '52009768976631', '52103937556727', '860014183423'],
+  ]) {
+    const line = { ...caseMapping({ ...coca, sku: `SD-${flavor}-60G-CS8` }), receivedCases: 1 };
+    assert.deepEqual([line.caseVariantId, line.archivedCaseVariantId, line.unitVariantId,
+      line.unitSku, line.unitBarcode, line.unitsPerCase, line.lookupByVariantId],
+    [`gid://shopify/ProductVariant/${caseId}`, `gid://shopify/ProductVariant/${oldCaseId}`,
+      `gid://shopify/ProductVariant/${unitId}`, upc, upc, 8, true]);
+    const plan = adjustmentPlan(line, { id: 'case', available: 1, unitCost: 23.92, mappingPending: false },
+      { id: 'tin', available: 0, price: 4.99 }, 'store-location', 'receipt-key');
+    assert.deepEqual(plan.input.changes.map(change => change.delta), [-1, 8]);
+  }
+});
+
+test('recent invoice-backed store packs and drink cases credit their exact sell units', () => {
+  for (const [caseSku, unitSku, unitsPerCase, cost, price] of [
+    ['MF-7760007-P1', 'MF-7760007-EA', 1, 15.99, 24.99],
+    ['MF-7760013-P1', 'MF-7760013-EA', 1, 15.99, 24.99],
+    ['MF-2630015-P1', 'MF-2630015-EA', 1, 11.52, 14.99],
+    ['MF-2630020-P1', 'MF-2630020-EA', 1, 11.52, 14.99],
+    ['MF-2630013-P1', 'MF-2630013-EA', 1, 11.52, 14.99],
+    ['MF-2630002-P1', 'MF-2630002-EA', 1, 11.52, 14.99],
+    ['MF-2630019-P1', 'MF-2630019-EA', 1, 11.52, 14.99],
+    ['HF-SUFFOLK-0042462-REDBULL-1-CS24', 'RB-IMPORT-APPLE-MUSCAT-GRAPE-CAN', 24, 72, 4.99],
+    ['HF-SUFFOLK-0042462-REDBULL-3-CS24', 'RB-IMPORT-SUMMER-BERRY-CAN', 24, 72, 4.99],
+    ['MF-5750060-CS24', 'MF-5750060-EA', 24, 55.58, 3.99],
+  ]) {
+    const line = { ...caseMapping({ ...coca, sku: caseSku }), receivedCases: 2 };
+    assert.equal(line.unitSku, unitSku);
+    assert.equal(line.unitsPerCase, unitsPerCase);
+    assert.equal(line.lookupByVariantId, true);
+    const plan = adjustmentPlan(line, { id: 'case', available: 2, unitCost: cost, mappingPending: false },
+      { id: 'unit', available: 0, price }, 'store-location', 'receipt-key');
+    assert.deepEqual(plan.input.changes.map(change => change.delta), [-2, 2 * unitsPerCase]);
+  }
+  assert.equal(caseMapping({ ...coca, sku: 'MF-5750060-CS24' }).archivedUnitVariantId,
+    'gid://shopify/ProductVariant/52103330070775');
+});
+
 test('invoice-backed Bucked Up one-bag store packs map three received packs to three POS bags', () => {
   for (const [caseSku, caseId, unitId, unitSku, barcode] of [
     ['MF-5960570-P1','52103329644791','51279797092599','810203842808','810203842808'],
