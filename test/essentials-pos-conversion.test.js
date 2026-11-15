@@ -110,6 +110,28 @@ test('recent invoice-backed store packs and drink cases credit their exact sell 
     'gid://shopify/ProductVariant/52103330070775');
 });
 
+test('remaining active cases convert only to the verified flavor and unit pack', () => {
+  for (const [caseSku, unitSku, pack, cost, price, archivedCase] of [
+    ['HF-FANTA-KR-ZERO-PEACH-CS6', 'HF-FANTA-KR-ZERO-PEACH-EA', 6, 8, 3.49,
+      'gid://shopify/ProductVariant/51392284655863'],
+    ['HF-SOURSTRIPS-DREAMBERRY-CS12', '850060777554', 12, 26, 4.15,
+      'gid://shopify/ProductVariant/51392383942903'],
+    ['HF-NYB-NOCCO-406-C12', '850075778829', 12, 23, 3.64, undefined],
+    ['HF-SUFFOLK-DORITOS-PROTEIN-NACHO-CS24', '028400803946', 24, 33.60, 2.99, undefined],
+  ]) {
+    const line = { ...caseMapping({ ...coca, sku: caseSku }), receivedCases: 1 };
+    assert.equal(line.unitSku, unitSku);
+    assert.equal(line.unitBarcode, /\d{12,14}/.test(unitSku) ? unitSku : '8801094000363');
+    assert.equal(line.unitsPerCase, pack);
+    assert.equal(line.archivedCaseVariantId, archivedCase);
+    const plan = adjustmentPlan(line, { id: 'case', available: 1, unitCost: cost, mappingPending: false },
+      { id: 'unit', available: 0, price }, 'store-location', 'receipt-key');
+    assert.deepEqual(plan.input.changes.map(change => change.delta), [-1, pack]);
+  }
+  assert.equal(caseMapping({ ...coca, sku: 'HF-SOURSTRIPS-DREAMBERRY-CS12' })
+    .allowSharedProductMappingPendingTag, true);
+});
+
 test('invoice-backed Bucked Up one-bag store packs map three received packs to three POS bags', () => {
   for (const [caseSku, caseId, unitId, unitSku, barcode] of [
     ['MF-5960570-P1','52103329644791','51279797092599','810203842808','810203842808'],
