@@ -294,6 +294,8 @@
     "caseVariantId": "gid://shopify/ProductVariant/51242720329975",
     "unitVariantId": "gid://shopify/ProductVariant/51280743825655",
     "unitBarcode": "741365421221",
+    "lookupByVariantId": true,
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/51236532453623",
     "allowSharedProductMappingPendingTag": true
   },
   {
@@ -303,6 +305,8 @@
     "caseVariantId": "gid://shopify/ProductVariant/51242719740151",
     "unitVariantId": "gid://shopify/ProductVariant/51280743858423",
     "unitBarcode": "741365421245",
+    "lookupByVariantId": true,
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/51236532519159",
     "allowSharedProductMappingPendingTag": true
   },
   {
@@ -312,6 +316,8 @@
     "caseVariantId": "gid://shopify/ProductVariant/51242719314167",
     "unitVariantId": "gid://shopify/ProductVariant/51280743891191",
     "unitBarcode": "741365421269",
+    "lookupByVariantId": true,
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/51236532584695",
     "allowSharedProductMappingPendingTag": true
   },
   {
@@ -321,6 +327,8 @@
     "caseVariantId": "gid://shopify/ProductVariant/51236532682999",
     "unitVariantId": "gid://shopify/ProductVariant/51280743923959",
     "unitBarcode": "741365421252",
+    "lookupByVariantId": true,
+    "archivedUnitVariantId": "gid://shopify/ProductVariant/51236532650231",
     "allowSharedProductMappingPendingTag": true
   },
   {
