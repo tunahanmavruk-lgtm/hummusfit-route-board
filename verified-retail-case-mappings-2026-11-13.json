@@ -565,5 +565,68 @@
     "unitVariantId": "gid://shopify/ProductVariant/51939890102519",
     "unitBarcode": "028400803946",
     "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7172011-C12",
+    "unitSku": "MF-7172011-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52259078963447",
+    "unitVariantId": "gid://shopify/ProductVariant/52259092365559",
+    "unitBarcode": "018200264818",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7172012-C12",
+    "unitSku": "MF-7172012-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52259078996215",
+    "unitVariantId": "gid://shopify/ProductVariant/52259092398327",
+    "unitBarcode": "018200264825",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7172013-C12",
+    "unitSku": "MF-7172013-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52259079028983",
+    "unitVariantId": "gid://shopify/ProductVariant/52259092431095",
+    "unitBarcode": "018200264832",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-8140058-B12",
+    "unitSku": "MF-8140058-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52259080503543",
+    "unitVariantId": "gid://shopify/ProductVariant/52259094397175",
+    "unitBarcode": "810815029369",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-1300000-C12",
+    "unitSku": "MF-1300000-EA",
+    "unitsPerCase": 12,
+    "caseVariantId": "gid://shopify/ProductVariant/52259080995063",
+    "unitVariantId": "gid://shopify/ProductVariant/52259094855927",
+    "unitBarcode": "853240004273",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7760005-P1",
+    "unitSku": "MF-7760005-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52259063693559",
+    "unitVariantId": "gid://shopify/ProductVariant/52259063103735",
+    "unitBarcode": "628942370809",
+    "lookupByVariantId": true
+  },
+  {
+    "caseSku": "MF-7760006-P1",
+    "unitSku": "MF-7760006-EA",
+    "unitsPerCase": 1,
+    "caseVariantId": "gid://shopify/ProductVariant/52259063726327",
+    "unitVariantId": "gid://shopify/ProductVariant/52259063136503",
+    "unitBarcode": "628942370816",
+    "lookupByVariantId": true
   }
 ]
