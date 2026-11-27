@@ -35,6 +35,7 @@ const {
   hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
+  thanksgivingCatchUpActive,
   localOrderVisible,
   completedOrderVisible,
   mergeRecentCompletedOrders,
@@ -1318,10 +1319,17 @@ app.get("/api/b2b-routes-today", (req, res) => {
   // full preparation window (Friday-Monday), not only on Sunday. On
   // Monday, Tuesday remains directly beneath the live Monday routes so
   // the warehouse can prepare the next wave without changing screens.
-  const visibleDays = [{
+  const visibleDays = [];
+  // Thanksgiving closure: keep Wednesday's Out-of-State route cards
+  // accessible through Friday 2 PM ET without changing the actual day,
+  // weekly schedule, assignments, or fulfillment state.
+  if (thanksgivingCatchUpActive(now.getTime())) {
+    visibleDays.push({ day: 3, dayLabel: "Today — Wednesday orders (Thanksgiving catch-up)" });
+  }
+  visibleDays.push({
     day: todayDow,
     dayLabel: "Today — " + dayNames[todayDow],
-  }];
+  });
   if (todayDow === 5 || todayDow === 6) {
     visibleDays.push({ day: 1, dayLabel: "Preparing for Monday" });
   } else {
