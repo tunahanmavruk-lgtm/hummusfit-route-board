@@ -60,16 +60,24 @@ function easternCalendar(timestamp) {
   };
 }
 
-// Thanksgiving warehouse closure: retain local store orders placed Wednesday,
-// November 25, 2026 through Friday, November 27 at 2 PM Eastern. This is a
-// one-time visibility exception; B2B routing and inventory are unchanged.
+// Thanksgiving warehouse closure: keep Wednesday, November 25, 2026
+// orders available on local and Out-of-State boards through Friday at 2 PM ET.
 const THANKSGIVING_ORDER_DAY = Math.floor(Date.UTC(2026, 10, 25) / DAY_MS);
+const THANKSGIVING_WINDOW_START = Date.parse("2026-11-26T05:00:00Z");
 const THANKSGIVING_CUTOFF = Date.parse("2026-11-27T19:00:00Z");
+function thanksgivingCatchUpActive(now = Date.now()) {
+  return now >= THANKSGIVING_WINDOW_START && now < THANKSGIVING_CUTOFF;
+}
+function thanksgivingOrderPlaced(order, now) {
+  const timestamps = [order?.createdAt, ...(order?.orders || []).map((part) => part.createdAt)];
+  return timestamps.some((value) => {
+    const createdAt = Date.parse(value);
+    return Number.isFinite(createdAt) && createdAt <= now &&
+      easternCalendar(createdAt).day === THANKSGIVING_ORDER_DAY;
+  });
+}
 function thanksgivingOrderVisible(order, now) {
-  const createdAt = Date.parse(order?.createdAt);
-  return Number.isFinite(createdAt) && createdAt <= now &&
-    easternCalendar(createdAt).day === THANKSGIVING_ORDER_DAY &&
-    now < THANKSGIVING_CUTOFF;
+  return now < THANKSGIVING_CUTOFF && thanksgivingOrderPlaced(order, now);
 }
 
 // Local orders leave the board at 1 PM Eastern on the day after they were
@@ -93,7 +101,7 @@ function completedOrderVisible(saved, stopMeta, now = Date.now()) {
   // compatibility fallback, never the route's scheduled delivery day.
   const fulfilledAt = Date.parse(saved.fulfilledAt || saved.archivedAt || saved.completedAt);
   if (!Number.isFinite(fulfilledAt) || fulfilledAt > now) return false;
-  if (!stopMeta.isB2B && thanksgivingOrderVisible(saved, now)) return true;
+  if (thanksgivingOrderPlaced(saved, now)) return now < THANKSGIVING_CUTOFF;
   const fulfilled = easternCalendar(fulfilledAt);
   const current = easternCalendar(now);
   const cleanupDay = fulfilled.day + 1;
@@ -130,6 +138,7 @@ module.exports = {
   hasUnmatchedB2BRouteIntent,
   normalizeOrderTags,
   selectB2BStop,
+  thanksgivingCatchUpActive,
   localOrderVisible,
   completedOrderVisible,
   mergeRecentCompletedOrders,
