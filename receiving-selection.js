@@ -12,7 +12,16 @@ function deliveryDate(source){
   // with the browser's calendar date.
   const dates=(source?.orders?.length?source.orders:[source]).map(o=>easternParts(o?.createdAt));
   if(!dates.length||dates.some(d=>!d))return null;
-  const days=dates.map(d=>d.day+(d.hour>=12?1:0));
+  const holidayOrderDay=Math.floor(Date.UTC(2026,10,25)/DAY_MS);
+  const closedThanksgivingDay=holidayOrderDay+1;
+  // Wednesday orders were delayed by the warehouse's Thanksgiving closure.
+  // Receiving stays open for Friday's entire delivery day, independently of
+  // the picking board's 2 PM cleanup. Other delivery cycles retain their dates.
+  const days=dates.map(d=>{
+    const scheduled=d.day+(d.hour>=12?1:0);
+    return d.day===holidayOrderDay||scheduled===closedThanksgivingDay
+      ?closedThanksgivingDay+1:scheduled;
+  });
   if(new Set(days).size!==1)return null;
   return new Date(days[0]*DAY_MS).toISOString().slice(0,10);
 }

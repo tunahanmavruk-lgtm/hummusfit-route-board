@@ -6,6 +6,17 @@ test('completed shipping and exact saved scans recover receiving without mutatin
  const {order,record}=fixture(),before=JSON.stringify(record),result=recoverFulfilledPick(order,record,'Holbrook',now);
  assert.equal(result.source.orderId,order.id);assert.equal(result.source.lineItems[0].quantity,2);assert.equal(result.record.completedAt,'2026-10-27T14:10:00Z');assert.equal(JSON.stringify(record),before);
 });
+test('Thanksgiving catch-up recovers Wednesday shipping on Friday with exact saved scans',()=>{
+ const {order,record}=fixture();order.createdAt='2026-11-25T21:00:00Z';
+ order.fulfillments[0].createdAt='2026-11-25T23:00:00Z';
+ const before=JSON.stringify(record),friday=new Date('2026-11-27T22:00:00Z');
+ const recovered=recoverFulfilledPick(order,record,'Holbrook',friday);
+ assert.equal(recovered.deliveryDate,'2026-11-27');
+ assert.equal(recovered.source.lineItems[0].quantity,2);
+ assert.equal(JSON.stringify(record),before);
+ order.displayFulfillmentStatus='UNFULFILLED';
+ assert.throws(()=>recoverFulfilledPick(order,record,'Holbrook',friday));
+});
 test('recovery fails closed for incomplete, mismatched, cross-store, unscanned, or unshipped evidence',()=>{
  for(const change of [f=>f.order.id+='9',f=>f.order.customer.tags=['Hummus Fit Islip'],f=>f.order.displayFulfillmentStatus='UNFULFILLED',f=>f.order.lineItems.pageInfo.hasNextPage=true,f=>f.order.fulfillments[0].location.id='other',f=>f.order.fulfillments[0].status='CANCELLED',f=>f.order.fulfillments[0].fulfillmentLineItems.nodes[0].quantity=1,f=>f.order.fulfillments[0].fulfillmentLineItems.pageInfo.hasNextPage=true,f=>f.record.itemScannedCount['Food::FOOD']=1,f=>f.record.itemStatus['Food::FOOD']='not_picked',f=>f.order.createdAt='2026-10-25T20:00:00Z',f=>f.record.itemStatus['Unrelated::ITEM']='picked']){
   const f=fixture();change(f);assert.throws(()=>recoverFulfilledPick(f.order,f.record,'Holbrook',now));
