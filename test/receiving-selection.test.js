@@ -3,6 +3,22 @@ const {deliveryDate,selectReceivingDelivery}=require('../receiving-selection');
 const now=new Date('2026-10-27T14:00:00Z');
 function archived(createdAt='2026-10-26T20:00:00Z'){return {orderId:'gid://shopify/Order/1',orderName:'#1',createdAt,completedAt:'2026-10-27T01:00:00Z',lineItems:[{title:'Food',sku:'FOOD',quantity:2}]};}
 const select=opts=>selectReceivingDelivery({localStore:true,now,...opts});
+test('Thanksgiving-delayed Wednesday orders remain receivable throughout Friday only',()=>{
+ for(const createdAt of ['2026-11-25T15:00:00Z','2026-11-25T21:00:00Z','2026-11-26T15:00:00Z']){
+  const archive=archived(createdAt),before=JSON.stringify(archive);
+  assert.equal(deliveryDate(archive),'2026-11-27');
+  for(const value of ['2026-11-27T15:00:00Z','2026-11-28T04:59:00Z']){
+   assert.equal(select({archive,now:new Date(value)}).source,archive);
+   assert.equal(select({order:archive,liveRecord:archive,separationEnabled:true,now:new Date(value)}).source,archive);
+  }
+  assert.equal(select({archive,now:new Date('2026-11-26T15:00:00Z')}),null);
+  assert.equal(select({archive,now:new Date('2026-11-28T05:00:00Z')}),null);
+  assert.equal(JSON.stringify(archive),before);
+ }
+ assert.equal(deliveryDate(archived('2026-11-24T21:00:00Z')),'2026-11-25');
+ assert.equal(deliveryDate(archived('2026-11-27T21:00:00Z')),'2026-11-28');
+ assert.equal(deliveryDate({orders:[{createdAt:'2026-11-25T21:00:00Z'},{createdAt:'2026-11-26T21:00:00Z'}]}),'2026-11-27');
+});
 test('overnight picking remains the current delivery all day, including after board cutoff',()=>{
  const archive=archived();assert.equal(deliveryDate(archive),'2026-10-27');
  assert.equal(select({archive}).source,archive);
