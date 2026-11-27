@@ -644,15 +644,23 @@
   // at least one open or recently picked order; it falls away after delivery.
   function rebuildRoutesData(){
     var visibleRouteIds = {};
+    var visibleStopNames = {};
     routesData = scheduledRoutesData.slice();
-    routesData.forEach(function(route){ visibleRouteIds[route.id] = true; });
+    routesData.forEach(function(route){
+      visibleRouteIds[route.id] = true;
+      route.stops.forEach(function(stop){ visibleStopNames[stop.name.toLowerCase()] = true; });
+    });
     allRoutesData.forEach(function(route){
       if(visibleRouteIds[route.id]) return;
-      var hasOpenOrder = route.stops.some(function(stop){
-        return Boolean(ordersByStop[stop.name.toLowerCase()]);
+      // A destination can occur on multiple weekly route templates. Show
+      // each open order on one card only, favoring the scheduled route.
+      var pendingStops = route.stops.filter(function(stop){
+        var key = stop.name.toLowerCase();
+        return Boolean(ordersByStop[key]) && !visibleStopNames[key];
       });
-      if(hasOpenOrder){
-        routesData.push(Object.assign({}, route, { dayLabel: 'Orders awaiting delivery' }));
+      if(pendingStops.length){
+        routesData.push(Object.assign({}, route, { stops: pendingStops, dayLabel: 'Orders awaiting delivery' }));
+        pendingStops.forEach(function(stop){ visibleStopNames[stop.name.toLowerCase()] = true; });
         visibleRouteIds[route.id] = true;
       }
     });
