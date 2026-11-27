@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { localOrderVisible, mergeRecentCompletedOrders } = require('../order-lifecycle.js');
+const { thanksgivingCatchUpActive, localOrderVisible, mergeRecentCompletedOrders } = require('../order-lifecycle.js');
 
 const validStops = new Map([
   ['meriden', { isB2B: true, deliveryDays: [4] }],
@@ -78,4 +78,32 @@ test('incomplete and invalid snapshots do not appear', () => {
     assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: saved }, validStops, visibleAt), {});
   }
   assert.deepEqual(mergeRecentCompletedOrders({}, { unknown: completed }, validStops, visibleAt), {});
+});
+
+// The 2026 Thanksgiving closure moved Wednesday order work into Thursday and Friday.
+test('Wednesday store and Out-of-State orders remain visible until Friday 2 PM ET', () => {
+  const wednesday = {
+    ...completed,
+    createdAt: '2026-11-25T21:00:00Z',
+    completedAt: '2026-11-25T22:00:00Z',
+    fulfilledAt: '2026-11-25T22:00:00Z',
+  };
+  const before = Date.parse('2026-11-27T18:59:59Z');
+  const cutoff = Date.parse('2026-11-27T19:00:00Z');
+  assert.equal(thanksgivingCatchUpActive(Date.parse('2026-11-26T19:00:00Z')), true);
+  assert.equal(thanksgivingCatchUpActive(before), true);
+  assert.equal(thanksgivingCatchUpActive(cutoff), false);
+  assert.equal(localOrderVisible(wednesday, before), true);
+  assert.equal(localOrderVisible(wednesday, cutoff), false);
+  assert.ok(mergeRecentCompletedOrders({}, { islip: wednesday, meriden: wednesday }, validStops, before).islip);
+  assert.ok(mergeRecentCompletedOrders({}, { islip: wednesday, meriden: wednesday }, validStops, before).meriden);
+  assert.deepEqual(mergeRecentCompletedOrders({}, { islip: wednesday, meriden: wednesday }, validStops, cutoff), {});
+});
+
+test('Thanksgiving exception does not extend Tuesday or unrelated Out-of-State orders', () => {
+  const tuesday = { ...completed, createdAt: '2026-11-24T21:00:00Z',
+    completedAt: '2026-11-24T22:00:00Z', fulfilledAt: '2026-11-24T22:00:00Z' };
+  assert.equal(localOrderVisible(tuesday, Date.parse('2026-11-26T19:00:00Z')), false);
+  assert.deepEqual(mergeRecentCompletedOrders({}, { meriden: tuesday }, validStops,
+    Date.parse('2026-11-26T19:00:00Z')), {});
 });
